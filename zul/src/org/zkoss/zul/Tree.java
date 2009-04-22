@@ -1351,7 +1351,8 @@ public class Tree extends XulElement implements Paginated {
 				if (_model != null) {
 					_model.removeTreeDataListener(_dataListener);
 				} else {
-					getItems().clear();
+					if (_treechildren != null) _treechildren.detach();
+						//don't call getItems().clear(), since it readonly
 				}
 
 				_model = model;
@@ -1361,7 +1362,8 @@ public class Tree extends XulElement implements Paginated {
 		} else if (_model != null) {
 			_model.removeTreeDataListener(_dataListener);
 			_model = null;
-			getItems().clear();
+			if (_treechildren != null) _treechildren.detach();
+				//don't call getItems().clear(), since it readonly
 		}
 	}
 	
