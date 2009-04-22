@@ -3,6 +3,7 @@ ZK 3.0.10
 * Features
 
 * Bugs
+  2777293: Tree keeps old data with new Model
 	--------
 ZK 3.0.9
 * Features

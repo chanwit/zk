@@ -1021,6 +1021,8 @@ public class Tree extends XulElement implements Paginated {
 
 	public void onChildAdded(Component child) {
 		super.onChildAdded(child);
+		if (child instanceof Treechildren)
+			addVisibleItemCount(((Treechildren) child).getVisibleItemCount());
 		invalidate();
 	}
 	public void onChildRemoved(Component child) {
@@ -1032,6 +1034,7 @@ public class Tree extends XulElement implements Paginated {
 			_treechildren = null;
 			_selItems.clear();
 			_sel = null;
+			addVisibleItemCount(-((Treechildren) child).getVisibleItemCount());
 		} else if (_paging == child) {
 			_paging = null;
 			if (_pgi == child) _pgi = null;

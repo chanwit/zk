@@ -155,13 +155,11 @@ public class Treechildren extends XulElement implements Pageable {
 	}
 	public void onChildAdded(Component child) {
 		super.onChildAdded(child);
-		if (((Treeitem)child).isVisible())
-			addVisibleItemCount(1);
+		addVisibleItemCount(((Treeitem)child).getVisibleItemCount());
 	}
 	public void onChildRemoved(Component child) {
 		super.onChildRemoved(child);
-		if (((Treeitem)child).isVisible())
-			addVisibleItemCount(-1);
+		addVisibleItemCount(-((Treeitem)child).getVisibleItemCount());
 	}
 	void addVisibleItemCount(int count) {
 		if (count == 0) return;
