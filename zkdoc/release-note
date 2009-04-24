@@ -4,6 +4,8 @@ ZK 3.0.10
 
 * Bugs
   2777293: Tree keeps old data with new Model
+  2780038: zhtml.Messagebox.INFORMATION returns wrong value
+  
 	--------
 ZK 3.0.9
 * Features
