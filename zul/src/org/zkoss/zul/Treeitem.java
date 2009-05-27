@@ -409,17 +409,19 @@ public class Treeitem extends XulElement {
 	}
 
 	public boolean setVisible(boolean visible) {
-		if (isVisible() != visible && _treerow != null) 
-			_treerow.smartUpdate("z.visible", visible);
-		int count = isOpen() && _treechildren != null ?
-				_treechildren.getVisibleItemCount() + 1: 1;
-		boolean result = super.setVisible(visible);
-		if (isVisible()) {
-			addVisibleItemCount(count, false);
-		} else {
-			addVisibleItemCount(-count, true);
+		if(isVisible() != visible){
+			if (isVisible() != visible && _treerow != null) 
+				_treerow.smartUpdate("z.visible", visible);
+			int count = isOpen() && _treechildren != null ?
+					_treechildren.getVisibleItemCount() + 1: 1;
+			boolean result = super.setVisible(visible);
+			if (isVisible()) {
+				addVisibleItemCount(count, false);
+			} else {
+				addVisibleItemCount(-count, true);
+			}
 		}
-		return result;
+		return visible;
 	}
 	
 	/**
