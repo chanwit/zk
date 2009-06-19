@@ -6,6 +6,7 @@ ZK 3.0.10
   2777293: Tree keeps old data with new Model
   2780038: zhtml.Messagebox.INFORMATION returns wrong value
   2780144: wrong display when rendering of tree with dottree and hidden treeitems
+  2809040: The forward condition doesn't accept multiple values
   
 	--------
 ZK 3.0.9
