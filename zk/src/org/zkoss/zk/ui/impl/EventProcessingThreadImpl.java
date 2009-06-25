@@ -94,7 +94,7 @@ implements EventProcessingThread {
 
 	//EventProcessingThread//
 	public boolean isCeased() {
-		return _ceased != null;
+		return _ceased != null || !isAlive();
 	}
 	public boolean isSuspended() {
 		return _suspended;
@@ -321,17 +321,28 @@ implements EventProcessingThread {
 		final Configuration config = desktop.getWebApp().getConfiguration();
 		_evtThdInits = config.newEventThreadInits(comp, event);
 		try {
-			synchronized (_evtmutex) {
-				_proc = proc; //Bug 1577842: don't let event thread start (and end) too early
+			long begt = System.currentTimeMillis();
+			for (;;) {
+				synchronized (_evtmutex) {
+					_proc = proc; //Bug 1577842: don't let event thread start (and end) too early
 
-				_evtmutex.notify(); //ask the event thread to handle it
-				if (_ceased == null) {
-					_evtmutex.wait();
-						//wait until the event thread to complete or suspended
+					_evtmutex.notify(); //ask the event thread to handle it
+					if (_ceased == null) {
+						_evtmutex.wait(600000);
+							//wait until the event thread to complete or suspended
 
-					if (_suspended) {
-						config.invokeEventThreadSuspends(_evtThdSuspends, comp, event);
-						_evtThdSuspends = null;
+						if (_suspended) {
+							config.invokeEventThreadSuspends(_evtThdSuspends, comp, event);
+							_evtThdSuspends = null;
+							break;
+						}
+						if (_proc == null || _ceased != null)
+							break;
+						if (!isAlive())
+							throw new UiException("The event processing thread was aborted");
+
+						log.warning("The event processing takes more than "+
+							((System.currentTimeMillis()-begt)/1000)+" seconds: "+proc);
 					}
 				}
 			}
