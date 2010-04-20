@@ -2070,10 +2070,11 @@ zk.History.prototype = {
 	/** Sets a bookmark that user can use forward and back buttons */
 	bookmark: function (nm) {
 		if (this.curbk != nm) {
+			var oldnm = this.curbk;
 			this.curbk = nm; //to avoid loop back the server
 			var encnm = encodeURIComponent(nm);
 			window.location.hash = zk.safari || !encnm ? encnm: '#' + encnm;
-			this.bkIframe(nm);
+			this.bkIframe(nm, oldnm);
 		}
 	},
 	/** Checks whether the bookmark is changed. */
@@ -2090,11 +2091,13 @@ zk.History.prototype = {
 		return j >= 0 ? decodeURIComponent(nm.substring(j + 1)): '';
 	},
 	/** bookmark iframe */
-	bkIframe: zk.ie ? function (nm) {
+	bkIframe: zk.ie ? function (nm, oldnm) {
 		//Bug 2019171: we have to create iframe frist
 		var url = zk.getUpdateURI("/web/js/zk/html/history.html", true),
 			ifr = $e('zk_histy');
-		if (!ifr) ifr = zk.newFrame('zk_histy', url, "display:none");
+		if (!ifr)
+			ifr = zk.newFrame('zk_histy',
+				oldnm ? url+'?'+encodeURIComponent(oldnm): url, "display:none");
 
 		if (nm) url += '?' +encodeURIComponent(nm);
 		ifr.src = url;
