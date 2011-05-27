@@ -41,6 +41,11 @@ zul.grid.Column = zk.$extends(zul.mesh.SortWidget, {
 		var grid = this.getGrid();
 		return grid ? grid.rows : null;  
 	},
+	checkClientSort_: function (ascending) {
+		var body;
+		return !(!(body = this.getMeshBody()) || body.hasGroup()) &&
+			this.$supers('checkClientSort_', arguments);
+	},
 	/** Groups and sorts the rows ({@link Row}) based on
 	 * {@link #getSortAscending}.
 	 * If the corresponding comparator is not set, it returns false
@@ -185,22 +190,15 @@ zul.grid.Column = zk.$extends(zul.mesh.SortWidget, {
 			this.domUnlisten_(btn, "onClick");
 		this.$supers(zul.grid.Column, 'unbind_', arguments);
 	},
-	//@Override to avoid add child offset 
-	ignoreChildNodeOffset_: function(attr) {
-		return true;
-	},
 	_doMouseOver: function(evt) {
-		if (this.parent._menupopup || this.parent._menupopup != 'none') {
-			var btn = this.$n('btn'),
-				n = this.$n();
-			jq(n).addClass(this.getZclass() + "-over");
-			if (btn) btn.style.height = n.offsetHeight - 1 + "px";
+		if (this.isSortable_() || (this.parent._menupopup && this.parent._menupopup != 'none')) {
+			jq(this.$n()).addClass(this.getZclass() + "-over");
+			zul.grid.Renderer.updateColumnMenuButton(this);
 		}
 	},
 	_doMouseOut: function (evt) {
-		if (this.parent._menupopup || this.parent._menupopup != 'none') {
-			var btn = this.$n('btn'),
-				n = this.$n(), $n = jq(n),
+		if (this.isSortable_() || (this.parent._menupopup && this.parent._menupopup != 'none')) {
+			var n = this.$n(), $n = jq(n),
 				zcls = this.getZclass();
 			if (!$n.hasClass(zcls + "-visi") &&
 				(!zk.ie || !jq.isAncestor(n, evt.domEvent.relatedTarget || evt.domEvent.toElement)))
@@ -208,7 +206,7 @@ zul.grid.Column = zk.$extends(zul.mesh.SortWidget, {
 		}
 	},
 	_doClick: function (evt) {
-		if (this.parent._menupopup || this.parent._menupopup != 'none') {
+		if (this.parent._menupopup && this.parent._menupopup != 'none') {
 			var pp = this.parent._menupopup,
 				n = this.$n(),
 				btn = this.$n('btn'),

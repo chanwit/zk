@@ -361,6 +361,8 @@ public class Parser {
 				pgdef.setStyle(val);
 			} else if ("id".equals(nm)) {
 				pgdef.setId(val);
+			} else if ("widgetClass".equals(nm)) {
+				pgdef.setWidgetClass(val);
 			} else if ("zscriptLanguage".equals(nm)
 			|| "zscript-language".equals(nm)) { //backward compatible with 2.4.x
 				noELnorEmpty("zscriptLanguage", val, pi);
@@ -375,8 +377,7 @@ public class Parser {
 				noEmpty("contentType", val, pi);
 				pgdef.setContentType(val);
 			} else if ("docType".equals(nm)) {
-				noEmpty("docType", val, pi);
-				pgdef.setDocType("<!DOCTYPE " + val + '>');
+				pgdef.setDocType(isEmpty(val) ? "": "<!DOCTYPE " + val + '>');
 			} else if ("xml".equals(nm)) {
 				noEmpty("xml", val, pi);
 				pgdef.setFirstLine("<?xml " + val + "?>");
@@ -548,7 +549,7 @@ public class Parser {
 			throw new UiException("Method not found: "+sig+" in "+clsnm+", "+pi.getLocator());
 		}
 		if ((mtd.getModifiers() & Modifier.STATIC) == 0)
-			throw new UiException("Not a static method: "+mtd);
+			throw new UiException("Not a static method: "+mtd+", "+pi.getLocator());
 
 		pgdef.addXelMethod(prefix, nm, new MethodFunction(mtd));
 	}
@@ -643,7 +644,8 @@ public class Parser {
 					final String textAs =
 						parentInfo != null ? parentInfo.getTextAs(): null;
 					if (textAs != null) {
-						parentInfo.addProperty(textAs, trimLabel, null);
+						if (trimLabel.length() != 0)
+							parentInfo.addProperty(textAs, trimLabel, null);
 					} else {
 						if (isTrimLabel() && !parentlang.isRawLabel()) {
 							if (trimLabel.length() == 0)
@@ -714,7 +716,8 @@ public class Parser {
 			parseCustomAttributes(langdef, parent, el, annHelper);
 		} else if ("variables".equals(nm) && isZkElement(langdef, nm, pref, uri)) {
 			parseVariables(langdef, parent, el, annHelper);
-		} else if (LanguageDefinition.ANNO_NAMESPACE.equals(uri)) {
+		} else if (LanguageDefinition.ANNO_NAMESPACE.equals(uri)
+		|| "annotation".equals(uri)) {
 			parseAnnotation(el, annHelper);
 		} else {
 			//if (D.ON && log.debugable()) log.debug("component: "+nm+", ns:"+ns);
@@ -731,8 +734,9 @@ public class Parser {
 
 				boolean prefRequired =
 					uri.startsWith(LanguageDefinition.NATIVE_NAMESPACE_PREFIX);
-				boolean bNative = bNativeContent || prefRequired ||
-					LanguageDefinition.NATIVE_NAMESPACE.equals(uri);
+				boolean bNative = bNativeContent || prefRequired
+					|| LanguageDefinition.NATIVE_NAMESPACE.equals(uri)
+					|| "native".equals(uri);
 
 				if (!bNative && langdef.isNative()
 				&& !langdef.getNamespace().equals(uri))
@@ -796,7 +800,8 @@ public class Parser {
 				final String attURI = attrns != null ? attrns.getURI(): "";
 				final String attnm = attr.getLocalName();
 				final String attval = attr.getValue();
-				if (LanguageDefinition.ANNO_NAMESPACE.equals(attURI)) {
+				if (LanguageDefinition.ANNO_NAMESPACE.equals(attURI)
+				|| "annotation".equals(attURI)) {
 					if (bzk) warnWrongZkAttr(attr);
 					else {
 						if (attrAnnHelper == null)
@@ -1100,7 +1105,7 @@ public class Parser {
 	isZkElement(LanguageDefinition langdef, String nm, String pref, String uri) {
 		if (isDefaultNS(langdef, pref, uri))
 			return !langdef.hasComponentDefinition(nm);
-		return LanguageDefinition.ZK_NAMESPACE.equals(uri);
+		return LanguageDefinition.ZK_NAMESPACE.equals(uri) || "zk".equals(uri);
 	}
 	/** Returns whether it is a ZK attribute (in a non-ZK element).
 	 */
@@ -1124,7 +1129,7 @@ public class Parser {
 			return true;
 
 		final String uri = attrns.getURI();
-		return  LanguageDefinition.ZK_NAMESPACE.equals(uri)
+		return  LanguageDefinition.ZK_NAMESPACE.equals(uri) || "zk".equals(uri)
 			|| langdef.getNamespace().equals(uri);
 	}
 
@@ -1137,8 +1142,14 @@ public class Parser {
 			boolean bZkAttr = attrns == null;
 			if (!bZkAttr) {
 				final String uri = attrns.getURI();
-				if (LanguageDefinition.CLIENT_NAMESPACE.equals(uri)) {
+				if (LanguageDefinition.CLIENT_NAMESPACE.equals(uri)
+				|| "client".equals(uri)) {
 					compInfo.addWidgetListener(name, value, cond);
+					return;
+				}
+				if (LanguageDefinition.CLIENT_ATTRIBUTE_NAMESPACE.equals(uri)
+				|| "client/attribute".equals(uri)) {
+					compInfo.addWidgetAttribute(name, value, cond);
 					return;
 				}
 
@@ -1149,7 +1160,8 @@ public class Parser {
 				else if (isDefaultNS(langdef, pref, uri))
 					bZkAttr = !langdef.isDynamicReservedAttributes("[event]");
 				else
-					bZkAttr = LanguageDefinition.ZK_NAMESPACE.equals(uri);
+					bZkAttr = LanguageDefinition.ZK_NAMESPACE.equals(uri)
+						|| "zk".equals(uri);
 			}
 			if (bZkAttr) {
 				final int lno = xl != null ? xl.getLineNumber(): 0;
@@ -1163,7 +1175,8 @@ public class Parser {
 			}
 		} else {
 			final String uri = attrns.getURI();
-			if (LanguageDefinition.CLIENT_NAMESPACE.equals(uri)) {
+			if (LanguageDefinition.CLIENT_NAMESPACE.equals(uri)
+			|| "client".equals(uri)) {
 				if (name.length() == 0)
 					throw new UiException("Client attribute name required, "+xl);
 				if ("use".equals(name)) {
@@ -1173,6 +1186,11 @@ public class Parser {
 				} else {
 					compInfo.addWidgetOverride(name, value, cond);
 				}
+				return;
+			}
+			if (LanguageDefinition.CLIENT_ATTRIBUTE_NAMESPACE.equals(uri)
+			|| "client/attribute".equals(uri)) {
+				compInfo.addWidgetAttribute(name, value, cond);
 				return;
 			}
 		}
@@ -1191,8 +1209,11 @@ public class Parser {
 			if (bNatPrefix
 			|| (langdef.isNative()
 				&& !LanguageDefinition.ZK_NAMESPACE.equals(uri)
+				&& !"zk".equals(uri)
 				&& !LanguageDefinition.ANNO_NAMESPACE.equals(uri)
+				&& !"annotation".equals(uri)
 				&& !LanguageDefinition.NATIVE_NAMESPACE.equals(uri)
+				&& !"native".equals(uri)
 				&& !langdef.getNamespace().equals(uri)))
 				nativeInfo.addDeclaredNamespace(
 					new Namespace(ns.getPrefix(),

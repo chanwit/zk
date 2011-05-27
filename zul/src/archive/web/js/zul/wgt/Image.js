@@ -15,7 +15,7 @@ it will be useful, but WITHOUT ANY WARRANTY.
 /**
  * An image.
  *
- * <p>See also <a href="http://docs.zkoss.org/wiki/ZK/How-Tos/Concepts-and-Tricks#How_to_fix_the_alpha_transparency_problem_of_PNG_files_found_in_IE6.3F">how to fix the alpha transparency problem of PNG files found in IE6?</a>
+ * <p>See also <a href="http://books.zkoss.org/wiki/ZK_Client-side_Reference/Customization/Alphafix_for_IE6">how to fix the alpha transparency problem of PNG files found in IE6?</a>
  */
 zul.wgt.Image = zk.$extends(zul.Widget, {
 	$define: {
@@ -51,17 +51,6 @@ zul.wgt.Image = zk.$extends(zul.Widget, {
 		align: function (v) {
 			var n = this.getImageNode();
 			if (n) n.align = v || '';
-		},
-		/** Returns the width of the border.
-		 * <p>Default: null (use browser default).
-		 * @return String
-		 */
-		/** Sets the width of the border.
-		 * @param String border
-		 */
-		border: function (v) {
-			var n = this.getImageNode();
-			if (n) n.border = v || '';
 		},
 		/** Returns number of pixels of extra space to the left and right
 		 * side of the image.
@@ -127,8 +116,6 @@ zul.wgt.Image = zk.$extends(zul.Widget, {
 		var attr = ' src="' + (this._src || '') + '"', v;
 		if (v = this._align) 
 			attr += ' align="' + v + '"';
-		if (v = this._border) 
-			attr += ' border="' + v + '"';
 		if (v = this._hspace) 
 			attr += ' hspace="' + v + '"';
 		if (v = this._vspace) 

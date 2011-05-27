@@ -16,17 +16,7 @@ Copyright (C) 2001 Potix Corporation. All Rights Reserved.
 */
 package org.zkoss.lang;
 
-import java.util.Date;
-import java.util.Locale;
-import java.util.TimeZone;
-import java.lang.reflect.InvocationTargetException;
-import java.text.ParseException;
-import java.math.BigDecimal;
-import java.math.BigInteger;
-
 import org.zkoss.mesg.MCommon;
-import org.zkoss.text.DateFormats;
-import org.zkoss.util.Locales;
 import org.zkoss.util.IllegalSyntaxException;
 
 /**
@@ -156,7 +146,7 @@ public class Strings {
 	/** Returns the index of the give character in the given string buffer,
 	 * or -1 if not found.
 	 * It is equivalent to <code>sb.indexOf(""+cc, j);</code>, but faster.
-	 * @sine 5.0.3
+	 * @since 5.0.3
 	 */
 	public static final int indexOf(StringBuffer sb, char cc, int j) {
 		for (int len = sb.length(); j < len; ++j)
@@ -167,7 +157,7 @@ public class Strings {
 	/** Returns the last index of the give character in the given string buffer,
 	 * or -1 if not found.
 	 * It is equivalent to <code>sb.lastIndexOf(""+cc, j);</code>, but faster.
-	 * @sine 5.0.3
+	 * @since 5.0.3
 	 */
 	public static final int lastIndexOf(StringBuffer sb, char cc, int j) {
 		if (j >= sb.length())
@@ -333,6 +323,13 @@ public class Strings {
 		if (sb == null)
 			return src; //nothing changed
 		return sb.append(src.substring(j)).toString();
+	}
+	/** @deprecated As of release 5.0.0, use {@link #escape(StringBuffer,CharSequence,String)}
+	 * instead.
+	 */
+	public static final StringBuffer
+	appendEscape(StringBuffer sb, String src, String specials) {
+		return escape(sb, (CharSequence)src, specials);
 	}
 	/** Escapes (aka. quote) the special characters with backslash
 	 * and appends it the specified string buffer.

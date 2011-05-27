@@ -19,17 +19,11 @@ package org.zkoss.zk.ui.util;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
-import java.io.InputStream;
-import java.io.IOException;
-
-import org.zkoss.util.Locales;
-import org.zkoss.io.Files;
 
 import org.zkoss.zk.ui.Component;
 import org.zkoss.zk.ui.Executions;
 import org.zkoss.zk.ui.Execution;
 import org.zkoss.zk.ui.UiException;
-import org.zkoss.zk.ui.http.Wpds;
 import org.zkoss.zk.au.AuResponse;
 import org.zkoss.zk.au.out.*;
 
@@ -81,6 +75,25 @@ public class Clients {
 		response(new AuConfirmClose(mesg));
 	}
 
+	/** Shows an error message at the browser.
+	 * It is similar to {@link org.zkoss.zul.Messagebox}.
+	 * @since 5.0.3
+	 */
+	public static final void alert(String msg) {
+		response(new AuAlert(msg));
+	}
+	/** Shows an error message at the browser.
+	 * It is similar to {@link org.zkoss.zul.Messagebox}.
+	 * @param msg the message to display.
+	 * @param title the title of the message box
+	 * @param icon the icon to show. It could null,
+	 "QUESTION", "EXCLAMATION", "INFORMATION", "ERROR", "NONE".
+	 * If null, "ERROR" is assumed
+	 * @since 5.0.3
+	 */
+	public static final void alert(String msg, String title, String icon) {
+		response(new AuAlert(msg, title, icon));
+	}
 	/** Shows an error message for the specified component, if any,
 	 * at the browser.
 	 * <p>You have to clear the error message manually with {@link #clearWrongValue}.
@@ -110,6 +123,21 @@ public class Clients {
 	 */
 	public static final void clearWrongValue(Component[] comps) {
 		response(new AuClearWrongValue(comps)); //append, not overwrite
+	}
+	/** @deprecated As of release 5.0.0, replaced with {@link #clearWrongValue(Component)}.
+	 */
+	public static final void closeErrorBox(Component comp) {
+		clearWrongValue(comp);
+	}
+	/** @deprecated As of release 5.0.0, replaced with {@link #clearWrongValue(List)}.
+	 */
+	public static final void closeErrorBox(List comps) {
+		clearWrongValue(comps);
+	}
+	/** @deprecated As of release 5.0.0, replaced with {@link #clearWrongValue(Component[])}.
+	 */
+	public static final void closeErrorBox(Component[] comps) {
+		clearWrongValue(comps);
 	}
 	
 	/** Submits the form with the specified ID.
@@ -215,6 +243,13 @@ public class Clients {
 	public static final void clearBusy() {
 		response(new AuClearBusy());
 	}
+	/** @deprecated As of release 5.0.0, replaced with {@link #showBusy(String)}
+	 * and {@link #clearBusy()}.
+	 */
+	public static final void showBusy(String msg, boolean open) {
+		if (open) showBusy(msg);
+		else clearBusy();
+	}
 	/** Shows the busy message at the browser that covers only the specified
 	 * component.
 	 * It is used to denote a portion of the desktop is busy, and
@@ -223,7 +258,7 @@ public class Clients {
 	 * <p>To execute a long operation asynchronously, the developer can use
 	 * a working thread,
 	 * or use {@link org.zkoss.zk.ui.event.EventQueue#subscribe(org.zkoss.zk.ui.event.EventListener,boolean)}.
-	 * <p>See also <a href="http://docs.zkoss.org/wiki/Long_Operations">Long Operations</a>
+	 * <p>See also <a href="http://books.zkoss.org/wiki/ZK_Developer%27s_Reference/UI_Patterns/Long_Operations">Long Operations</a>
 	 *
 	 * @param comp the component that the busy message to cover.
 	 * Ignored if null. Notice that if the component is not found,
@@ -259,35 +294,13 @@ public class Clients {
 	 * and ZUL components. It does not reload messages loaded by your
 	 * own JavaScript codes.
 	 *
-	 * @param locale the locale. If null, {@link Locales#getCurrent}
+	 * @param locale the locale. If null, {@link org.zkoss.util.Locales#getCurrent}
 	 * is assumed.
+	 * @exception UnsupportedOperationException if the device is not ajax.
 	 * @since 3.6.3
 	 */
 	public static final void reloadMessages(Locale locale)
-	throws IOException {
-		if (locale == null)
-			locale = Locales.getCurrent();
-
-		final StringBuffer sb = new StringBuffer(4096);
-		final Locale oldl = Locales.setThreadLocal(locale);
-		try {
-			final Execution exec = Executions.getCurrent();
-			sb.append(loadJS(exec, "~./js/zk/lang/mesg*.js"));
-			sb.append(Wpds.outLocaleJavaScript());
-			sb.append(loadJS(exec, "~./js/zul/lang/msgzul*.js"));
-		} finally {
-			Locales.setThreadLocal(oldl);
-		}
-		response("zk.reload", new AuScript(null, sb.toString()));
-	}
-	private static String loadJS(Execution exec, String path)
-	throws IOException {
-		path = exec.locate(path);
-		InputStream is = exec.getDesktop().getWebApp().getResourceAsStream(path);
-		if (is == null)
-			throw new UiException("Unable to load "+path);
-		final byte[] bs = Files.readAll(is);
-		Files.close(is);
-		return new String(bs, "UTF-8"); //UTF-8 is assumed
+	throws java.io.IOException {
+		Executions.getCurrent().getDesktop().getDevice().reloadMessages(locale);
 	}
 }

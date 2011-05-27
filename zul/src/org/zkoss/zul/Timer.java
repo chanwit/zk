@@ -16,7 +16,7 @@ Copyright (C) 2005 Potix Corporation. All Rights Reserved.
 */
 package org.zkoss.zul;
 
-import org.zkoss.html.HTMLs;
+import org.zkoss.xml.HTMLs;
 
 import org.zkoss.zk.ui.WrongValueException;
 import org.zkoss.zk.ui.HtmlBasedComponent;
@@ -45,7 +45,7 @@ public class Timer extends HtmlBasedComponent implements org.zkoss.zul.api.Timer
 	}
 	public Timer(int delay) {
 		this();
-		_delay = delay;
+		_delay = Math.max(0, delay);
 	}
 
 	/** Returns the delay, the number of milliseconds between
@@ -57,11 +57,10 @@ public class Timer extends HtmlBasedComponent implements org.zkoss.zul.api.Timer
 	}
 	/** Sets the delay, the number of milliseconds between
 	 * successive action events.
+	 * @param delay If negative, 0 is assumed.
 	 */
-	public void setDelay(int delay)
-	throws WrongValueException {
-		if (delay < 0)
-			throw new WrongValueException("Negative delay is not allowed: "+delay);
+	public void setDelay(int delay) {
+		delay = Math.max(0, delay);
 		if (delay != _delay) {
 			_delay = delay;
 			smartUpdate("delay", _delay);
@@ -101,7 +100,7 @@ public class Timer extends HtmlBasedComponent implements org.zkoss.zul.api.Timer
 	public void stop() {
 		if (_running) {
 			_running = false;
-			smartUpdate("running", false);
+			smartUpdate("running", Boolean.FALSE, true); //Bug 3155985: shall allow restore
 		}
 	}
 	/** Starts the timer.
@@ -109,7 +108,7 @@ public class Timer extends HtmlBasedComponent implements org.zkoss.zul.api.Timer
 	public void start() {
 		if (!_running) {
 			_running = true;
-			smartUpdate("running", true);
+			smartUpdate("running", Boolean.TRUE, true); //Bug 3155985: shall allow restore
 		}
 	}
 

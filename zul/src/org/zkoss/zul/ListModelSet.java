@@ -19,6 +19,7 @@ package org.zkoss.zul;
 import org.zkoss.zul.event.ListDataEvent;
 import org.zkoss.lang.Objects;
 
+import java.util.LinkedList;
 import java.util.Set;
 import java.util.List;
 import java.util.SortedSet;
@@ -363,6 +364,6 @@ implements ListModelExt, Set, java.io.Serializable {
 		Collections.sort(copy, cmpr);
 		_set.clear();
 		_set.addAll(copy);
-		fireEvent(ListDataEvent.CONTENTS_CHANGED, -1, -1);
+		fireEvent(ListDataEvent.STRUCTURE_CHANGED, -1, -1);
 	}
 }

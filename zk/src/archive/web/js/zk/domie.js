@@ -24,7 +24,37 @@ it will be useful, but WITHOUT ANY WARRANTY.
 		zk.skipBfUnload = false;
 	}
 
-var _zjq = {};
+var _zjq = {}, _jq = {};
+zk.override(jq.fn, _jq, {
+	replaceWith: function (html) {
+		//outerHTML to minimize memory leak in IE
+		var done, el;
+		try {
+			//Note: IE's outerHTML cannot handle td/th.. and ignore script
+			//so we have skip them (the result is memory leak)
+			//
+			//We can use jquery's evalScript to handle script elements,
+			//but unable to find what scripts are created since they might not be
+			//children of new created elements
+			if (typeof html == 'string' && (el = this[0])
+			&& !jq.nodeName(el, "td", "th", "table", "tr",
+			"caption", "tbody", "thead", "tfoot", "colgroup","col")
+			&& !containsScript(html)) {
+				var o = zjq._beforeOuter(el);
+
+				jq.cleanData(el.getElementsByTagName("*"));
+				jq.cleanData([el]);
+				el.innerHTML = ""; //seems less memory leak
+				el.outerHTML = html;
+				done = true;
+				zjq._afterOuter(o);
+				return this;
+			}
+		} catch (e) {
+		}
+		return done ? this: _jq.replaceWith.apply(this, arguments);
+	}
+});
 zk.override(zjq, _zjq, {
 	_fixCSS: function (el) {
 		var zoom = el.style.zoom;
@@ -36,10 +66,10 @@ zk.override(zjq, _zjq, {
 	}
 });
 zk.copy(zjq, {
-	_src0: "javascript:false;",
+	src0: "javascript:false;",
 		//IE: prevent secure/nonsecure warning with HTTPS
 
-	_fixIframe: function (el) { //used in widget.js
+	_fixIframe: function (el) { //used in widget.js (Bug 2900274)
 		try {
 			if (jq.nodeName(el, 'iframe'))
 				zk(el).redoSrc();
@@ -53,46 +83,30 @@ zk.copy(zjq, {
 	_fixClick: function (evt) {
 		//Bug 1635685, 1612312: <a>
 		//Bug 1896749: <area>
-		var n;
-		if (jq.nodeName(n = evt.target, "a", "area")
-		&& n.href.indexOf("javascript:") >= 0) {
-			zk.skipBfUnload = true;
-			setTimeout(noSkipBfUnload, 0); //restore
-		}
+		if (zk.confirmClose)
+			for (var n = evt.target; n; n = n.parentNode)
+				if (jq.nodeName(n, "a", "area")) {
+					if (n.href.indexOf("javascript:") >= 0) {
+						zk.skipBfUnload = true;
+						setTimeout(noSkipBfUnload, 0); //restore
+					}
+					return;
+				}
 	},
 
 	_beforeOuter: zk.$void, //overridden by domie6.js
-	_afterOuter: zk.$void,
-
-	_setOuter: function (el, html) {
-		//outerHTML instead of replaceWith to minimize memory leak in IE
-		var done;
-		try {
-			//Note: IE's outerHTML cannot handle td/th.. and ignore script
-			//so we have skip them (the result is memory leak)
-			//
-			//We can use jquery's evalScript to handle script elements,
-			//but unable to find what scripts are created since they might not be
-			//children of new created elements
-			if ((el = jq(el)[0]) && !jq.nodeName(el, "td", "th", "table", "tr",
-			"caption", "tbody", "thead", "tfoot", "colgroup","col")
-			&& !containsScript(html)) {
-				var o = zjq._beforeOuter(el);
-
-				jq.cleanData(el.getElementsByTagName("*"));
-				jq.cleanData([el]);
-				el.innerHTML = ""; //seems less memory leak
-				el.outerHTML = html;
-				done = true;
-				zjq._afterOuter(o);
-				return;
-			}
-		} catch (e) {
-		}
-		if (!done)
-			jq(el).replaceWith(html);
-	}
+	_afterOuter: zk.$void
 });
+/* Bug 3092040 but not sure it is worth to fix
+  (there might be side effect since skipResize is not reset immediately)
+if (zk.ie8_) //ie8 only
+	zjq._fixedVParent = function (el, make) {
+		if (make) {
+			zk.skipResize = true;
+			setTimeout(function () {zk.skipResize = false;}, 0);
+		}
+	};
+*/
 
 	function _dissel() {
 		this.onselectstart = _dissel0;
@@ -135,3 +149,19 @@ zk.override(jq.event, zjq._evt = {}, {
 		return evt;
 	}
 });
+
+//IE: use query string if possible to avoid incomplete-request problem
+if (!zk.ie8) //including ie6, ie7, ie7 compatible mode (under ie8/9)
+	zjq._useQS = function (reqInf) {
+		var s = reqInf.content, j = s.length, prev, cc;
+		if (j + reqInf.uri.length < 2000) {
+			while (j--) {
+				cc = s.charAt(j);
+				if (cc == '%' && prev >= '8') //%8x, %9x...
+					return false;
+				prev = cc;
+			}
+			return true;
+		}
+		return false;
+	};

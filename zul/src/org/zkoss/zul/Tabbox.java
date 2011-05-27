@@ -19,7 +19,7 @@ package org.zkoss.zul;
 import java.util.Iterator;
 
 import org.zkoss.lang.Objects;
-import org.zkoss.html.HTMLs;
+import org.zkoss.xml.HTMLs;
 
 import org.zkoss.zk.ui.Component;
 import org.zkoss.zk.ui.UiException;
@@ -127,7 +127,8 @@ public class Tabbox extends XulElement implements org.zkoss.zul.api.Tabbox {
 	}
 
 	/**
-	 * Sets whether to eable the tab scrolling
+	 * Sets whether to enable the tab scrolling.
+	 * When enabled, if tab list is wider than tab bar, left, right arrow will appear.
 	 * @since 3.5.0
 	 */
 	public void setTabscroll(boolean tabscroll) {
@@ -479,8 +480,6 @@ public class Tabbox extends XulElement implements org.zkoss.zul.api.Tabbox {
 	protected void renderProperties(org.zkoss.zk.ui.sys.ContentRenderer renderer)
 			throws java.io.IOException {
 		super.renderProperties(renderer);
-		if (_seltab != null)
-			render(renderer, "selectedTab", _seltab.getUuid());
 		if (_panelSpacing != null )
 			render(renderer, "panelSpacing", _panelSpacing);
 		if (!"horizontal".equals(_orient))

@@ -19,7 +19,7 @@ package org.zkoss.zul;
 import org.zkoss.lang.Objects;
 import org.zkoss.util.media.RepeatableMedia;
 import org.zkoss.util.media.Media;
-import org.zkoss.html.HTMLs;
+import org.zkoss.xml.HTMLs;
 
 import org.zkoss.zk.ui.Desktop;
 import org.zkoss.zk.ui.HtmlBasedComponent;
@@ -37,6 +37,9 @@ import org.zkoss.zul.impl.Utils;
  * property. Rather, use the CSS style to customize the border (like
  * any other components).
  *
+ * <p>To handle the onload event, you have to use the client-attribute namespace.
+ * Please refer to <a href="http://books.zkoss.org/wiki/ZK_Component_Reference/Essential_Components/Iframe#onload">ZK Component Reference: iframe</a> fore more information.
+ *
  * @author tomyeh
  * @see Include
  */
@@ -51,7 +54,7 @@ public class Iframe extends HtmlBasedComponent implements org.zkoss.zul.api.Ifra
 	private boolean _autohide;
 
 	static {
-		addClientEvent(Iframe.class, Events.ON_URI_CHANGE, CE_DUPLICATE_IGNORE);
+		addClientEvent(Iframe.class, Events.ON_URI_CHANGE, 0);
 	}
 
 	public Iframe() {
@@ -122,8 +125,8 @@ public class Iframe extends HtmlBasedComponent implements org.zkoss.zul.api.Ifra
 	 * it is possible that it obscues the popup that shall be shown
 	 * above it. To resolve this, you have to specify autohide="true"
 	 * to this component, and specify the following in the page:
-	 * <pre><code>&lt;script content="zk.useStack='auto';"?>
-	 * <p>Refer to <a href="http://docs.zkoss.org/wiki/JavaScript_Customization">JavaScript Customization</a>
+	 * <pre><code>&lt;?script content="zk.useStack='auto';"?>
+	 * <p>Please refer to <a href="http://books.zkoss.org/wiki/ZK_Client-side_Reference/Customization/Stackup_and_Shadow">Stackup and Shadow</a>
 	 * for more information.
 	 */
 	public boolean isAutohide() {
@@ -131,6 +134,7 @@ public class Iframe extends HtmlBasedComponent implements org.zkoss.zul.api.Ifra
 	}
 	/** Sets whether to automatically hide this component if
 	 * a popup or dropdown is overlapped with it.
+	 * Refer to {@link #isAutohide} for more information
 	 */
 	public void setAutohide(boolean autohide) {
 		if (_autohide != autohide) {
@@ -242,7 +246,7 @@ public class Iframe extends HtmlBasedComponent implements org.zkoss.zul.api.Ifra
 	}
 
 	//-- ComponentCtrl --//
-	protected Object newExtraCtrl() {
+	public Object getExtraCtrl() {
 		return new ExtraCtrl();
 	}
 	/** A utility class to implement {@link #getExtraCtrl}.

@@ -21,9 +21,6 @@ it will be useful, but WITHOUT ANY WARRANTY.
 			uplder.destroy(finish);
 		delete o.uploaders[key];
 	}
-	function _parseMaxSize(val) {
-		return val.indexOf("maxsize=") >= 0 ? val.match(new RegExp(/maxsize=([^,]*)/))[1] : '';
-	}
 	function _start(o, form, val) { //start upload		
 		var key = o.getKey(o.sid),
 			uplder = new zul.Uploader(o, key, form, val);
@@ -64,9 +61,19 @@ zul.Upload = zk.$extends(zk.Object, {
 	 * @param String clsnm the CSS class name of the fileupload
 	 */
 	$init: function(wgt, parent, clsnm) {
-		this.maxsize = _parseMaxSize(clsnm);
-		this.isNative = clsnm.indexOf('native') != -1;
-		this._clsnm = (this.maxsize || this.isNative) ? clsnm.split(',')[0] : clsnm;
+		var cls;
+		for (var attrs = clsnm.split(','), i = 0, len = attrs.length; i < len; i++) {
+			var attr = attrs[i].trim(); 
+			if (attr.startsWith('maxsize='))
+				this.maxsize = attr.match(new RegExp(/maxsize=([^,]*)/))[1];
+			else if (attr == 'native')
+				this.isNative = true;
+			else if (attr != 'true')
+				cls = attr;
+		}
+		
+		this._clsnm = cls || '';
+		
 		this._wgt = wgt;
 		this._parent = parent;
 		
@@ -84,8 +91,9 @@ zul.Upload = zk.$extends(zk.Object, {
 			refof = zk(ref).cmOffset(),
 			outerof = jq(outer).css({top: '0', left: '0'}).zk.cmOffset(),
 			diff = inp.offsetWidth - ref.offsetWidth,
-			st = outer.style;
-		st.top = refof[1] - outerof[1] + "px"; //not sure why, but cannot use offsetTop
+			st = outer.style,
+			dy = refof[1] - outerof[1];
+		st.top = dy + "px";
 		st.left = refof[0] - outerof[0] - diff + "px";
 		inp.style.height = ref.offsetHeight + 'px';
 		inp.style.clip = 'rect(auto,auto,auto,' + diff + 'px)';
@@ -103,7 +111,9 @@ zul.Upload = zk.$extends(zk.Object, {
 		else 
 			jq(wgt).after(html);
 			
-		this.sync();
+		//B50-3304877: autodisable and Upload
+		if (!wgt._autodisable_self)
+			this.sync();
 		
 		var outer = this._outer = parent ? parent.lastChild : ref.nextSibling,
 			inp = outer.firstChild.firstChild;
@@ -250,7 +260,7 @@ zul.Uploader = zk.$extends(zk.Object, {
 		this._wgt = upload._wgt;
 		
 		var viewer, self = this;
-		if (upload._clsnm.startsWith('true')) viewer = new zul.UploadViewer(this, flnm);
+		if (!upload._clsnm) viewer = new zul.UploadViewer(this, flnm);
 		else
 			zk.$import(upload._clsnm, function (cls) {
 				viewer = new cls(self, flnm);
@@ -339,6 +349,8 @@ zul.Uploader = zk.$extends(zk.Object, {
 			}
 		};
 		zul.Uploader._tmupload = setInterval(t, 1000);
+		//B50-3304877: autodisable and Upload
+		zul.wgt.ADBS.autodisable(wgt);
 	},
 	/**
 	 * Cancels the uploader to upload.
@@ -371,6 +383,25 @@ zul.Uploader = zk.$extends(zk.Object, {
 	end: function (finish) {
 		this.viewer.destroy(finish);
 		zul.Upload.destroy(this);
+		
+		//B50-3304877: autodisable and Upload
+		var wgt, upload, aded, parent;
+		if ((wgt = this._wgt) && (upload = this._upload) && 
+			(aded = upload._aded)) {
+			wgt._uplder = null; // prevent destory
+			aded.onResponse();
+			upload._aded = null;
+			
+			//restore uploader
+			wgt._uplder.destroy();
+			if ((parent = upload._parent) && !jq(parent).parents('html').length) {
+				upload._parent = wgt._getUploadRef();
+				upload.initContent();
+			}
+			wgt._uplder = upload;
+			wgt._uplder.sync();
+			delete wgt._autodisable_self;
+		}
 	}
 });
 

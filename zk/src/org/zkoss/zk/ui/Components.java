@@ -41,6 +41,8 @@ import java.util.Map.Entry;
 import java.util.Date;
 
 import org.zkoss.lang.Classes;
+import org.zkoss.lang.Library;
+import org.zkoss.lang.Objects;
 import org.zkoss.idom.Document;
 import org.zkoss.util.CollectionsX;
 import org.zkoss.util.logging.Log;
@@ -446,7 +448,20 @@ public class Components {
 	void wireFellows(IdSpace idspace, Object controller, char separator) {
 		new Wire(controller, separator).wireFellows(idspace);
 	}
-		
+	/** Wire fellow components and space owner with full control.
+	 * @param separator the separator used to separate the component ID and event name.
+	 * @param ignoreZScript whether to ignore variables defined in zscript when wiring
+	 * a member.
+	 * @param ignoreXel whether to ignore variables defined in varible resolver
+	 * ({@link Page#addVariableResolver}) when wiring a member.
+	 * @since 5.0.3
+	 */
+	public static final
+	void wireFellows(IdSpace idspace, Object controller, char separator,
+	boolean ignoreZScript, boolean ignoreXel) {
+		new Wire(controller, separator, ignoreZScript, ignoreXel).wireFellows(idspace);
+	}
+
 	/** <p>Wire accessible variable objects of the specified component into a 
 	 * controller Java object. This implementation checks the 
 	 * setXxx() method names first then the field names. If a setXxx() method 
@@ -496,7 +511,20 @@ public class Components {
 	void wireVariables(Component comp, Object controller, char separator) {
 		new Wire(controller, separator).wireVariables(comp);
 	}
-	
+	/** Wire controller as a variable objects of the specified component with full control.
+	 * @param separator the separator used to separate the component ID and event name.
+	 * @param ignoreZScript whether to ignore variables defined in zscript when wiring
+	 * a member.
+	 * @param ignoreXel whether to ignore variables defined in varible resolver
+	 * ({@link Page#addVariableResolver}) when wiring a member.
+	 * @since 5.0.3
+	 */
+	public static final
+	void wireVariables(Component comp, Object controller, char separator,
+	boolean ignoreZScript, boolean ignoreXel) {
+		new Wire(controller, separator, ignoreZScript, ignoreXel).wireVariables(comp);
+	}
+
 	/** <p>Wire accessible variables of the specified page into a 
 	 * controller Java object. This implementation checks the 
 	 * setXxx() method names first then the field names. If a setXxx() method 
@@ -545,6 +573,19 @@ public class Components {
 	void wireVariables(Page page, Object controller, char separator) {
 		new Wire(controller, separator).wireVariables(page);
 	}
+	/** Wire accessible variable objects of the specified page with complete control.
+	 * @param separator the separator used to separate the component ID and event name.
+	 * @param ignoreZScript whether to ignore variables defined in zscript when wiring
+	 * a member.
+	 * @param ignoreXel whether to ignore variables defined in varible resolver
+	 * ({@link Page#addVariableResolver}) when wiring a member.
+	 * @since 5.0.3
+	 */
+	public static final
+	void wireVariables(Page page, Object controller, char separator,
+	boolean ignoreZScript, boolean ignoreXel) {
+		new Wire(controller, separator, ignoreZScript, ignoreXel).wireVariables(page);
+	}
 
 	/** Wire controller as a variable objects of the specified component with a custom separator.
 	 * The separator is used to separate the component ID and the controller.
@@ -557,7 +598,7 @@ public class Components {
 	void wireController(Component comp, Object controller) {
 		new Wire(controller).wireController(comp, comp.getId());
 	}
-	
+
 	/** Wire controller as a variable objects of the specified component with a custom separator.
 	 * The separator is used to separate the component ID and the controller.
 	 * By default, it is '$'. However, for Groovy or other environment that
@@ -569,7 +610,20 @@ public class Components {
 	void wireController(Component comp, Object controller, char separator) {
 		new Wire(controller, separator).wireController(comp, comp.getId());
 	}
-	
+	/** Wire controller as a variable objects of the specified component with full control.
+	 * @param separator the separator used to separate the component ID and event name.
+	 * @param ignoreZScript whether to ignore variables defined in zscript when wiring
+	 * a member.
+	 * @param ignoreXel whether to ignore variables defined in varible resolver
+	 * ({@link Page#addVariableResolver}) when wiring a member.
+	 * @since 5.0.3
+	 */
+	public static final
+	void wireController(Component comp, Object controller, char separator,
+	boolean ignoreZScript, boolean ignoreXel) {
+		new Wire(controller, separator, ignoreZScript, ignoreXel).wireController(comp, comp.getId());
+	}
+
 	/** <p>Adds forward conditions to myid source component so onXxx source 
 	 * event received by 
 	 * myid component can be forwarded to the specified target 
@@ -679,7 +733,7 @@ public class Components {
 		IMPLICIT_NAMES.add("requestScope");
 		IMPLICIT_NAMES.add("param");
 	}
-	
+
 	/** Retuns the implicit object of the specified name, or null
 	 * if not found.
 	 *
@@ -790,7 +844,35 @@ public class Components {
 		final Execution exec = Executions.getCurrent();
 		return exec != null ? ((ExecutionCtrl)exec).getCurrentPage(): null;
 	}
-	
+
+	private static boolean ignoreFromWire(Class cls) {
+		Package pkg;
+		return cls != null && (_ignoreWires.contains(cls.getName())
+		|| ((pkg = cls.getPackage()) != null && _ignoreWires.contains(pkg.getName())));
+	}
+	private static Set _ignoreWires = new HashSet(16);
+	static {
+		final Class[] clses = new Class[] {
+			HtmlBasedComponent.class,
+			HtmlMacroComponent.class,
+			HtmlNativeComponent.class,
+			AbstractComponent.class,
+			org.zkoss.zk.ui.util.GenericComposer.class,
+			Object.class
+		};
+		for (int j = 0; j < clses.length; ++j)
+			_ignoreWires.add(clses[j].getName());
+
+		//5.0.5: ignore zul by default (but able to enable for backward compatible)
+		if (!"true".equals(Library.getProperty("org.zkoss.zk.ui.wire.zul.enabled"))) {
+			//a dirty solution but no better way until we use annotation instead
+			_ignoreWires.add("org.zkoss.zul");
+			_ignoreWires.add("org.zkoss.zkex.zul");
+			_ignoreWires.add("org.zkoss.zkmax.zul");
+			_ignoreWires.add("org.zkoss.zhtml");
+		}
+	}
+
 	/**
 	 * Utility class for wiring variables
 	 * @author henrichen
@@ -800,18 +882,26 @@ public class Components {
 		private final Set _injected;
 		private final Map _fldMaps;
 		private final char _separator;
-		
+		private final boolean _ignoreZScript;
+		private final boolean _ignoreXel;
+
 		private Wire(Object controller) {
-			this(controller, '$');
+			this(controller, '$', false, false);
 		}
 		private Wire(Object controller, char separator) {
+			this(controller, separator, false, false);
+		}
+		private Wire(Object controller, char separator,
+		boolean ignoreZScript, boolean ignoreXel) {
 			_controller = controller;
 			_separator = separator;
+			_ignoreZScript = ignoreZScript;
+			_ignoreXel = ignoreXel;
 			_injected = new HashSet();
 			_fldMaps = new LinkedHashMap(64);
 			
 			Class cls = _controller.getClass();
-			do {
+			while (cls != null && !ignoreFromWire(cls)) {
 				Field[] flds = cls.getDeclaredFields();
 				for (int j = 0; j < flds.length; ++j) {
 					final Field fd = flds[j];
@@ -820,8 +910,9 @@ public class Components {
 						_fldMaps.put(fdname, fd);
 				}
 				cls = cls.getSuperclass();
-			} while (cls != null && !Object.class.equals(cls));
+			}
 		}
+
 		/**
 		 * Inject controller as variable of the specified component.
 		 */
@@ -896,7 +987,8 @@ public class Components {
 				if ("param".equals(fdname) && arg != null) {
 					arg = new HashMap((Map) arg); 
 				}
-				injectByName(arg, fdname);
+				injectByName(arg, fdname,
+					x instanceof Component && "page".equals(fdname));
 			}
 		}
 		private void wireOthers(Object x) {
@@ -908,7 +1000,8 @@ public class Components {
 				final String mdname = md.getName();
 				if ((md.getModifiers() & Modifier.STATIC) == 0
 				&& mdname.length() > 3 && mdname.startsWith("set") 
-				&& Character.isUpperCase(mdname.charAt(3))) {
+				&& Character.isUpperCase(mdname.charAt(3))
+				&& !ignoreFromWire(md.getDeclaringClass())) {
 					final String fdname = Classes.toAttributeName(mdname);
 					if (!_injected.contains(fdname)) { //if not injected yet
 						final Class[] parmcls = md.getParameterTypes();
@@ -965,37 +1058,37 @@ public class Components {
 		private boolean containsVariable(Object x, String fdname) {
 			//#feature 2770471 GenericAutowireComposer shall support wiring ZScript varible
 			if (x instanceof Page) {
-				final Page pg = (Page) x;
-				return pg.getZScriptVariable(fdname) != null
-					|| pg.hasAttributeOrFellow(fdname, true)
-					|| pg.getXelVariable(null, null, fdname, true) != null;
+				final Page page = (Page) x;
+				return (!_ignoreZScript && page.getZScriptVariable(fdname) != null)
+					|| page.hasAttributeOrFellow(fdname, true)
+					|| (!_ignoreXel && page.getXelVariable(null, null, fdname, true) != null);
 			} else {
 				final Component cmp = (Component) x;
 				final Page page = getPage(cmp);
-				return (page != null && page.getZScriptVariable(cmp, fdname) != null)
+				return (!_ignoreZScript && page != null && page.getZScriptVariable(cmp, fdname) != null)
 					|| cmp.hasAttributeOrFellow(fdname, true)
-					|| (page != null && page.getXelVariable(null, null, fdname, true) != null);
+					|| (!_ignoreXel && page != null && page.getXelVariable(null, null, fdname, true) != null);
 			}
 		}
 		
 		private Object getVariable(Object x, String fdname) {
 			//#feature 2770471 GenericAutowireComposer shall support wiring ZScript varible
 			if (x instanceof Page) {
-				final Page pg = (Page) x;
-				Object arg = pg.getZScriptVariable(fdname);
+				final Page page = (Page) x;
+				Object arg = _ignoreZScript ? null: page.getZScriptVariable(fdname);
 				if (arg == null) {
-					arg = pg.getAttributeOrFellow(fdname, true);
-					if (arg == null)
-						arg = pg.getXelVariable(null, null, fdname, true);
+					arg = page.getAttributeOrFellow(fdname, true);
+					if (!_ignoreXel && arg == null)
+						arg = page.getXelVariable(null, null, fdname, true);
 				}
 				return arg;
 			} else {
 				final Component cmp = (Component) x;
 				final Page page = getPage(cmp);
-				Object arg = page != null ? page.getZScriptVariable(cmp, fdname): null;
+				Object arg = !_ignoreZScript && page != null ? page.getZScriptVariable(cmp, fdname): null;
 				if (arg == null) {
 					arg = cmp.getAttributeOrFellow(fdname, true);
-					if (arg == null && page != null)
+					if (!_ignoreXel && arg == null && page != null)
 						arg = page.getXelVariable(null, null, fdname, true);
 				}
 				return arg;
@@ -1011,20 +1104,21 @@ public class Components {
 			final String fdname = (arg instanceof Page) ? 
 					((Page)arg).getId() : ((Component)arg).getId();
 			if (fdname.length() > 0) {
-				injectByName(arg, fdname);
+				injectByName(arg, fdname, false);
 			}
 		}
 		
-		private void injectByName(Object arg, String fdname) {
+		private void injectByName(Object arg, String fdname, boolean fieldOnly) {
 			//argument to be injected is null; then no need to inject
 			if (arg != null) {
 				final String mdname = Classes.toMethodName(fdname, "set");
 				final Class parmcls = arg.getClass();
 				final Class tgtcls = _controller.getClass();
 				try {
-					final Method md = 
+					final Method md = fieldOnly ? null:
 						Classes.getCloseMethod(tgtcls, mdname, new Class[] {parmcls});
-					if (!injectByMethod(md, parmcls, parmcls, arg, fdname)) {
+					if (fieldOnly
+					|| !injectByMethod(md, parmcls, parmcls, arg, fdname)) {
 						injectFieldByName(arg, tgtcls, parmcls, fdname);
 					}
 				} catch (NoSuchMethodException ex) {
@@ -1395,6 +1489,12 @@ public class Components {
 			return exec().isIncluded();
 		}
 
+		/** @deprecated As of release 5.0.0, MIL is no longer supported.
+		 */
+		public boolean isMilDevice() {
+			return exec().isMilDevice();
+		}
+
 		public boolean isRobot() {
 			return exec().isRobot();
 		}
@@ -1421,6 +1521,10 @@ public class Components {
 
 		public void postEvent(int priority, Event evt) {
 			exec().postEvent(priority, evt);
+		}
+
+		public void postEvent(int priority, Component realTarget, Event evt) {
+			exec().postEvent(priority, realTarget, evt);
 		}
 
 		public void pushArg(Map arg) {
@@ -1489,6 +1593,18 @@ public class Components {
 		public String locate(String path) {
 			return exec().locate(path);
 		}
+
+		public String toString() {
+			return Objects.toString(exec());
+		}
+		public int hashCode() {
+			return Objects.hashCode(exec());
+		}
+		public boolean equals(Object o) {
+			if (o instanceof Exec)
+				return Objects.equals(exec(), ((Exec)o).exec());
+			return Objects.equals(exec(), o);
+		}
 	}
 	
 	//Proxy to read current requestScope
@@ -1531,6 +1647,18 @@ public class Components {
 		}
 		public Collection values() {
 			return req().values();
+		}
+
+		public String toString() {
+			return Objects.toString(req());
+		}
+		public int hashCode() {
+			return Objects.hashCode(req());
+		}
+		public boolean equals(Object o) {
+			if (o instanceof RequestScope)
+				return Objects.equals(req(), ((RequestScope)o).req());
+			return Objects.equals(req(), o);
 		}
 	}
 }

@@ -26,15 +26,12 @@ Copyright (C) 2008 Potix Corporation. All Rights Reserved.
  *
  * <p>See Also
  * <ul>
- * <li><a href="http://docs.zkoss.org/wiki/AU_Request">AU Request</a> - a full list of built-in AU requests (aka., widget events)</li>
- * <li><a href="http://docs.zkoss.org/wiki/AU_Response">AU Response</a> - a full list of built-in AU responses.</li>
- * <li><a href="http://docs.zkoss.org/wiki/Client_Watches">Watches</a> - a full list of watches.</li>
- * <li><a href="http://docs.zkoss.org/wiki/Widget_and_DOM_Events#Listen_By_Overriding">Widget and DOM Events</a></li>
- * <li><a href="http://docs.zkoss.org/wiki/How_to_Process_Request_with_JSON">How to Process Request with JSON</a></li>
- * <li><a href="http://docs.zkoss.org/wiki/CDG5:_Event_Data">Event Data</a></li>
- * </ul>
+ * <li><a href="http://books.zkoss.org/wiki/ZK_Client-side_Reference/Communication/AU_Requests">AU Requests</a></li>
+ * <li><a href="http://books.zkoss.org/wiki/ZK_Client-side_Reference/Communication/AU_Responses">AU Responses</a></li>
+ * <li><a href="http://books.zkoss.org/wiki/ZK_Client-side_Reference/Notifications">Notifications</a></li>
+  * </ul>
  * <p>Common Key Codes:
- * <table>
+ * <table cellspacing="0" cellpadding="3" border="1">
  * <tr>
  * <td>BACKSSPACE</td><td>8</td>
  * <td>TAB</td><td>9</td>
@@ -93,8 +90,7 @@ onClick: function (evt) {
   }
 }
 </code></pre>
-	 * <p>Refer to How to <a href="http://docs.zkoss.org/wiki/How_to_Process_Request_with_JSON">How to Process Request with JSON</a>
-	 * and <a href="http://docs.zkoss.org/wiki/CDG5:_Event_Data">Event Data</a> for more information.
+	 * <p>Refer to <a href="http://books.zkoss.org/wiki/ZK_Client-side_Reference/Communication/AU_Requests/Server-side_Processing">ZK Client-side Reference: AU Requests: Server-side Processing</a>.
 	 * @type Object
  	 */
  	//data: null,
@@ -147,7 +143,6 @@ onClick: function (evt) {
 	 * @param zk.Widget target the target widget.
 	 * @param String name the event name, such as onClick
 	 * @param Object data [optional] the data depending on the event.
-	 * Here is a list of <a href="http://docs.zkoss.org/wiki/CDG5:_Event_Data">Event Data</a>
 	 * @param Map opts [optional] the options. Refer to {@link #opts}
 	 * @param jq.Event domEvent [optional] the DOM event that causes this widget event.
 	 */
@@ -185,8 +180,8 @@ evt.stop({progagation:true,revoke:true}); //revoke the event propagation
 	* (but not {@link #auStopped}).
 	* For fine control, you can use a combination of the following values:
 	<ul>
-	<li>revoke - revoke the stop, i.e., undo the last invocation of {@link #stop}<li>
-	<li>propagation - stop (or revoke) the event propagation ({@link #stopped}).<li>
+	<li>revoke - revoke the stop, i.e., undo the last invocation of {@link #stop}</li>
+	<li>propagation - stop (or revoke) the event propagation ({@link #stopped}).</li>
 	<li>dom - stop (or revoke) the native DOM event ({@link #domStopped}).</li>
 	<li>au - stop (or revoke) the sending of the AU request to the server ({@link #auStopped}).
 	Notice that, unlike the propagation and dom options, the sending of AU requests won't be stopped if opts is omitted.
@@ -221,7 +216,8 @@ zWatch = (function () {
 					for (var j = 0, l = xinfs.length; j < l; ++j)
 						if (xinfs[j][0] == ref) {
 							infs = xinfs[j][1]
-							xinfs.splice(j, 1);
+							xinfs.splice(j--, 1);
+							--l;
 							_invoke(name, infs, ref, args);
 						}
 				} else
@@ -247,9 +243,14 @@ zWatch = (function () {
 	}
 	//Returns if c is a visible child of p
 	function _visibleChild(name, p, c) {
-		if (_visible(name, c))
-			for (; c; c = c.parent)
-				if (p == c) return true;
+		if (c.isWatchable_) //in future, w might not be a widget
+			for (var w = c; w; w = w.parent) {
+				if (!w._visible) //much faster to check _visible than DOM element
+					break;
+
+				if (p == w)
+					return c.isWatchable_(name, p);
+			}
 		return false;
 	}
 	//Returns subset of xinfs that are visible childrens of p
@@ -260,7 +261,7 @@ zWatch = (function () {
 				o = xinf[0],
 				diff = bindLevel > o.bindLevel;
 			if (diff) break;//nor ancestor, nor this (&sibling)
-			if ((p == o && _visible(name, o)) || _visibleChild(name, p, o)) {
+			if (_visibleChild(name, p, o)) {
 				if (remove)
 					xinfs.splice(j, 1);
 				found.unshift(xinf); //parent first
@@ -295,8 +296,11 @@ zWatch = (function () {
 				wts.sort(_cmpLevel);
 		}
 	}
+	function _bindLevel(a) {
+		return (a = a.bindLevel) == null || isNaN(a) ? -1: a;
+	}
 	function _cmpLevel(a, b) {
-		return a[0].bindLevel - b[0].bindLevel;
+		return _bindLevel(a[0]) - _bindLevel(b[0]);
 	}
 	function _zsync(name, org) {
 		if (name == 'onSize' || name == 'onShow' || name == 'onHide')
@@ -332,11 +336,11 @@ zWatch = (function () {
  *
  * <p>A watch is a system-level event, such as onSize and beforeSize. For example, when an AU request is going to be sent to the server, the onSend watch is fired so the client application and/or the widget implementation can listen to it.
  *
- * <p>Here is a full list of <a href="http://docs.zkoss.org/wiki/Client_Watches">watches</a></li>. 
+ * <p>Here is a full list of <a href="http://books.zkoss.org/wiki/ZK_Client-side_Reference/Notifications/Client_Activity_Watches">Client Activity Watches</a></li>. 
 
 <h3>Add a Watch</h3>
 
-<p>To add a listener to a watch, use #listen. The listener must implement a method with the same as the action name. For example,
+<p>To add a listener to a watch, use {@link #listen}. The listener must implement a method with the same as the action name. For example,
 <pre><code>
 MyListener = zk.$extends(zk.Object, {
   onSend: function() {
@@ -361,7 +365,7 @@ zWatch({
   onHide: [this, this._onHide]
 });
 </code></pre>
-	* <p>As shown above, each key of the infs map is the watch name, and each value is the target against which the watch listener will be called, or a two-element array, where the first element is the target and the second the listener function. For example, zWatch({onSize: foo}) will cause foo.onSize to be called when onSize is fired. The arguments passed are the same as {@link #fire}/{@link #fireDown}.3
+	* <p>As shown above, each key of the infs map is the watch name, and each value is the target against which the watch listener will be called, or a two-element array, where the first element is the target and the second the listener function. For example, zWatch({onSize: foo}) will cause foo.onSize to be called when onSize is fired. The arguments passed are the same as {@link #fire}/{@link #fireDown}.
 	* <p>Note: the order is parent-first (if the watch has a method called getParent or a member called parent), so the invocation ({@link #fire}) is from the parent to the child if both are registered.
 	* @param Map infs a map of the watch listeners. Each key of the map is the the watch name, and each value is the target or a two-element array, where the first element is the target and the second the listener function. It assumes the target implements the method with the same name as the watch name. In addition, when the method is called, this references to the target. 
 	*/

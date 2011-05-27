@@ -25,16 +25,20 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Set;
 import java.util.HashSet;
+import java.lang.reflect.Method;
 
 import org.zkoss.lang.Library;
 import org.zkoss.lang.Classes;
+import org.zkoss.lang.Objects;
 import org.zkoss.lang.PotentialDeadLockException;
 import org.zkoss.lang.Exceptions;
+import org.zkoss.lang.reflect.Fields;
 import org.zkoss.util.WaitLock;
 import org.zkoss.util.FastReadArray;
 import org.zkoss.util.logging.Log;
 import org.zkoss.xel.ExpressionFactory;
 import org.zkoss.xel.Expressions;
+import org.zkoss.xel.VariableResolver;
 
 import org.zkoss.zk.ui.Component;
 import org.zkoss.zk.ui.WebApp;
@@ -57,12 +61,15 @@ import org.zkoss.zk.ui.sys.DesktopCacheProvider;
 import org.zkoss.zk.ui.sys.UiFactory;
 import org.zkoss.zk.ui.sys.FailoverManager;
 import org.zkoss.zk.ui.sys.IdGenerator;
+import org.zkoss.zk.ui.sys.PropertiesRenderer;
+import org.zkoss.zk.ui.sys.SEORenderer;
 import org.zkoss.zk.ui.sys.SessionCache;
+import org.zkoss.zk.ui.sys.Attributes;
 import org.zkoss.zk.ui.impl.RichletConfigImpl;
 import org.zkoss.zk.ui.impl.EventInterceptors;
 import org.zkoss.zk.ui.impl.MultiComposer;
-import org.zkoss.zk.ui.sys.Attributes;
 import org.zkoss.zk.device.Devices;
+import org.zkoss.zk.au.AuDecoder;
 
 /**
  * The ZK configuration.
@@ -96,13 +103,18 @@ public class Configuration {
 		_dtCleans = new FastReadArray(Class.class),
 		_execInits = new FastReadArray(Class.class),
 		_execCleans = new FastReadArray(Class.class),
-		_uiCycles = new FastReadArray(UiLifeCycle.class),
-		_composers = new FastReadArray(Class.class);
+		_composers = new FastReadArray(Class.class),
+		_initiators = new FastReadArray(Class.class),
+		_seoRends = new FastReadArray(Class.class),
+		_resolvers = new FastReadArray(Class.class);
 		//since it is called frequently, we use array to avoid synchronization
 	/** List of objects. */
 	private final FastReadArray
 		_uriIntcps = new FastReadArray(URIInterceptor.class),
-		_reqIntcps = new FastReadArray(RequestInterceptor.class);
+		_reqIntcps = new FastReadArray(RequestInterceptor.class),
+		_uiCycles = new FastReadArray(UiLifeCycle.class),
+		_propRends = new FastReadArray(PropertiesRenderer.class),
+		_labellocs = new FastReadArray(String.class);
 	private final Map _prefs  = Collections.synchronizedMap(new HashMap());
 	/** Map(String name, [Class richlet, Map params] or Richilet richlet). */
 	private final Map _richlets = new HashMap();
@@ -124,7 +136,7 @@ public class Configuration {
 	/** A list of client packages. */
 	private final FastReadArray _clientpkgs = new FastReadArray(String.class);
 	private Class _wappcls, _uiengcls, _dcpcls, _uiftycls,
-		_failmancls, _idgencls, _sesscachecls;
+		_failmancls, _idgencls, _sesscachecls, _audeccls;
 	private int _dtTimeout = 3600, _sessDktMax = 15, _sessReqMax = 5,
 		_sessPushMax = -1,
 		_sessTimeout = 0, _sparThdMax = 100, _suspThdMax = -1,
@@ -182,13 +194,25 @@ public class Configuration {
 	 * to richlets. In additions, an independent
 	 * composer is instantiated for each page so there is synchronization required.
 	 *
+	 * <p>By default, a listener is instantiated when required, and dropped
+	 * after invoked. In other words, a new instance will be instantiated in
+	 * the next invocation. It means you don't have to worry the threading,
+	 * <p>However, for better performance, the following listeners will be instantiated
+	 * in {@link #addListener}, and then used repeatedly. It means it has
+	 * to be thread safe. These listeners include
+	 * {@link URIInterceptor}, {@link RequestInterceptor},
+	 * {@link EventInterceptor}, {@link UiLifeCycle},
+	 * and {@link PropertiesRenderer}.
+	 *
 	 * @param klass the listener class must implement at least one of
 	 * {@link Monitor}, {@link PerformanceMeter}, {@link EventThreadInit},
 	 * {@link EventThreadCleanup}, {@link EventThreadSuspend},
 	 * {@link EventThreadResume}, {@link WebAppInit}, {@link WebAppCleanup},
 	 * {@link SessionInit}, {@link SessionCleanup}, {@link DesktopInit},
 	 * {@link DesktopCleanup}, {@link ExecutionInit}, {@link ExecutionCleanup},
-	 * {@link Composer},
+	 * {@link Composer}, {@link Initiator} (since 5.0.7), {@link SEORenderer} (since 5.0.7),
+	 * {@link PropertiesRenderer} (since 5.0.7),
+	 * {@link VariableResolver},
 	 * {@link URIInterceptor}, {@link RequestInterceptor},
 	 * {@link UiLifeCycle}, {@link DesktopRecycle},
 	 * and/or {@link EventInterceptor} interfaces.
@@ -200,19 +224,19 @@ public class Configuration {
 
 		if (Monitor.class.isAssignableFrom(klass)) {
 			if (_monitor != null)
-				throw new UiException("Monitor listener can be assigned only once");
+				throw new UiException("Monitor can be assigned only once");
 			_monitor = (Monitor)(listener = getInstance(klass, listener));
 			added = true;
 		}
 		if (PerformanceMeter.class.isAssignableFrom(klass)) {
 			if (_pfmeter != null)
-				throw new UiException("PerformanceMeter listener can be assigned only once");
+				throw new UiException("PerformanceMeter can be assigned only once");
 			_pfmeter = (PerformanceMeter)(listener = getInstance(klass, listener));
 			added = true;
 		}
 		if (DesktopRecycle.class.isAssignableFrom(klass)) {
 			if (_dtRecycle != null)
-				throw new UiException("PerformanceMeter listener can be assigned only once");
+				throw new UiException("DesktopRecycle can be assigned only once");
 			_dtRecycle = (DesktopRecycle)(listener = getInstance(klass, listener));
 			added = true;
 		}
@@ -273,6 +297,21 @@ public class Configuration {
 			_composers.add(klass); //not instance
 			added = true;
 		}
+		if (Initiator.class.isAssignableFrom(klass)) {
+			_initiators.add(klass); //not instance
+			added = true;
+		}
+		if (SEORenderer.class.isAssignableFrom(klass)) {
+			_seoRends.add(klass);
+			added = true;
+		}
+		if (VariableResolver.class.isAssignableFrom(klass)) {
+			_resolvers.add(klass); //not instance
+			added = true;
+		}
+
+		//for better performance, the following listeners are instantiated
+		//here and shared in the whole application
 
 		if (URIInterceptor.class.isAssignableFrom(klass)) {
 			try {
@@ -302,6 +341,14 @@ public class Configuration {
 		if (UiLifeCycle.class.isAssignableFrom(klass)) {
 			try {
 				_uiCycles.add(listener = getInstance(klass, listener));
+			} catch (Throwable ex) {
+				log.error("Failed to instantiate "+klass, ex);
+			}
+			added = true;
+		}
+		if (PropertiesRenderer.class.isAssignableFrom(klass)) {
+			try {
+				_propRends.add(listener = getInstance(klass, listener));
 			} catch (Throwable ex) {
 				log.error("Failed to instantiate "+klass, ex);
 			}
@@ -344,11 +391,15 @@ public class Configuration {
 		_execCleans.remove(klass);
 
 		_composers.remove(klass);
+		_initiators.remove(klass);
+		_seoRends.remove(klass);
+		_resolvers.remove(klass);
 
 		final SameClass sc = new SameClass(klass);
 		_uriIntcps.removeBy(sc, true);
 		_reqIntcps.removeBy(sc, true);
 		_uiCycles.removeBy(sc, true);
+		_propRends.removeBy(sc, true);
 
 		_eis.removeEventInterceptor(klass);
 	}
@@ -407,8 +458,15 @@ public class Configuration {
 		for (Iterator it = inits.iterator(); it.hasNext();) {
 			final EventThreadInit fn = (EventThreadInit)it.next();
 			try {
-				if (!fn.init(comp, evt))
-					return false; //ignore the event
+				try {
+					if (!fn.init(comp, evt))
+						return false; //ignore the event
+				} catch (AbstractMethodError ex) { //backward compatible prior to 3.0
+					final Method m = fn.getClass().getMethod(
+						"init", new Class[] {Component.class, Event.class});
+					Fields.setAccessible(m, true);
+					m.invoke(fn, new Object[] {comp, evt});
+				}
 			} catch (Throwable ex) {
 				throw UiException.Aide.wrap(ex);
 				//Don't intercept; to prevent the event being processed
@@ -681,8 +739,9 @@ public class Configuration {
 			final Class klass = (Class)ary[j];
 			try {
 				((WebAppCleanup)klass.newInstance()).cleanup(_wapp);
+			} catch (NoClassDefFoundError ex) { //Bug 3046360
 			} catch (Throwable ex) {
-				log.error("Failed to invoke "+klass, ex);
+				log.realCauseBriefly("Ignored: failed to invoke "+klass, ex);
 			}
 		}
 	}
@@ -708,7 +767,14 @@ public class Configuration {
 			final Class klass = (Class)ary[j];
 			try {
 				final SessionInit fn = (SessionInit)klass.newInstance();
-				fn.init(sess, request);
+				try {
+					fn.init(sess, request);
+				} catch (AbstractMethodError ex) { //backward compatible prior to 3.0.1
+					final Method m =
+						klass.getMethod("init", new Class[] {Session.class});
+					Fields.setAccessible(m, true);
+					m.invoke(fn, new Object[] {sess});
+				}
 			} catch (Throwable ex) {
 				throw UiException.Aide.wrap(ex);
 				//Don't intercept; to prevent the creation of a session
@@ -760,7 +826,14 @@ public class Configuration {
 			final Class klass = (Class)ary[j];
 			try {
 				final DesktopInit fn = (DesktopInit)klass.newInstance();
-				fn.init(desktop, request);
+				try {
+					fn.init(desktop, request);
+				} catch (AbstractMethodError ex) { //backward compatible prior to 3.0.1
+					final Method m =
+						klass.getMethod("init", new Class[] {Desktop.class});
+					Fields.setAccessible(m, true);
+					m.invoke(fn, new Object[] {desktop});
+				}
 			} catch (Throwable ex) {
 				throw UiException.Aide.wrap(ex);
 				//Don't intercept; to prevent the creation of a session
@@ -890,8 +963,27 @@ public class Configuration {
 		}
 	}
 
+	/** Adds the location of a properties file for i18n labels.
+	 * <p>Default: none (/WEB-INF/i3-label.properties are assumed).
+	 * <p>Notice that this method has no effect after the web server has been
+	 * started. Thus, it is suggested to use the label-location element in zk.xml instead.
+	 * @since 5.0.7
+	 */
+	public void addLabelLocation(String location) {
+		if (location == null || location.length() == 0)
+			throw new IllegalArgumentException();
+		_labellocs.add(location);
+	}
+	/** Returns an array of the locations of properties files registered
+	 * by {@link #addLabelLocation}.
+	 * @since 5.0.7
+	 */
+	public String[] getLabelLocations() {
+		return (String[])_labellocs.toArray();
+	}
+
 	/** Returns the system-level composer or null if none is registered.
-	 * To register a system-levelcomposer, use {@link #addListener}
+	 * To register a system-levelcomposer, use {@link #addListener}.
 	 * <p>Notice that any number of composers can be registered,
 	 * and a single composer is returned to represent them all.
 	 * @since 5.0.1
@@ -900,6 +992,77 @@ public class Configuration {
 		return MultiComposer.getComposer(page, (Class[])_composers.toArray());
 	}
 
+	/** Returns a readonly list of the system-level initiators.
+	 * It is empty if none is registered.
+	 * To register a system-level initiator, use {@link #addListener}.
+	 * @since 5.0.7
+	 */
+	public Initiator[] getInitiators() {
+		final Class[] initclses = (Class[])_initiators.toArray();
+		if (initclses.length == 0)
+			return new Initiator[0];
+
+		final List inits = new LinkedList();
+		for (int j = 0; j < initclses.length; ++j) {
+			final Initiator init;
+			try {
+				inits.add((Initiator)initclses[j].newInstance());
+			} catch (Throwable ex) {
+				log.error("Failed to instantiate " + initclses[j]);
+			}
+		}
+		return (Initiator[])inits.toArray(new Initiator[inits.size()]);
+	}
+	/** Returns a readonly list of the system-level SEO renderer.
+	 * It is empty if none is registered.
+	 * To register a system-level SEO renderers, use {@link #addListener}.
+	 * <p>Notice that, once registered, an instance is instantiated before
+	 * invoking {@link SEORenderer#render}.
+	 * @since 5.0.7
+	 */
+	public SEORenderer[] getSEORenderers() {
+		final Class[] sdclses = (Class[])_seoRends.toArray();
+		if (sdclses.length == 0)
+			return new SEORenderer[0];
+
+		final List sds = new LinkedList();
+		for (int j = 0; j < sdclses.length; ++j) {
+			final SEORenderer sd;
+			try {
+				sds.add((SEORenderer)sdclses[j].newInstance());
+			} catch (Throwable ex) {
+				log.error("Failed to instantiate " + sdclses[j]);
+			}
+		}
+		return (SEORenderer[])sds.toArray(new SEORenderer[sds.size()]);
+	}
+	
+	/** Initializes the given page with the variable resolvers registered
+	 * by {@link #addListener}.
+	 * It must be called before accessing a page (actually in {@link org.zkoss.zk.ui.sys.PageCtrl#preInit}).
+	 * @since 5.0.4
+	 */
+	public void init(Page page) {
+		final Class[] classes = (Class[])_resolvers.toArray();
+		for (int j = 0; j < classes.length; ++j) {
+			try {
+				page.addVariableResolver((VariableResolver)classes[j].newInstance());
+			} catch (Throwable ex) {
+				log.error("Failed to instantiate "+classes[j], ex);
+			}
+		}
+	}
+
+	/** Returns a readonly list of the system-level properties renders.
+	 * It is empty if none is registered.
+	 * To register a system-level properties renders, use {@link #addListener}.
+	 * <p>Notice that, once registered, it is instantiated immeidately,
+	 * and the same instance is shared for rendering the properties of every component.
+	 * @since 5.0.7
+	 */
+	public PropertiesRenderer[] getPropertiesRenderers() {
+		return (PropertiesRenderer[])_propRends.toArray();
+	}
 	/** Invokes {@link UiLifeCycle#afterComponentAttached}
 	 * when a component is attached to a page.
 	 * @since 3.0.6
@@ -1044,22 +1207,26 @@ public class Configuration {
 		_themeProvider = provider;
 	}
 
-	/** Sets the class that implements {@link UiEngine}, or null to
+	/** Sets the class used to handle UI loading and updates, or null to
 	 * use the default.
+	 * It must implement {@link UiEngine}.
 	 */
 	public void setUiEngineClass(Class cls) {
 		if (cls != null && !UiEngine.class.isAssignableFrom(cls))
 			throw new IllegalArgumentException("UiEngine not implemented: "+cls);
 		_uiengcls = cls;
 	}
-	/** Returns the class that implements {@link UiEngine}, or null if default is used.
+	/** Returns the class used to handle UI loading and updates,
+	 * or null if default is used.
+	 * It must implement {@link UiEngine}.
 	 */
 	public Class getUiEngineClass() {
 		return _uiengcls;
 	}
 
-	/** Sets the class that implements {@link WebApp} and
-	 * {@link WebAppCtrl}, or null to use the default.
+	/** Sets the class used to represent a Web application,
+	 * or null to use the default.
+	 * It must implement {@link WebApp} and {@link WebAppCtrl}
 	 *
 	 * <p>Note: you have to set the class before {@link WebApp} is created.
 	 * Otherwise, it won't have any effect.
@@ -1070,15 +1237,17 @@ public class Configuration {
 			throw new IllegalArgumentException("WebApp or WebAppCtrl not implemented: "+cls);
 		_wappcls = cls;
 	}
-	/** Returns the class that implements {@link WebApp} and
-	 * {@link WebAppCtrl}, or null if default is used.
+	/** Returns the class used to represent a Web application,
+	 * or null if default is used.
+	 * It must implement {@link WebApp} and {@link WebAppCtrl}
 	 */
 	public Class getWebAppClass() {
 		return _wappcls;
 	}
 
-	/** Sets the class that implements {@link DesktopCacheProvider}, or null to
+	/** Sets the class used to provide the desktop cache, or null to
 	 * use the default.
+	 * It must implement {@link DesktopCacheProvider}.
 	 *
 	 * <p>Note: you have to set the class before {@link WebApp} is created.
 	 * Otherwise, it won't have any effect.
@@ -1088,14 +1257,17 @@ public class Configuration {
 			throw new IllegalArgumentException("DesktopCacheProvider not implemented: "+cls);
 		_dcpcls = cls;
 	}
-	/** Returns the class that implements the UI engine, or null if default is used.
+	/** Returns the class used to provide the desktop cache, or null
+	 * if default is used.
+	 * It must implement {@link DesktopCacheProvider}.
 	 */
 	public Class getDesktopCacheProviderClass() {
 		return _dcpcls;
 	}
 
-	/** Sets the class that implements {@link UiFactory}, or null to
-	 * use the default.
+	/** Sets the class used to instantiate desktops, pages and components, or
+	 * null to use the default.
+	 * It must implement {@link UiFactory},
 	 *
 	 * <p>Note: you have to set the class before {@link WebApp} is created.
 	 * Otherwise, it won't have any effect.
@@ -1105,14 +1277,17 @@ public class Configuration {
 			throw new IllegalArgumentException("UiFactory not implemented: "+cls);
 		_uiftycls = cls;
 	}
-	/** Returns the class that implements the UI engine, or null if default is used.
+	/** Returns the class used to instantiate desktops, pages and components,
+	 * or null if default is used.
+	 * It must implement {@link UiFactory},
 	 */
 	public Class getUiFactoryClass() {
 		return _uiftycls;
 	}
 
-	/** Sets the class that implements {@link FailoverManager}, or null if
+	/** Sets the class used to handle the failover mechanism, or null if
 	 * no custom failover mechanism.
+	 * It must implement {@link FailoverManager}.
 	 *
 	 * <p>Note: you have to set the class before {@link WebApp} is created.
 	 * Otherwise, it won't have any effect.
@@ -1122,8 +1297,9 @@ public class Configuration {
 			throw new IllegalArgumentException("FailoverManager not implemented: "+cls);
 		_failmancls = cls;
 	}
-	/** Returns the class that implements the failover manger,
+	/** Returns the class used to handle the failover mechanism,
 	 * or null if no custom failover mechanism.
+	 * It must implement {@link FailoverManager}.
 	 */
 	public Class getFailoverManagerClass() {
 		return _failmancls;
@@ -1142,8 +1318,9 @@ public class Configuration {
 			throw new IllegalArgumentException("IdGenerator not implemented: "+cls);
 		_idgencls = cls;
 	}
-	/** Returns the class that implements {@link IdGenerator},
-	 * or null if the default shall be used.
+	/** Returns the class used to generate UUID/ID for desktop,
+	 * page and components, or null if the default shall be used.
+	 * It must implement {@link IdGenerator}
 	 * @since 2.4.1
 	 */
 	public Class getIdGeneratorClass() {
@@ -1153,6 +1330,9 @@ public class Configuration {
 	/** Sets the class that is used to store ZK sessions,
 	 * or null to use the default.
 	 * It must implement {@link SessionCache}.
+	 *
+	 * <p>Note: you have to set the class before {@link WebApp} is created.
+	 * Otherwise, it won't have any effect.
 	 * @since 3.0.5
 	 */
 	public void setSessionCacheClass(Class cls) {
@@ -1160,23 +1340,45 @@ public class Configuration {
 			throw new IllegalArgumentException("SessionCache not implemented: "+cls);
 		_sesscachecls = cls;
 	}
-	/** Returns the class that implements {@link SessionCache}, or null
+	/** Returns the class used to store ZK sessions, or null
 	 * if the default shall be used.
+	 * It must implement {@link SessionCache}.
 	 * @since 3.0.5
 	 */
 	public Class getSessionCacheClass() {
 		return _sesscachecls;
 	}
 
+	/** Sets the class that is used to decode AU requests,
+	 * or null to use the default.
+	 * It must implement {@link AuDecoder}.
+	 *
+	 * <p>Note: you have to set the class before {@link WebApp} is created.
+	 * Otherwise, it won't have any effect.
+	 * @since 5.0.4
+	 */
+	public void setAuDecoderClass(Class cls) {
+		if (cls != null && !AuDecoder.class.isAssignableFrom(cls))
+			throw new IllegalArgumentException("AuDecoder not implemented: "+cls);
+		_audeccls = cls;
+	}
+	/** Returns the class used to decode AU requests, or null
+	 * if the default shall be used.
+	 * It must implement {@link AuDecoder}.
+	 * @since 5.0.4
+	 */
+	public Class getAuDecoderClass() {
+		return _audeccls;
+	}
+
 	/** Specifies the maximal allowed time to process events, in milliseconds.
-	 * ZK will keep processing the requests sent from
-	 * the client until all requests are processed, or the maximal allowed
-	 * time expires.
+	 * ZK will keep processing the requests until all requests are processed,
+	 * or the maximal allowed time expires.
 	 *
 	 * <p>Default: 3000.
 	 *
-	 * <p>Note: since 3.0.0, this setting has no effect on Ajax devices.
-	 * Ajax devices send the requests synchronously.
+	 * <p>Note: since 3.0.0, this setting has no effect on AU requests.
+	 * It controls only the requests from the client-polling server push.
 	 *
 	 * @param time the maximal allowed time to process events.
 	 * It must be positive.
@@ -1185,7 +1387,7 @@ public class Configuration {
 		_maxProcTime = time;
 	}
 	/** Returns the maximal allowed time to process events, in milliseconds.
-	 * It is always positive
+	 * It is always positive.
 	 */
 	public int getMaxProcessTime() {
 		return _maxProcTime;
@@ -1331,8 +1533,7 @@ public class Configuration {
 	 * the request to the server.
 	 *
 	 * <p>Default: -1 (i.e., disabled).
-	 * However, if zkmax.jar was installed (or with ZK 3.0.1 and 3.0.2),
-	 * the default is 9000.
+	 * However, if ZK 5.0.3 EE or prior, the default is 9000.
 	 *
 	 * <p>There are many reasons an Ajax request is not received by
 	 * the server. With the resending mechanism, ZK ensures the reliable
@@ -1411,6 +1612,44 @@ public class Configuration {
 		TimeoutURIInfo oldi = (TimeoutURIInfo)_timeoutURIs.put(deviceType, newi);
 		if (oldi != null) newi.auto = oldi.auto;
 		return oldi != null && oldi.uri != null ? oldi: null;
+	}
+
+	/** Returns the timeout message for this device, or null if the default
+	 * message is preferred.
+	 * It is used only if {@link #getTimeoutURI} returns null.
+	 * @since 5.0.5
+	 * @see #setTimeoutMessage
+	 */
+	public String getTimeoutMessage(String deviceType) {
+		if (deviceType == null) deviceType = "ajax";
+
+		TimeoutURIInfo inf = (TimeoutURIInfo)_timeoutURIs.get(deviceType);
+		return inf != null ? inf.message: null;
+	}
+	/** Sets the timeout message for this device, or null if the default
+	 * message is preferred.
+	 * It is used only if {@link #getTimeoutURI} returns null.
+	 * <p>To specify an I18N label, prefix the key with <code>label:</code>.
+	 * To specify the JavaScript code, prefix the code with <code>script:</code>.
+	 * Refer to <a href="http://books.zkoss.org/wiki/ZK_Configuration_Reference/zk.xml/The_session-config_Element#The_timeout-message_Element">ZK Configuration Reference</a>
+	 * for more information.
+	 * @return the previous message, if any
+	 * @since 5.0.5
+	 */
+	public String setTimeoutMessage(String deviceType, String message) {
+		if (deviceType == null) deviceType = "ajax";
+
+		TimeoutURIInfo inf = (TimeoutURIInfo)_timeoutURIs.get(deviceType);
+		if (inf != null) {
+			String old = inf.message;
+			inf.message = message;
+			return old;
+		}
+
+		inf = new TimeoutURIInfo();
+		inf.message = message;
+		_timeoutURIs.put(deviceType, inf);
+		return null;
 	}
 
 	/** Returns whether to automatically trigger the timeout at the client.
@@ -1562,6 +1801,30 @@ public class Configuration {
 			"s:" + deviceType: deviceType;
 	}
 	
+	/** @deprecated As of release 3.6.3, replaced with {@link #setClientErrorReload}.
+	 * It is equivalent to setClientErrorReload("ajax", errCode, uri, null).
+	 */
+	public String addClientErrorReload(int errCode, String uri) {
+		return setClientErrorReload("ajax", errCode, uri, null);
+	}
+	/** @deprecated As of release 3.6.3, replaced with {@link #removeClientErrorReload(String,int,String)}.
+	 * It is equivalent to removeClientErrorReload("ajax", errCode, null).
+	 */
+	public String removeClientErrorReload(int errCode) {
+		return removeClientErrorReload("ajax", errCode, null);
+	}
+	/** @deprecated As of release 3.6.3, replaced with {@link #getClientErrorReload(String,int,String)}.
+	 * It is equivalent to getClientErrorReload("ajax", errCode, null).
+	 */
+	public String getClientErrorReload(int errCode) {
+		return getClientErrorReload("ajax", errCode, null);
+	}
+	/** @deprecated As of release 3.6.3, replaced with {@link #getClientErrorReloads}.
+	 */
+	public int[] getClientErrorReloadCodes() {
+		throw new UnsupportedOperationException("use getClientErrorReloads(\"ajax\",null) instead");
+	}
+
 	/**  Specifies the time, in seconds, between client requests
 	 * before ZK will invalidate the session.
 	 *
@@ -2358,8 +2621,20 @@ public class Configuration {
 		public int compareTo(Object o) {
 			return o.getClass().equals(_klass) ? 0: 1;
 		}
+
+		//Object//
+		public String toString() {
+			return Objects.toString(_klass);
+		}
+		public boolean equals(Object o) {
+			return Objects.equals(_klass, o instanceof SameClass ? ((SameClass)o)._klass: o);
+		}
+		public int hashCode() {
+			return Objects.hashCode(_klass);
+		}
 	}
 	private static class TimeoutURIInfo extends URIInfo {
+		private String message;
 		private boolean auto;
 		private TimeoutURIInfo() {
 			super(null);

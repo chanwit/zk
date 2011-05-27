@@ -57,6 +57,15 @@ abstract public class GenericDevice implements Device {
 		return old;
 	}
 
+	/** @deprecated */
+	public String getTimeoutURI() {
+		return null;
+	}
+	/** @deprecated */
+	public String setTimeoutURI(String timeoutURI) {
+		throw new UnsupportedOperationException("Use Configuration.setTimeoutURI() instead");
+	}
+
 	public Class setServerPushClass(Class cls) {
 		if (cls != null && !ServerPush.class.isAssignableFrom(cls))
 			throw new IllegalArgumentException("ServerPush not implemented: "+cls);
@@ -91,6 +100,31 @@ abstract public class GenericDevice implements Device {
 	 */
 	public boolean isClient(String userAgent, String type) {
 		return false;
+	}
+
+	/** Reloads the client-side messages in the specified locale.
+	 * <p>Default: throw UnsupportedOperationException.
+	 * @since 5.0.4
+	 */
+	public void reloadMessages(java.util.Locale locale)
+	throws java.io.IOException {
+		throw new UnsupportedOperationException();
+	}
+	/** Converts a package to an absolute path that can be accessible by
+	 * the class loader (classpath).
+	 * <p>Default: throw UnsupportedOperationException.
+	 * @since 5.0.4
+	 */
+	public String packageToPath(String pkg) {
+		throw new UnsupportedOperationException();
+	}
+	/** Converts a relative path to an absolute path that can be accessible by
+	 * the class loader (classpath).
+	 * <p>Default: throw UnsupportedOperationException.
+	 * @since 5.0.4
+	 */
+	public String toAbsolutePath(String path) {
+		throw new UnsupportedOperationException();
 	}
 
 	public void init(String type, DeviceConfig config) {

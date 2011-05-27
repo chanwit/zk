@@ -19,7 +19,6 @@ package org.zkoss.zkplus.databind;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -54,7 +53,7 @@ implements org.zkoss.zul.RowRenderer, org.zkoss.zul.RowRendererExt, Serializable
 		//link cloned component with template
 		//each Row and its decendants share the same templatemap
 		Map templatemap = new HashMap(7);
-		linkTemplates(clone, _template, templatemap);
+		BindingRendererUtil.linkTemplates(clone, _template, templatemap, _binder);
 		
 		//link this template map to parent templatemap (Grid in Grid)
 		Map parenttemplatemap = (Map) grid.getAttribute(DataBinder.TEMPLATEMAP);
@@ -86,7 +85,7 @@ implements org.zkoss.zul.RowRenderer, org.zkoss.zul.RowRendererExt, Serializable
 		_binder.setupTemplateComponent(row, null); 
 			
 		//setup clone id
-		setupCloneIds(row);
+		BindingRendererUtil.setupCloneIds(row);
 
 		//bind bean to the associated listitem and its decendant
 		final String varname = (String) _template.getAttribute(DataBinder.VARNAME);
@@ -95,50 +94,9 @@ implements org.zkoss.zul.RowRenderer, org.zkoss.zul.RowRendererExt, Serializable
 
 		//apply the data binding
 		_binder.loadComponent(row);
-	}
 
-	//link cloned components with bindings of templates
-	private void linkTemplates(Component clone, Component template, Map templatemap) {
-		if (_binder.existsBindings(template)) {
-			templatemap.put(template, clone);
-			clone.setAttribute(DataBinder.TEMPLATEMAP, templatemap);
-			clone.setAttribute(DataBinder.TEMPLATE, template);
-		}
-		
-		//Listbox in Listbox, Listbox in Grid, Grid in Listbox, Grid in Grid, 
-		//no need to process down since BindingRowRenderer of the under Grid
-		//owner will do its own linkTemplates()
-		//bug#1888911 databind and Grid in Grid not work when no _var in inner Grid
-		if (DataBinder.isCollectionOwner(template)) {
-			return;
-		}
-		
-		final Iterator itt = template.getChildren().iterator();
-		final Iterator itc = clone.getChildren().iterator();
-		while (itt.hasNext()) {
-			final Component t = (Component) itt.next();
-			final Component c = (Component) itc.next();
-			linkTemplates(c, t, templatemap);	//recursive
-		}
+		//feature# 3026221: Databinder shall fire onCreate when cloning each items
+		DataBinder.postOnCreateEvents(row); //since 5.0.4
 	}
 	
-	//setup id of cloned components (cannot called until the component is attached to Grid)
-	private void setupCloneIds(Component clone) {
-		//bug #1813271: Data binding generates duplicate ids in grids/listboxes
-		//Bug #1962153: Data binding generates duplicate id in some case (add "_")
-		clone.setId(null); //init id to null to avoid duplicate id issue
-
-		//Listbox in Listbox, Listbox in Grid, Grid in Listbox, Grid in Grid, 
-		//no need to process down since BindingRowRenderer of the under Grid
-		//owner will do its own setupCloneIds()
-		//bug#1893247: Not unique in the new ID space when Grid in Grid
-		final Component template = DataBinder.getComponent(clone); 
-		if (template != null && DataBinder.isCollectionOwner(template)) {
-			return;
-		}
-		
-		for(final Iterator it = clone.getChildren().iterator(); it.hasNext(); ) {
-			setupCloneIds((Component) it.next()); //recursive
-		}
-	}
 }

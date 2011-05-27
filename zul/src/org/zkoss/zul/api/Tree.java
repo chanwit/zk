@@ -230,7 +230,6 @@ public interface Tree extends org.zkoss.zul.impl.api.XulElement, Paginated {
 	 * event-driven model.
 	 */
 	public String getName();
-
 	/**
 	 * Sets the name of this component.
 	 * <p>
@@ -245,6 +244,23 @@ public interface Tree extends org.zkoss.zul.impl.api.XulElement, Paginated {
 	 *            the name of this component.
 	 */
 	public void setName(String name);
+
+	/** Sets a list of HTML tag names that shall <i>not</i> cause the tree item
+	 * being selected if they are clicked.
+	 * <p>Default: null (it means button, input, textarea and a). If you want
+	 * to select no matter which tag is clicked, please specify an empty string.
+	 * @param tags a list of HTML tag names that will <i>not</i> cause the tree item
+	 * being selected if clicked. Specify null to use the default and "" to
+	 * indicate none.
+	 * @since 5.0.5
+	 */
+	public void setNonselectableTags(String tags);
+	/** Returns a list of HTML tag names that shall <i>not</i> cause the tree item
+	 * being selected if they are clicked.
+	 * <p>Refer to {@link #setNonselectableTags} for details.
+	 * @since 5.0.5
+	 */
+	public String getNonselectableTags();
 
 	/**
 	 * Sets whether the check mark shall be displayed in front of each item.
@@ -419,9 +435,6 @@ public interface Tree extends org.zkoss.zul.impl.api.XulElement, Paginated {
 	 * it to re-render, you could assign the same model again (i.e.,
 	 * setModel(getModel())), or fire an {@link TreeDataEvent} event.
 	 * 
-	 * <p>
-	 * Author: jeffliu
-	 * 
 	 * @param model
 	 *            the tree model to associate, or null to dis-associate any
 	 *            previous model.
@@ -434,8 +447,6 @@ public interface Tree extends org.zkoss.zul.impl.api.XulElement, Paginated {
 	/**
 	 * Returns the list model associated with this tree, or null if this tree is
 	 * not associated with any tree data model.
-	 * <p>
-	 * Author: jeffliu
 	 * 
 	 * @return the list model associated with this tree
 	 */
@@ -450,8 +461,31 @@ public interface Tree extends org.zkoss.zul.impl.api.XulElement, Paginated {
 	 * it to re-render, you could assign the same model again (i.e.,
 	 * setModel(getModel())), or fire an {@link TreeDataEvent} event.
 	 * 
+	 * @param renderer
+	 *            the renderer, or null to use the default.
+	 * @exception UiException
+	 *                if failed to initialize with the model
+	 * @since 5.0.6
+	 */
+	public void setItemRenderer(TreeitemRenderer renderer);
+
+	/**
+	 * Returns the renderer to render each item, or null if the default renderer
+	 * is used.
+	 * 
+	 * @return the renderer to render each item, or null if the default
+	 * @since 5.0.6
+	 */
+	public TreeitemRenderer getItemRenderer();
+
+	/**@deprecated As of release 5.0.6, replaced with {@link #setItemRenderer}.
+	 * Sets the renderer which is used to render each item if {@link #getModel}
+	 * is not null.
+	 * 
 	 * <p>
-	 * Author: jeffliu
+	 * Note: changing a render will not cause the tree to re-render. If you want
+	 * it to re-render, you could assign the same model again (i.e.,
+	 * setModel(getModel())), or fire an {@link TreeDataEvent} event.
 	 * 
 	 * @param renderer
 	 *            the renderer, or null to use the default.
@@ -460,7 +494,7 @@ public interface Tree extends org.zkoss.zul.impl.api.XulElement, Paginated {
 	 */
 	public void setTreeitemRenderer(TreeitemRenderer renderer);
 
-	/**
+	/**@deprecated As of release 5.0.6, replaced with {@link #getItemRenderer}.
 	 * Returns the renderer to render each item, or null if the default renderer
 	 * is used.
 	 * 
@@ -470,7 +504,7 @@ public interface Tree extends org.zkoss.zul.impl.api.XulElement, Paginated {
 
 	/**
 	 * Renders the specified {@link Treeitem}, if not loaded yet, with
-	 * {@link #getTreeitemRenderer}.
+	 * {@link #getItemRenderer}.
 	 * 
 	 * <p>
 	 * It does nothing if {@link #getModel} returns null.
@@ -483,7 +517,7 @@ public interface Tree extends org.zkoss.zul.impl.api.XulElement, Paginated {
 
 	/**
 	 * Renders the specified {@link Treeitem}, if not loaded yet, with
-	 * {@link #getTreeitemRenderer}.
+	 * {@link #getItemRenderer}.
 	 * 
 	 * <p>
 	 * It does nothing if {@link #getModel} returns null.
@@ -501,7 +535,7 @@ public interface Tree extends org.zkoss.zul.impl.api.XulElement, Paginated {
 
 	/**
 	 * Renders the specified {@link Treeitem} if not loaded yet, with
-	 * {@link #getTreeitemRenderer}.
+	 * {@link #getItemRenderer}.
 	 * 
 	 * <p>
 	 * It does nothing if {@link #getModel} returns null.
@@ -512,14 +546,21 @@ public interface Tree extends org.zkoss.zul.impl.api.XulElement, Paginated {
 	 */
 	public void renderItems(Set items);
 
+	/** Load the treeitems by the given node.
+	 * This method must be used with a tree model, and the node is
+	 * one of the value returned by {@link TreeModel#getChild}.
+	 * @exception IllegalStateException if no model is assigned ({@link #setModel}).
+	 * @since 5.0.6
+	 */
+	public org.zkoss.zul.api.Treeitem renderItemByNodeApi(Object node);
 	/**
 	 * Load treeitems through path <b>path</b> <br>
 	 * Note: By using this method, all treeitems in path will be rendered and
 	 * opened ({@link Treeitem#setOpen}). If you want to visit the rendered item
 	 * in paging mold, please invoke {@link #setActivePageApi(Treeitem)}.
 	 * 
-	 * @param path
-	 *            - an int[] path, see {@link TreeModel#getPath}
+	 * @param path - an index path. The first element is the index at the first level
+	 * of the tree structure.
 	 * @return the treeitem from tree by given path
 	 */
 	public org.zkoss.zul.api.Treeitem renderItemByPathApi(int[] path);

@@ -36,8 +36,11 @@ it will be useful, but WITHOUT ANY WARRANTY.
 		if (onBlur) {
 			if (zul.inp.InputWidget.onChangingForced && wgt.isListen("onChanging"))
 				_onChanging.call(wgt, -1); //force
-			wgt._lastChg = wgt.valueEnter_ = wgt.valueSel_ = null;
+			_clearOnChanging(wgt);
 		}
+	}
+	function _clearOnChanging(wgt) {
+		wgt._lastChg = wgt.valueEnter_ = wgt.valueSel_ = null;
 	}
 	function _onChanging(timeout) {
 		//Note: "this" is available here
@@ -47,11 +50,77 @@ it will be useful, but WITHOUT ANY WARRANTY.
 			this._lastChg = val;
 			var valsel = this.valueSel_;
 			this.valueSel_ = null;
-			this.fire('onChanging', _onChangeData(this, val, valsel == val),
-				{ignorable:1}, timeout||5);
+			this.fire('onChanging', _onChangeData(this, val, valsel == val), //pass inp.value directly
+				{ignorable:1, rtags: {onChanging: 1}}, timeout||5);
 		}
 	}
+	var _keyIgnorable = zk.ie ? function () {return true;}:
+		zk.opera ? function (code) {
+			return code == 32 || code > 46; //DEL
+		}: function (code) {
+			return code >= 32;
+		}
+/** @class zul.inp.Renderer
+ * The renderer used to render a inputWidget.
+ * It is designed to be overridden.
+ */
+zul.inp.Renderer = {
+	/** render the spinner's(timebox) button
+	* @param Array out an array of HTML fragments.
+	* @param zul.inp.ComboWidget wgt the combowidget
+	*/
+	renderSpinnerButton: function (out, wgt) {
+	}
+};
+/** @class zul.inp.RoundUtl
+ * The RoundUtl used to adjust the display of the rounded input.
+ * @since 5.0.7
+ */
+zul.inp.RoundUtl = {
+	/** Synchronizes the input element's width of this component
+	*/
+	syncWidth: function (wgt, rightElem) {
+		var node = wgt.$n();
+		if (!zk(node).isRealVisible() || (!wgt._inplace && !node.style.width))
+			return;
 
+		var inp = wgt.getInputNode();
+		
+		if (!node.style.width && wgt._inplace && 
+			(wgt._buttonVisible == undefined
+				|| wgt._buttonVisible)) {
+			node.style.width = jq.px0(this.getOuterWidth(wgt, true));
+		}
+		
+		if (zk.ie6_ && node.style.width)
+			inp.style.width = '0px';
+	
+		var	width = this.getOuterWidth(wgt, wgt.inRoundedMold());
+		
+		inp.style.width = jq.px0(zk(inp).revisedWidth(width - (rightElem ? rightElem.offsetWidth : 0)));
+	},
+	getOuterWidth: function(wgt, rmInplace) {
+		var node = wgt.$n(),
+			$n = jq(node),
+			$inp = jq(wgt.getInputNode()),
+			inc = wgt.getInplaceCSS(),
+			shallClean = !node.style.width && wgt._inplace;
+		
+		if (rmInplace && shallClean) {
+    		$n.removeClass(inc);
+    		$inp.removeClass(inc);
+		}
+		var	width = zk(node).revisedWidth(
+				node[zk.opera ? 'clientWidth': 'offsetWidth']) 
+				+ (zk.opera ? zk(node).borderWidth(): 0);
+		if (rmInplace && shallClean) {
+    		$n.addClass(inc);
+    		$inp.addClass(inc);
+		}
+		return width;
+	}
+	
+};
 var InputWidget =
 /**
  * A skeletal implementation for a input widget.
@@ -66,7 +135,7 @@ var InputWidget =
 zul.inp.InputWidget = zk.$extends(zul.Widget, {
 	_maxlength: 0,
 	_cols: 0,
-	_tabindex: -1,
+	//_tabindex: 0,
 	_type: 'text',
 	$define: {
 		/** Returns the name of this component.
@@ -125,6 +194,7 @@ zul.inp.InputWidget = zk.$extends(zul.Widget, {
 					fnm = readonly ? 'addClass': 'removeClass';
 				
 				inp.readOnly = readonly;
+				jq(this.$n())[fnm](zcls + '-real-readonly'); //Merge breeze
 				jq(inp)[fnm](zcls + '-readonly');
 				
 				if (!this.inRoundedMold()) return;
@@ -132,9 +202,11 @@ zul.inp.InputWidget = zk.$extends(zul.Widget, {
 				var btn = this.$n('btn');
 				jq(btn)[fnm](zcls + '-btn-readonly');
 				
-				if (zk.ie6_)		
+				if (zk.ie6_) {
 					jq(btn)[fnm](zcls + (this._buttonVisible ? '-btn-readonly':
 													'-btn-right-edge-readonly'));
+					jq(this.$n('right-edge'))[fnm](zcls + '-right-edge-readonly');
+				}
 			}
 		},
 		/** Returns the cols.
@@ -163,7 +235,7 @@ zul.inp.InputWidget = zk.$extends(zul.Widget, {
 				inp.maxLength = maxlength;
 		},
 		/** Returns the tab order of this component.
-		 * <p>Default: -1 (means the same as browser's default).
+		 * <p>Default: 0 (means the same as browser's default).
 		 * @return int
 		 */
 		/** Sets the tab order of this component.
@@ -172,7 +244,7 @@ zul.inp.InputWidget = zk.$extends(zul.Widget, {
 		tabindex: function (tabindex) {
 			var inp = this.getInputNode();
 			if (inp)
-				inp.tabIndex = tabindex;
+				inp.tabIndex = tabindex||'';
 		},
 		/** Returns whether enable the inplace-editing.
 		 * <p>default: false.
@@ -221,35 +293,62 @@ zul.inp.InputWidget = zk.$extends(zul.Widget, {
 	inRoundedMold: function(){
 		return this._mold == "rounded";
 	},
+
+	/** Returns the text representing the value in the given format,
+	 * or an empty etring if value is null
+	 * @return String
+	 * @since 5.0.5
+	 */
+	getText: function () {
+		return this.coerceToString_(this.getValue());
+	},
+	/** Sets the text representing the value in the given format.
+	 * @param String txt the text
+	 * @since 5.0.5
+	 */
+	setText: function (txt) {
+		this.setValue(this.coerceFromString_(txt));
+	},
+
 	/** Returns the value in the String format.
 	 * @return String
 	 */
 	getValue: function () {
 		return this._value;
 	},
-	/** Sets the value in the String format.
-	 * @param String value the value; If null, it is considered as empty.
-	 * @param boolean fromServer it will clear error message if true
+	/** Sets the value in the String format(assumes no locale issue).
+	 * <p>Notice that the invocation of {@link #getValue} won't fire
+	 * the onChange event. To fire it, you have to invoke {@link #fireOnChange}
+	 * explicitly.
+	 * @param Object value the value.
+	 * @param boolean fromServer whether it is called from the server.
+	 * The error message will be cleared if true
 	 */
 	setValue: function (value, fromServer) {
 		var vi;
 		if (fromServer) this.clearErrorMessage(true);
-		else if (value == this._lastRawValVld) return; //not changed
- 		else {
+		else {
+			if (value == this._lastRawValVld)
+				return; //not changed
+
  			vi = this._validate(value);
  			value = vi.value;
- 		}
+	 	}
+
+		_clearOnChanging(this);
 
 		//Note: for performance reason, we don't send value back if
 		//the validation shall be done at server, i.e., if (vi.server)
-		if ((!vi || !vi.error) && (fromServer || this._value != value)) {
+		if ((!vi || !vi.error) && (fromServer || !this._equalValue(this._value, value))) {
 			this._value = value;
 			var inp = this.getInputNode();
-			if (inp) {
-				inp.value = value = this.coerceToString_(value);
-				if (fromServer) inp.defaultValue = value; //not clear error if by client app
-			}
+			if (inp)
+				this._defValue = this._lastChg = inp.value = value = this.coerceToString_(value);
 		}
+	},
+	//value object set from server(smartUpdate, renderProperites)
+	set_value: function (value, fromServer) {
+		this.setValue(this.unmarshall_(value), fromServer);
 	},
 	/** Returns the input node of this widget
 	 * @return DOMElement
@@ -283,7 +382,7 @@ zul.inp.InputWidget = zk.$extends(zul.Widget, {
 			if (v > 0) html += ' maxlength="' + v + '"';
 		}
 		v = this._tabindex;
-		if (v >= 0) html += ' tabindex="' + v +'"';
+		if (v) html += ' tabindex="' + v +'"';
 		v = this._name;
 		if (v) html += ' name="' + v + '"';
 		if (this._disabled) html += ' disabled="disabled"';
@@ -318,7 +417,6 @@ zul.inp.InputWidget = zk.$extends(zul.Widget, {
 	doMouseOut_: function () {
 		this._inplaceout = true;
 		this.$supers('doMouseOut_', arguments);
-		
 	},
 	doMouseOver_: function () {
 		this._inplaceout = false;
@@ -327,14 +425,14 @@ zul.inp.InputWidget = zk.$extends(zul.Widget, {
 	doFocus_: function (evt) {
 		this.$supers('doFocus_', arguments);
 
-		if (evt.domTarget.tagName) { //Bug 2111900
-			var inp = this.getInputNode();
-			this._lastChg = inp.value;
+		var inp = this.getInputNode();
+		if (inp) this._lastChg = inp.value;
 
+		if (evt.domTarget.tagName) { //Bug 2111900
 			jq(this.$n()).addClass(this.getZclass() + '-focus');
 			if (this._inplace) {
 				jq(this.getInputNode()).removeClass(this.getInplaceCSS());
-				if (this._inplaceout === undefined)
+				if (!this._inplaceout)
 					this._inplaceout = true;
 			}
 			
@@ -343,9 +441,7 @@ zul.inp.InputWidget = zk.$extends(zul.Widget, {
 				var self = this;
 				setTimeout(function () {
 					if (self._errbox)
-						self._errbox.open(self, null, "end_before", {
-							overflow: true
-						});
+						self._errbox.open(self, null, "end_before", {dodgeRef: true}); // Bug 3251564
 				});
 			}
 		}
@@ -358,9 +454,8 @@ zul.inp.InputWidget = zk.$extends(zul.Widget, {
 			this.updateChange_();
 			this.$supers('doBlur_', arguments);
 		}
-		if (this._inplace && this._inplaceout) {
+		if (this._inplace && this._inplaceout)
 			jq(this.getInputNode()).addClass(this.getInplaceCSS());
-		}
 	},
 
 	_doSelect: function (evt) { //domListen_
@@ -418,8 +513,10 @@ zul.inp.InputWidget = zk.$extends(zul.Widget, {
 			var zcls = this.getZclass();
 			this._errmsg = null;
 			jq(this.getInputNode()).removeClass(zcls + "-text-invalid");
-			if(zk.ie6_ && this.inRoundedMold())
+			if(zk.ie6_ && this.inRoundedMold()) {
 				jq(this.$n('btn')).removeClass(zcls + "-btn-right-edge-invalid");
+				jq(this.$n('right-edge')).removeClass(zcls + "-right-edge-invalid");
+			}
 			
 		}
 		if (revalidate)
@@ -434,6 +531,8 @@ zul.inp.InputWidget = zk.$extends(zul.Widget, {
 	 *
 	 * <p>Moreover, when {@link zul.inp.Textbox} is called, it calls this method
 	 * with value = null. Derives shall handle this case properly.
+	 *
+	 * @param String value the string to coerce from
 	 * @return String
 	 */
 	coerceFromString_: function (value) {
@@ -447,6 +546,7 @@ zul.inp.InputWidget = zk.$extends(zul.Widget, {
 	 * If you want to store the value in other type, say BigDecimal,
 	 * you have to override {@link #coerceToString_} and {@link #coerceFromString_}
 	 * to convert between a string and your targeting type.
+	 * @param Object value the value that will be coerced to a string
 	 * @return String
 	 */
 	coerceToString_: function (value) {
@@ -458,8 +558,11 @@ zul.inp.InputWidget = zk.$extends(zul.Widget, {
 		var zcls = this.getZclass();
 		if (this.desktop) { //err not visible if not attached
 			jq(this.getInputNode()).addClass(zcls + "-text-invalid");
-			if(zk.ie6_ && this.inRoundedMold() && !this._buttonVisible)
-				jq(this.$n('btn')).addClass(zcls + "-btn-right-edge-invalid");
+			if(zk.ie6_ && this.inRoundedMold()) {
+				if(!this._buttonVisible)
+					jq(this.$n('btn')).addClass(zcls + "-btn-right-edge-invalid");
+				jq(this.$n('right-edge')).addClass(zcls + "-right-edge-invalid");
+			}
 
 			var cst = this._cst, errbox;
 			if (cst != "[c") {
@@ -508,14 +611,14 @@ zul.inp.InputWidget = zk.$extends(zul.Widget, {
 				this.clearErrorMessage(true);
 				msg = this.validate_(val);
 				if (msg === false) {
-					this._lastRawValVld = value; //raw (don't validate again if no changed and no error)
+					this._lastRawValVld = value;
 					return {value: val, server: true};
 				}
 				if (msg) {
 					this._markError(msg, val);
 					return {error: msg};
 				} else
-					this._lastRawValVld = value; //raw
+					this._lastRawValVld = value;
 			}
 			return {value: val};
 		} finally {
@@ -524,7 +627,7 @@ zul.inp.InputWidget = zk.$extends(zul.Widget, {
 	},
 	_shallIgnore: function (evt, keys) {
 		var code = (zk.ie||zk.opera) ? evt.keyCode : evt.charCode;
-		if (!evt.altKey && !evt.ctrlKey && (zk.ie || code >= 32)
+		if (!evt.altKey && !evt.ctrlKey && _keyIgnorable(code)
 		&& keys.indexOf(String.fromCharCode(code)) < 0) {
 			evt.stop();
 			return true;
@@ -538,6 +641,15 @@ zul.inp.InputWidget = zk.$extends(zul.Widget, {
 		var eb = new zul.inp.Errorbox();
 		eb.show(this, msg);
 		return eb;
+	},
+	_equalValue: function(a, b) {
+		return a == b || this.marshall_(a) == this.marshall_(b);
+	},
+	marshall_: function(val) {
+		return val;
+	},
+	unmarshall_: function(val) {
+		return val;
 	},
 	/** Updates the change to server by firing onChange if necessary. 
 	 * @return boolean
@@ -555,29 +667,45 @@ zul.inp.InputWidget = zk.$extends(zul.Widget, {
 		if (!vi.error || vi.server) {
 			var upd;
 			if (!vi.error) {
-				inp.value = value = this.coerceToString_(vi.value);
-				//reason to use defaultValue rather than this._value is
-				//to save the trouble of coerceToString issue
-				upd = wasErr || value != inp.defaultValue;
+				// _lastRawValVld must be updated after validate. Bug#3071613
+				this._lastRawValVld = inp.value = value = this.coerceToString_(vi.value);
+					//reason to use this._defValue rather than this._value is
+					//to save the trouble of coerceToString issue
+				upd = wasErr || !this._equalValue(vi.value, this._value);
 				if (upd) {
 					this._value = vi.value; //vi - not coerced
-					inp.defaultValue = value;
+					this._defValue = value;
 				}
 			}
 			if (upd || vi.server)
-				this.fire('onChange', _onChangeData(this, value),
-					vi.server ? {toServer:true}: null, 150);
+				this.fire('onChange', _onChangeData(this, this.marshall_(vi.value)),
+					vi.server ? {toServer:true}: null, 90);
 		}
 		return true;
 	},
+	/** Fires the onChange event.
+	 * If the widget is created at the server, the event will be sent
+	 * to the server too.
+	 * @param Map opts [optional] the options. Refer to {@link zk.Event#opts}
+	 * @since 5.0.5
+	 */
+	fireOnChange: function (opts) {
+		this.fire('onChange', _onChangeData(this, this.marshall_(this.getValue())), opts);
+	},
+
+	_resetForm: function () {
+		var inp = this.getInputNode();
+		if (inp.value != inp.defaultValue) { //test if it will be reset
+			var wgt = this;
+			setTimeout(function () {wgt.updateChange_();}, 0);
+				//value not reset yet so wait a moment
+		}
+	},
 
 	//super//
-	focus: function (timeout) {
-		if (this.isVisible() && this.canActivate({checkOnly:true})) {
-			zk(this.getInputNode()).focus(timeout);
-			return true;
-		}
-		return false;
+	focus_: function (timeout) {
+		zk(this.getInputNode()).focus(timeout);
+		return true;
 	},
 	domClass_: function (no) {
 		var sc = this.$supers('domClass_', arguments),
@@ -587,22 +715,32 @@ zul.inp.InputWidget = zk.$extends(zul.Widget, {
 		
 		if ((!no || !no.input) && this._inplace)
 			sc += ' ' + this.getInplaceCSS();
+			
+		// Merge breeze
+		if ((!no || !no.zclass) && this._readonly)
+			sc += ' ' + zcls + '-real-readonly';
+			
 		return sc;
 	},
 	bind_: function () {
 		this.$supers(InputWidget, 'bind_', arguments);
-		var inp = this.getInputNode(),
+		var n = this.getInputNode(),
 			zcls = this.getZclass();
-		
+
+		this._defValue = n.value;
+
 		if (this._readonly)
-			jq(inp).addClass(zcls + '-readonly');
+			jq(n).addClass(zcls + '-readonly');
 		
 		if (this._disabled)
-			jq(inp).addClass(zcls + '-text-disd');
+			jq(n).addClass(zcls + '-text-disd');
 			
-		this.domListen_(inp, "onFocus", "doFocus_")
-			.domListen_(inp, "onBlur", "doBlur_")
-			.domListen_(inp, "onSelect");
+		this.domListen_(n, "onFocus", "doFocus_")
+			.domListen_(n, "onBlur", "doBlur_")
+			.domListen_(n, "onSelect");
+
+		if (n = n.form)
+			jq(n).bind("reset", this.proxy(this._resetForm));
 	},
 	unbind_: function () {
 		this.clearErrorMessage(true);
@@ -610,8 +748,18 @@ zul.inp.InputWidget = zk.$extends(zul.Widget, {
 		var n = this.getInputNode();
 		this.domUnlisten_(n, "onFocus", "doFocus_")
 			.domUnlisten_(n, "onBlur", "doBlur_")
-			.domUnlisten_(n, "onSelect")
-			.$supers(InputWidget, 'unbind_', arguments);
+			.domUnlisten_(n, "onSelect");
+
+		if (n = n.form)
+			jq(n).unbind("reset", this.proxy(this._resetForm));
+
+		this.$supers(InputWidget, 'unbind_', arguments);
+	},
+	resetSize_: function(orient) {
+		var n;
+		if (this.$n() != (n = this.getInputNode()))
+			n.style[orient == 'w' ? 'width': 'height'] = '';
+		this.$supers('resetSize_', arguments);
 	},
 	doKeyDown_: function (evt) {
 		var keyCode = evt.keyCode;
@@ -648,7 +796,7 @@ zul.inp.InputWidget = zk.$extends(zul.Widget, {
 			var maxlen = this._maxlength;
 			if (maxlen > 0) {
 				var inp = this.getInputNode(), val = inp.value;
-				if (val != inp.defaultValue && val.length > maxlen)
+				if (val != this._defValue && val.length > maxlen)
 					inp.value = val.substring(0, maxlen);
 			}
 		}
@@ -660,7 +808,7 @@ zul.inp.InputWidget = zk.$extends(zul.Widget, {
 	},
 	afterKeyDown_: function (evt) {
 		if (this._inplace) {
-			if (evt.keyCode == 13) {
+			if (!this._multiline && evt.keyCode == 13) {
 				var $inp = jq(this.getInputNode()), inc = this.getInplaceCSS();
 				if ($inp.toggleClass(inc).hasClass(inc)) 
 					$inp.zk.setSelectionRange(0, $inp[0].value.length);
@@ -688,8 +836,10 @@ zul.inp.InputWidget = zk.$extends(zul.Widget, {
 	 * @type boolean
 	 * @since 5.0.1
 	 */
-	onChangingForced: true,
-	_allowKeys: "0123456789"+zk.MINUS
+	onChangingForced: true
 });
-
+zk.load('zul.lang', function () { // Fixed merging JS issue
+	zul.inp.InputWidget._allowKeys = "0123456789"+zk.MINUS+zk.PERCENT
+		+(zk.groupingDenied ? '': zk.GROUPING);
+});
 })();

@@ -12,6 +12,24 @@ Copyright (C) 2008 Potix Corporation. All Rights Reserved.
 This program is distributed under LGPL Version 3.0 in the hope that
 it will be useful, but WITHOUT ANY WARRANTY.
 */
+(function () {
+	
+	function _initUpld(wgt) {
+		zWatch.listen(zk.ie7_ ? {onShow: wgt, onSize: wgt} : {onShow: wgt});
+		var v;
+		if (v = wgt._upload)
+			wgt._uplder = new zul.Upload(wgt, wgt._getUploadRef(), v);
+	}
+	
+	function _cleanUpld(wgt) {
+		var v;
+		if (v = wgt._uplder) {
+			zWatch.unlisten(zk.ie7_ ? {onShow: wgt, onSize: wgt} : {onShow: wgt});
+			wgt._uplder = null;
+			v.destroy();
+		}
+	}
+	
 /**
  * A single choice in a {@link Menupopup} element.
  * It acts much like a button but it is rendered on a menu.
@@ -108,6 +126,39 @@ zul.menu.Menuitem = zk.$extends(zul.LabelImageWidget, {
 				anc.target = this._target;
 			}
 		},
+		/** Returns a list of component IDs that shall be disabled when the user
+		 * clicks this menuitem.
+		 *
+		 * <p>To represent the menuitem itself, the developer can specify <code>self</code>.
+		 * For example, <code>&lt;menuitem id="ok" autodisable="self,cancel"/></code>
+		 * is the same as <code>&lt;menuitem id="ok" autodisable="ok,cancel"/></code>
+		 * that will disable
+		 * both the ok and cancel menuitem when an user clicks it.
+		 *
+		 * <p>The menuitem being disabled will be enabled automatically
+		 * once the client receives a response from the server.
+		 * In other words, the server doesn't notice if a menuitem is disabled
+		 * with this method.
+		 *
+		 * <p>However, if you prefer to enable them later manually, you can
+		 * prefix with '+'. For example,
+		 * <code>&lt;menuitem id="ok" autodisable="+self,+cancel"/></code>
+		 *
+		 * <p>Then, you have to enable them manually such as
+		 * <pre><code>if (something_happened){
+		 *  ok.setDisabled(false);
+		 *  cancel.setDisabled(false);
+		 *</code></pre>
+		 *
+		 * <p>Default: null.
+		 * @since 5.0.7
+		 * @return String
+		 */
+		/** Sets whether to disable the button after the user clicks it.
+		 * @since 5.0.7
+		 * @param String autodisable
+		 */
+		autodisable: null,
 		/** Returns non-null if this button is used for file upload, or null otherwise.
 		 * Refer to {@link #setUpload} for more details.
 		 * @return String
@@ -124,8 +175,8 @@ zul.menu.Menuitem = zk.$extends(zul.LabelImageWidget, {
 		upload: function (v) {
 			var n = this.$n();
 			if (n) {
-				this._cleanUpld();
-				if (v && v != 'false') this._initUpld();
+				_cleanUpld(this);
+				if (v && v != 'false') _initUpld(this);
 			}
 		}
 	},
@@ -138,6 +189,7 @@ zul.menu.Menuitem = zk.$extends(zul.LabelImageWidget, {
 	},
 	beforeParentChanged_: function (newParent) {
 		this._topmost = newParent && !(newParent.$instanceof(zul.menu.Menupopup));
+		this.$supers("beforeParentChanged_", arguments);
 	},
 	domClass_: function (no) {
 		var scls = this.$supers('domClass_', arguments);
@@ -165,12 +217,7 @@ zul.menu.Menuitem = zk.$extends(zul.LabelImageWidget, {
 	/** Returns the {@link Menubar} that contains this menuitem, or null if not available.
 	 * @return zul.menu.Menubar
 	 */
-	getMenubar: function () {
-		for (var p = this.parent; p; p = p.parent)
-			if (p.$instanceof(zul.menu.Menubar))
-				return p;
-		return null;
-	},
+	getMenubar: zul.menu.Menu.prototype.getMenubar,
 	bind_: function () {
 		this.$supers(zul.menu.Menuitem, 'bind_', arguments);
 
@@ -180,12 +227,12 @@ zul.menu.Menuitem = zk.$extends(zul.LabelImageWidget, {
 				this.domListen_(anc, "onFocus", "doFocus_")
 					.domListen_(anc, "onBlur", "doBlur_");
 			}
-			if (this._upload) this._initUpld();
+			if (this._upload) _initUpld(this);
 		}
 	},
 	unbind_: function () {
 		if (!this.isDisabled()) {
-			if (this._upload) this._cleanUpld();
+			if (this._upload) _cleanUpld(this);
 			if (this.isTopmost()) {
 				var anc = this.$n('a');
 				this.domUnlisten_(anc, "onFocus", "doFocus_")
@@ -194,20 +241,6 @@ zul.menu.Menuitem = zk.$extends(zul.LabelImageWidget, {
 		}
 
 		this.$supers(zul.menu.Menuitem, 'unbind_', arguments);
-	},
-	_initUpld: function () {
-		zWatch.listen(zk.ie7_ ? {onShow: this, onSize: this} : {onShow: this});
-		var v;
-		if (v = this._upload)
-			this._uplder = new zul.Upload(this, this.isTopmost() ? this.$n() : this.$n('a'), v);
-	},
-	_cleanUpld: function () {
-		var v;
-		if (v = this._uplder) {
-			zWatch.unlisten(zk.ie7_ ? {onShow: this, onSize: this} : {onShow: this});
-			this._uplder = null;
-			v.destroy();
-		}
 	},
 	onShow: _zkf = function () {
 		if (this._uplder)
@@ -219,6 +252,8 @@ zul.menu.Menuitem = zk.$extends(zul.LabelImageWidget, {
 			evt.stop();
 		else {
 			if (!this._canActivate(evt)) return;
+			if (!this._upload)
+				zul.wgt.ADBS.autodisable(this);
 
 			var topmost = this.isTopmost(),
 				anc = this.$n('a');
@@ -247,28 +282,49 @@ zul.menu.Menuitem = zk.$extends(zul.LabelImageWidget, {
 			}
 			if (!topmost)
 				for (var p = this.parent; p; p = p.parent)
-					if (p.$instanceof(zul.menu.Menupopup))
+					if (p.$instanceof(zul.menu.Menupopup)) {
 						// if close the popup before choosing a file, the file chooser can't be triggered.
-						if (p.isOpen() && !this._uplder /*Bug #2911385 && !this._popup*/)							
-							p.close({sendOnOpen:true});
-						else break;
-										
+						if (!p.isOpen() || this._uplder /*Bug #2911385 && !this._popup*/)
+							break;
+						p.close({sendOnOpen:true});
+					} else if (!p.$instanceof(zul.menu.Menu)) //either menubar or non-menu*
+						break;
+
+			var menubar;
+			if (zk.safari && (menubar=this.getMenubar()) && menubar._autodrop)
+				menubar._noFloatUp = true;
+				//_noFloatUp used in Menu.js to fix Bug 1852304
+
 			this.$class._rmActive(this);
-			this.$super('doClick_', evt, true);			
+			this.$super('doClick_', evt, true);
 		}
 	},
 	_canActivate: function (evt) {
 		return !this.isDisabled() && (!zk.ie || !this.isTopmost() || this._uplder
 				|| jq.isAncestor(this.$n('a'), evt.domTarget));
 	},
+	_getUploadRef: function () {
+		return this.isTopmost() ? this.$n() : this.$n('a');
+	},
 	doMouseOver_: function (evt) {
+		var menubar = this.getMenubar();
+		if (menubar) {
+			menubar._bOver = true;
+			menubar._noFloatUp = false;
+		}
 		if (!this.$class._isActive(this) && this._canActivate(evt)) {
 			this.$class._addActive(this);
-			zWatch.fire('onFloatUp', this); //notify all
+			if (zul.menu._nOpen || !this.isTopmost())
+				zWatch.fire('onFloatUp', this); //notify all
 		}
 		this.$supers('doMouseOver_', arguments);
 	},
 	doMouseOut_: function (evt) {
+		var menubar = this.getMenubar();
+		if (menubar) {
+			menubar._bOver = false;
+			menubar._closeOnOut();
+		}
 		if (!this.isDisabled()) {
 			var deact = !zk.ie;
 			if (!deact) {
@@ -284,6 +340,10 @@ zul.menu.Menuitem = zk.$extends(zul.LabelImageWidget, {
 				this.$class._rmActive(this);
 		}
 		this.$supers('doMouseOut_', arguments);
+	},
+	deferRedrawHTML_: function (out) {
+		var tag = this.isTopmost() ? 'td' : 'li';
+		out.push('<', tag, this.domAttrs_({domClass:1}), ' class="z-renderdefer"></', tag,'>');
 	}
 }, {
 	_isActive: function (wgt) {
@@ -307,3 +367,4 @@ zul.menu.Menuitem = zk.$extends(zul.LabelImageWidget, {
 		jq(n).removeClass(cls);
 	}
 });
+})();

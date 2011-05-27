@@ -16,7 +16,7 @@ function (out) {
 	var uuid = this.uuid,
 		zcls = this.getZclass(),
 		innerWidth = this.getInnerWidth(),
-		wdAttr = this.getHflex() == 'min' ? '' : innerWidth == '100%' ? ' width="100%"' : '',
+		wdAttr = innerWidth == '100%' ? ' width="100%"' : '', //bug#3183182
 		wdStyle = innerWidth != '100%' ? 'width:' + innerWidth : '',
 		inPaging = this.inPagingMold(), pgpos;
 
@@ -40,16 +40,17 @@ function (out) {
 		for (var hds = this.heads, j = 0, len = hds.length; j < len;)
 			hds[j++].redraw(out);
 	
-		out.push('</table></div>');
+		out.push('</table></div><div class="', zcls, '-header-bg"></div>');
 	}
-	out.push('<div id="', uuid, '-body" class="', zcls, '-body"');
+	out.push('<div id="', uuid, '-body" class="', zcls, '-body');
+	if (this._autopaging)
+		out.push(' ', zcls, '-autopaging');
+	out.push('"');
 
 	var hgh = this.getHeight();
 	if (hgh) out.push(' style="height:', hgh, '"');
 	
-	out.push('><table', wdAttr, zUtl.cellps0);
-	if (!this.isSizedByContent())
-		out.push(' style="table-layout:fixed;', wdStyle,'"');		
+	out.push('><table', wdAttr, zUtl.cellps0, ' style="table-layout:fixed;', wdStyle,'"');		
 	out.push('>');
 	
 	if (this.columns)
@@ -62,6 +63,8 @@ function (out) {
 		if (this.domPad_ && !this.inPagingMold())
 			this.domPad_(out, '-bpad');
 	}
+	
+	this.redrawEmpty_(out);
 	
 	out.push('</table></div>');
 	

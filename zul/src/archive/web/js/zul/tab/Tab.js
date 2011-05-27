@@ -65,8 +65,7 @@ zul.tab.Tab = zk.$extends(zul.LabelImageWidget, {
 		 * @param boolean selected
 		 */
 		selected: function(selected) {
-			if (this.desktop)
-				this._sel();
+			this._sel();
 		}
 	},
 	/**
@@ -118,6 +117,10 @@ zul.tab.Tab = zk.$extends(zul.LabelImageWidget, {
 		var	tabs = this.parent,
 			oldtab = tabbox._selTab;
 		if (oldtab != this || init) {
+			if (oldtab && tabbox.inAccordionMold()) {
+				var p = this.getLinkedPanel();
+				if (p) p._changeSel(oldtab.getLinkedPanel());
+			}
 			if (oldtab && oldtab != this)
 				this._setSel(oldtab, false, false, init);
 			this._setSel(this, true, notify, init);
@@ -126,13 +129,21 @@ zul.tab.Tab = zk.$extends(zul.LabelImageWidget, {
 	_setSel: function(tab, toSel, notify, init) {
 		var tabbox = this.getTabbox(),
 			zcls = this.getZclass(),
-			panel = tab.getLinkedPanel();
+			panel = tab.getLinkedPanel(),
+			bound = this.desktop;
 		if (tab.isSelected() == toSel && notify)
 			return;
 
-		if (toSel)
+		if (toSel) {
 			tabbox._selTab = tab; //avoid loopback
+			var ps;
+			if (ps = tabbox.tabpanels)
+				ps._selPnl = panel; //stored in tabpanels
+		}
 		tab._selected = toSel;
+		
+		if (!bound) return;
+		
 		if (toSel)
 			jq(tab).addClass(zcls + "-seld");
 		else
@@ -155,6 +166,20 @@ zul.tab.Tab = zk.$extends(zul.LabelImageWidget, {
 		
 		if (notify)
 			this.fire('onSelect', {items: [this], reference: this.uuid});
+	},
+	setHeight: function (height) {
+		this.$supers('setHeight', arguments);
+		if (this.desktop) {
+			zWatch.fireDown('beforeSize', this.parent);
+			zWatch.fireDown('onSize', this.parent);
+		}
+	},
+	setWidth: function (width) {
+		this.$supers('setWidth', arguments);
+		if (this.desktop) {
+			zWatch.fireDown('beforeSize', this.parent);
+			zWatch.fireDown('onSize', this.parent);
+		}
 	},
 	//protected
 	doClick_: function(evt) {
@@ -179,25 +204,34 @@ zul.tab.Tab = zk.$extends(zul.LabelImageWidget, {
 		img = '<img src="' + img + '" align="absmiddle" class="' + this.getZclass() + '-img"/>';
 		return label ? img + ' ' + label: img;
 	},
+	//bug #3014664
+	setVflex: function (v) { //vflex ignored for Tab
+		if (v != 'min') v = false;
+		this.$super(zul.tab.Tab, 'setVflex', v);
+	},
+	//bug #3014664
+	setHflex: function (v) { //hflex ignored for Tab
+		if (v != 'min') v = false;
+		this.$super(zul.tab.Tab, 'setHflex', v);
+	},
 	bind_: function (desktop, skipper, after) {
 		this.$supers(zul.tab.Tab, 'bind_', arguments);
 		var closebtn = this.$n('close'),
 			tab = this;
 		if (closebtn) {
 			this.domListen_(closebtn, "onClick", '_doCloseClick');
-			if (!closebtn.style.cursor)
-				closebtn.style.cursor = "default";
 			if (zk.ie6_)
 				this.domListen_(closebtn, "onMouseOver", '_toggleBtnOver')
 					.domListen_(closebtn, "onMouseOut", '_toggleBtnOver');
 		}
 
+		after.push(function () {tab.parent._fixHgh();});
+			//Bug 3022274: required so it is is called before, say, panel's slideDown
+			//_sel will invoke _fixWidth but it is too late since it uses afterMount
 		after.push(function () {
 			zk.afterMount(function () {
     			if (tab.isSelected()) 
     				tab._sel(false, true);
-    			else if (tab.parent._isInited())
-    				tab.parent._scrollcheck("init");
 			});
 		});
 	},
@@ -213,25 +247,27 @@ zul.tab.Tab = zk.$extends(zul.LabelImageWidget, {
 	},
 	//event handler//
 	onClose: function () {
-		if (this.isSelected()) {
-			var self = this,
-				p = this.parent;
-			
-			// Bug 2931212, send onSelect after onClose
-			setTimeout(function () {
-    			if (!self.parent || self.parent != p)
-    				return; // nothing to do
-    			for (var tab = self; tab = tab.nextSibling;)
-    				if (!tab.isDisabled()) {
-    					tab._sel(true);
-    					return;
-    				}
-    			for (var tab = self; tab = tab.previousSibling;)
-    				if (!tab.isDisabled()) {
-    					tab._sel(true);
-    					return;
-    				}
-    		});
+		if (this.getTabbox().inAccordionMold()) {
+			this.getTabbox()._syncSize();
 		}
+	},
+	deferRedrawHTML_: function (out) {
+		var tbx = this.getTabbox(),
+			tag = tbx.inAccordionMold() ? 'div' : 'li';
+		out.push('<', tag, this.domAttrs_({domClass:1}), ' class="z-renderdefer"></', tag,'>');
 	}
 });
+/** @class zul.tab.TabRenderer
+ * The renderer used to render a Tab.
+ * It is designed to be overriden
+ * @since 5.0.5
+ */
+zul.tab.TabRenderer = {
+	/** Check the Tab whether to render the frame
+	 * 
+	 * @param zul.wnd.Panel wgt the window
+	 */
+	isFrameRequired: function (wgt) {
+		return true;
+	}
+};

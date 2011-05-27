@@ -20,6 +20,7 @@
 	background-position: right -22px;
 	margin-right: -7px;
 	position: relative;
+	cursor: pointer;
 }
 .z-slider-sphere-hor-btn,
 .z-slider-scale-btn,
@@ -27,6 +28,7 @@
 	width: 14px; height: 15px; position: absolute; left: 0; top: 3px;
 	background: transparent no-repeat 0 0;
 	background-image : url(${c:encodeURL('~./zul/img/slider/slider-square.png')});
+	cursor: pointer;
 }
 .z-slider-scale-btn {
 	background-image : url(${c:encodeURL('~./zul/img/slider/slider-scale.gif')});
@@ -36,7 +38,6 @@
 .z-slider-scale-tick {
 	background-image:url(${c:encodeURL('~./zul/img/slider/ticks.gif')});
 	padding-top:6px;
-	width:214px;
 }
 
 <%-- Vertical style --%>
@@ -58,6 +59,7 @@
 	background-position: -22px bottom;
 	margin-bottom: -7px;
 	position: relative;
+	cursor: pointer;
 }
 
 .z-slider-sphere-ver-btn,
@@ -65,6 +67,7 @@
 	width: 15px; height: 15px; position: absolute; left: 4px; bottom: 0;
 	background: transparent no-repeat 0 0;
 	background-image : url(${c:encodeURL('~./zul/img/slider/slider-v-square.png')});
+	cursor: pointer;
 }
 .z-slider-sphere-ver-btn {
  	height: 14px;

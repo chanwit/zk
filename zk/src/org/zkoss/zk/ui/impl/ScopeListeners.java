@@ -118,6 +118,9 @@ public class ScopeListeners {
 	public void notifyIdSpaceChanged(IdSpace newIdSpace) {
 		if (_listeners != null)
 			for (Iterator it = _listeners.iterator(); it.hasNext();)
-				((ScopeListener)it.next()).idSpaceChanged(_owner, newIdSpace);
+				try {
+					((ScopeListener)it.next()).idSpaceChanged(_owner, newIdSpace);
+				} catch (AbstractMethodError ex) { //backward compatible to 5.0.0
+				}
 	}
 }

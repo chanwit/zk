@@ -45,6 +45,7 @@ import org.zkoss.zk.ui.sys.ExecutionCtrl;
 import org.zkoss.zk.ui.sys.DesktopCtrl;
 import org.zkoss.zk.ui.sys.Visualizer;
 import org.zkoss.zk.ui.sys.UiEngine;
+import org.zkoss.zk.ui.sys.ExecutionInfo;
 import org.zkoss.zk.au.AuResponse;
 
 /**
@@ -67,6 +68,8 @@ abstract public class AbstractExecution implements Execution, ExecutionCtrl {
 	private String _reqId;
 	/** A collection of the AU responses that shall be generated to client */
 	private Collection _resps;
+	/** The information of the event being served, or null if not under event processing. */
+	private ExecutionInfo _execinf;
 	/** Whether onPiggyback is checked for this execution. */
 	private boolean _piggybacked;
 
@@ -82,12 +85,7 @@ abstract public class AbstractExecution implements Execution, ExecutionCtrl {
 			_curpage = getPage(desktop);
 	}
 	private static Page getPage(Desktop desktop) {
-		if (desktop != null) {
-			final Collection c = desktop.getPages();
-			if (c != null && !c.isEmpty())
-				return (Page)c.iterator().next();
-		}
-		return null;
+		return desktop != null ? desktop.getFirstPage(): null;
 	}
 
 	//-- Execution --//
@@ -124,6 +122,10 @@ abstract public class AbstractExecution implements Execution, ExecutionCtrl {
 				break;
 			}
 		}	
+	}
+	public void postEvent(int priority, Component realTarget, Event evt) {
+		postEvent(priority,
+			realTarget != evt.getTarget() ? new ProxyEvent(realTarget, evt): evt);
 	}
 
 	//-- ExecutionCtrl --//
@@ -344,6 +346,13 @@ abstract public class AbstractExecution implements Execution, ExecutionCtrl {
 	}
 	public void setResponses(Collection responses) {
 		_resps = responses;
+	}
+
+	public ExecutionInfo getExecutionInfo() {
+		return _execinf;
+	}
+	public void setExecutionInfo(ExecutionInfo execinf) {
+		_execinf = execinf;
 	}
 
 	//Object//

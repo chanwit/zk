@@ -31,7 +31,8 @@ import org.zkoss.math.RoundingModes;
  *
  * @author tomyeh
  */
-abstract public class NumberInputElement extends FormatInputElement {
+abstract public class NumberInputElement extends FormatInputElement
+implements org.zkoss.zul.impl.api.NumberInputElement {
 	/** The rounding mode. */
 	private int _rounding = BigDecimal.ROUND_HALF_EVEN;
 
@@ -52,6 +53,7 @@ abstract public class NumberInputElement extends FormatInputElement {
 			if (!JVMs.isJava6())
 				throw new UnsupportedOperationException("Java 6 or above is required");
 			_rounding = mode;
+			smartUpdate("rounding", mode);
 		}
 	}
 	/** Sets the rounding mode by the name.
@@ -201,6 +203,28 @@ abstract public class NumberInputElement extends FormatInputElement {
 				}
 			}
 		}
+
+		//handle '%'
+		if (fmt != null && divscale > 0) {
+		l_out:
+			for (int j = 0, k, len = fmt.length(); (k = fmt.indexOf('\'', j)) >= 0;) {
+				while (++k < len){
+					final char cc = fmt.charAt(k);
+					if (cc == '%') divscale -= 2;
+					else if (cc == '\u2030') divscale -= 3;
+					else if (cc == '\'') {
+						++k;
+						break;
+					}
+					if (divscale <= 0) {
+						divscale = 0;
+						break l_out;
+					}
+				}
+				j = k;
+			}
+		}
+
 		return new Object[] {
 			(sb != null ? sb.toString(): val), new Integer(divscale)};
 	}

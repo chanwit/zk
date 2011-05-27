@@ -16,6 +16,27 @@ it will be useful, but WITHOUT ANY WARRANTY.
 	function _isPE() {
 		return zk.feature.pe && zk.isLoaded('zkex.grid');
 	}
+
+	function _toggleEffect(wgt, undo) {
+		var self = wgt;
+		setTimeout(function () {
+			var $n = jq(self.$n()),
+				zcls = self.getZclass() + '-over';
+			if (undo) {
+   				$n.removeClass(zcls);
+			} else if (self._musin) {
+				$n.addClass(zcls);
+				
+				var musout = self.parent._musout;
+				// fixed mouse-over issue for datebox 
+				if (musout && $n[0] != musout.$n()) {
+					jq(musout.$n()).removeClass(zcls);
+					musout._musin = false;
+					self.parent._musout = null;
+				}
+			}
+		});
+	}
 /**
  * A single row in a {@link Rows} element.
  * Each child of the {@link Row} element is placed in each successive cell
@@ -47,9 +68,10 @@ zul.grid.Row = zk.$extends(zul.Widget, {
 		 * @param boolean nowrap
 		 */
 		nowrap: function (v) {
-			var n = this.$n();
-			if (n)
-				n.noWrap = v;
+			var cells = this.$n();
+			if (cells && (cells = cells.cells))
+				for (var j = cells.length; j--;)
+					cells[j].noWrap = v;
 		},
 		/** Returns the vertical alignment of the whole row.
 		 * <p>Default: null (system default: top).
@@ -73,7 +95,7 @@ zul.grid.Row = zk.$extends(zul.Widget, {
 	setVisible: function (visible) {
 		if (this.isVisible() != visible) {
 			this.$supers('setVisible', arguments);
-			if (this.isStripeable_() && this.parent)
+			if (visible && this.isStripeable_() && this.parent)
 				this.parent.stripe();
 		}
 	},
@@ -109,14 +131,14 @@ zul.grid.Row = zk.$extends(zul.Widget, {
 	getGroup: function () {
 		// TODO: this performance is not good.
 		if (_isPE() && this.parent && this.parent.hasGroup())
-			for (var w = this.previousSibling; w; w = w.previousSibling)
+			for (var w = this; w; w = w.previousSibling)
 				if (w.$instanceof(zkex.grid.Group)) return w;
 				
 		return null;
 	},	
 	setStyle: function (style) {
 		if (this._style != style) {
-			if (!zk._rowTime) zk._rowTime = zUtl.now();
+			if (!zk._rowTime) zk._rowTime = jq.now();
 			this._style = style;
 			this.rerender();
 		}
@@ -151,7 +173,7 @@ zul.grid.Row = zk.$extends(zul.Widget, {
 		
 		child.bind(desktop);
 	},
-	removeChildHTML_: function (child, prevsib) {
+	removeChildHTML_: function (child) {
 		this.$supers('removeChildHTML_', arguments);
 		jq(child.uuid + '-chdextr', zk).remove();
 	},
@@ -214,16 +236,16 @@ zul.grid.Row = zk.$extends(zul.Widget, {
 				style += 'height:' + hgh + ';';
 		}
 		
-		var clx = isDetail ? child.getZclass() + "-outer" : this.getZclass() + "-inner";
-		
-		if (!colattrs && !style && span === 1)
-			return ' class="' + clx + '"';
-
-		var attrs = colattrs ? colattrs : '';
+		var clx = isDetail ? child.getZclass() + "-outer" : this.getZclass() + "-inner",
+			attrs = colattrs || '';
 		
 		if (span !== 1)
 			attrs += ' colspan="' + span + '"';
-		return attrs + ' style="' + style + '"' + ' class="' + clx + '"';
+		if (this._nowrap)
+			attrs += ' nowrap="nowrap"';
+		if (style)
+			attrs += ' style="' + style + '"'
+		return attrs + ' class="' + clx + '"';
 	},
 	/**
 	 * Returns whether is stripeable or not.
@@ -253,19 +275,49 @@ zul.grid.Row = zk.$extends(zul.Widget, {
 		if (child == this.detail)
 			this.detail = null;
 	},
-	doMouseOver_: function(evt) {
-		if (zk.gecko && this._draggable
-		&& !jq.nodeName(evt.domTarget, "input", "textarea")) {
-			var n = this.$n();
-			if (n) n.firstChild.style.MozUserSelect = "none";
+	doFocus_: function (evt) {
+		this.$supers('doFocus_', arguments);
+		//sync frozen
+		var grid, frozen, tbody, td, tds;
+		if ((grid = this.getGrid()) && grid.efrozen && 
+			(frozen = zk.Widget.$(grid.efrozen.firstChild)) &&
+			grid.rows && (tbody = grid.rows.$n())) {
+			tds = jq(evt.domTarget).parents('td')
+			for (var i = 0, j = tds.length; i < j; i++) {
+				td = tds[i];
+				if (td.parentNode.parentNode == tbody) {
+					grid._moveToHidingFocusCell(td.cellIndex);
+					break;
+				}
+			}
 		}
+	},
+	doMouseOver_: function(evt) {
+		if (this._musin) return;
+		this._musin = true;
+		var n = this.$n();
+		if (n && zk.gecko && this._draggable
+		&& !jq.nodeName(evt.domTarget, "input", "textarea"))
+			n.firstChild.style.MozUserSelect = "none";
+		
+		//Merge breeze
+		_toggleEffect(this);
 		this.$supers('doMouseOver_', arguments);
 	},
 	doMouseOut_: function(evt) {
-		if (zk.gecko && this._draggable) {
-			var n = this.$n();
-			if (n) n.firstChild.style.MozUserSelect = "none";
+		var n = this.$n();
+		if ((this._musin && jq.isAncestor(n,
+				evt.domEvent.relatedTarget || evt.domEvent.toElement))) {
+			// fixed mouse-over issue for datebox 
+			this.parent._musout = this;
+			return;
 		}
+		this._musin = false;
+		if (n && zk.gecko && this._draggable)
+			n.firstChild.style.MozUserSelect = "none";
+		
+		//Merge breeze
+		_toggleEffect(this, true);
 		this.$supers('doMouseOut_', arguments);
 	},
 	domAttrs_: function (no) {
@@ -274,8 +326,6 @@ zul.grid.Row = zk.$extends(zul.Widget, {
 			attr += ' align="' + this._align + '"';
 		if (this._valign)
 			attr += ' valign="' + this._valign + '"';
-		if (this._nowrap)
-			attr += ' nowrap="nowrap"';
 		return attr;
 	},
 	domClass_: function () {
@@ -284,6 +334,9 @@ zul.grid.Row = zk.$extends(zul.Widget, {
 		if (grid && jq(this.$n()).hasClass(grid = grid.getOddRowSclass()))
 			return cls + ' ' + grid; 
 		return cls;
+	},
+	deferRedrawHTML_: function (out) {
+		out.push('<tr', this.domAttrs_({domClass:1}), ' class="z-renderdefer"></tr>');
 	}
 });
 })();

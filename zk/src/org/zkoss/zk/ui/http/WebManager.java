@@ -23,6 +23,7 @@ import java.util.LinkedList;
 import java.util.Iterator;
 import java.util.Enumeration;
 import java.net.URL;
+import java.io.InputStream;
 
 import javax.servlet.ServletContext;
 import javax.servlet.ServletRequest;
@@ -33,15 +34,16 @@ import javax.servlet.http.HttpSession;
 
 import org.zkoss.lang.Objects;
 import org.zkoss.lang.Library;
+import org.zkoss.util.CollectionsX;
 import org.zkoss.util.logging.Log;
 import org.zkoss.util.resource.Labels;
 import org.zkoss.util.resource.Locator;
-import org.zkoss.util.resource.XMLResourcesLocator;
+import org.zkoss.util.resource.ClassLocator;
 
 import org.zkoss.web.servlet.Servlets;
 import org.zkoss.web.util.resource.ServletContextLocator;
 import org.zkoss.web.util.resource.ServletLabelLocator;
-import org.zkoss.web.util.resource.ServletLabelResovler;
+import org.zkoss.web.util.resource.ServletRequestResolver;
 import org.zkoss.web.util.resource.ClassWebResource;
 
 import org.zkoss.zk.ui.Execution;
@@ -66,7 +68,6 @@ import org.zkoss.zk.ui.sys.UiEngine;
 import org.zkoss.zk.ui.sys.ConfigParser;
 import org.zkoss.zk.ui.sys.RequestInfo;
 import org.zkoss.zk.ui.impl.RequestInfoImpl;
-import org.zkoss.zk.ui.impl.Utils;
 
 /**
  * A bridge bewteen Web server and ZK.
@@ -132,10 +133,10 @@ public class WebManager {
 		}
 
 		//load metainfo/zk/zk.xml
+		String XML = "metainfo/zk/zk.xml";
 		try {
-			final XMLResourcesLocator loc = Utils.getXMLResourcesLocator();
-			for (Enumeration en = loc.getResources("metainfo/zk/zk.xml");
-			en.hasMoreElements();) {
+			final ClassLocator loc = new ClassLocator();
+			for (Enumeration en = loc.getResources(XML); en.hasMoreElements();) {
 				final URL cfgUrl = (URL)en.nextElement();
 				try {
 					parser.parse(cfgUrl, config, loc);
@@ -144,16 +145,37 @@ public class WebManager {
 				}
 			}
 		} catch (Throwable ex) {
-			log.error("Unable to load metainfo/zk/zk.xml", ex);
+			log.error("Unable to load " + XML, ex);
 		}
 
 		//load /WEB-INF/zk.xml
+		XML = "/WEB-INF/zk.xml";
 		try {
-			final URL cfgUrl = _ctx.getResource("/WEB-INF/zk.xml");
+			final URL cfgUrl = _ctx.getResource(XML);
 			if (cfgUrl != null)
-				parser.parse(cfgUrl, config, new ServletContextLocator(_ctx));
+				parser.parse(cfgUrl, config, new ServletContextLocator(_ctx, true));
+					//accept URL, so zk.xml could contain URL
 		} catch (Throwable ex) {
-			log.error("Unable to load /WEB-INF/zk.xml", ex);
+			log.realCauseBriefly("Unable to load " + XML, ex);
+		}
+
+		//load additional configuration file
+		XML = Library.getProperty("org.zkoss.zk.config.path");
+		if (XML != null && XML.length() > 0) {
+			log.info("Parsing "+XML);
+			InputStream is = null;
+			try {
+				is = Servlets.getResourceAsStream(_ctx, XML);
+				if (is != null)
+					parser.parse(is, config, new ServletContextLocator(_ctx, true));
+				else
+					log.error("File not found: " + XML);
+			} catch (Throwable ex) {
+				log.realCauseBriefly("Unable to load " + XML, ex);
+			} finally {
+				if (is != null)
+					try {is.close();} catch (Throwable t) {}
+			}
 		}
 
 		//after zk.xml is loaded since it depends on the configuration
@@ -162,11 +184,16 @@ public class WebManager {
 		String s = Library.getProperty("org.zkoss.web.util.resource.dir");
 		if (s != null && s.length() > 0) {
 			if (s.charAt(0) != '/') s = '/' + s;
-			_cwr.setExtraLocator(new ServletContextLocator(_ctx, null, s));
+			_cwr.setExtraLocator(new ServletContextLocator(_ctx, null, s)); //for safety, not accept URL
 		}
 
-		Labels.register(new ServletLabelLocator(_ctx));
-		Labels.setVariableResolver(new ServletLabelResovler());
+		String[] labellocs = config.getLabelLocations();
+		if (labellocs.length == 0)
+			Labels.register(new ServletLabelLocator(_ctx));
+		else
+			for (int j = 0; j < labellocs.length; ++j)
+				Labels.register(new ServletLabelLocator(_ctx, labellocs[j]));
+		Labels.setVariableResolver(new ServletRequestResolver());
 
 		//create a WebApp instance
 		final Class cls = config.getWebAppClass();
@@ -204,11 +231,10 @@ public class WebManager {
 
 		final List listeners = (List)_actListeners.remove(_ctx); //called and drop
 		if (listeners != null) {
-			for (Iterator it = listeners.iterator(); it.hasNext();) {
+			for (Iterator it = CollectionsX.comodifiableIterator(listeners);
+			it.hasNext();) {
 				try {
 					((WebManagerActivationListener)it.next()).didActivate(this);
-				} catch (java.util.ConcurrentModificationException ex) {
-					throw ex;
 				} catch (Throwable ex) {
 					log.realCause(ex);
 				}
@@ -221,7 +247,7 @@ public class WebManager {
 			^ _wapp.getBuild().hashCode()
 			^ WebApps.getEdition().hashCode();
 
-		for (Iterator it = LanguageDefinition.getByDeviceType("ajax").iterator();
+		for (Iterator it = LanguageDefinition.getAll().iterator();
 		it.hasNext();) {
 			final LanguageDefinition langdef = (LanguageDefinition)it.next();
 			for (Iterator e = langdef.getJavaScriptModules().entrySet().iterator();
@@ -229,6 +255,10 @@ public class WebManager {
 				final Map.Entry me = (Map.Entry)e.next();
 				code ^= Objects.hashCode(me.getKey())
 					+ Objects.hashCode(me.getValue());
+			}
+			for (Iterator e = langdef.getMergeJavaScriptPackages().iterator();
+			e.hasNext();) {
+				code ^= Objects.hashCode(e.next());
 			}
 		}
 
@@ -307,15 +337,17 @@ public class WebManager {
 	public static final WebManager getWebManager(WebApp wapp) {
 		return getWebManager((ServletContext)wapp.getNativeContext());
 	}
-	/** Returns the Web manager, or null if not found.
+	/** Returns the Web manager of the give context, or null if not found.
+	 * @since 5.0.5
 	 */
-	/*package*/ static final WebManager getWebManagerIfAny(ServletContext ctx) {
+	public static final WebManager getWebManagerIfAny(ServletContext ctx) {
 		return (WebManager)ctx.getAttribute(ATTR_WEB_MANAGER);
 	}
-	/** Returns the Web manager of the specified {@link WebApp}.
-	 * @since 5.0.3
+	/** Returns the Web manager of the specified {@link WebApp},
+	 * or null if not found.
+	 * @since 5.0.5
 	 */
-	/*package*/ static final WebManager getWebManagerIfAny(WebApp wapp) {
+	public static final WebManager getWebManagerIfAny(WebApp wapp) {
 		return getWebManagerIfAny((ServletContext)wapp.getNativeContext());
 	}
 	/** Returns the Web application of the specified context.
@@ -330,13 +362,17 @@ public class WebManager {
 			throw new UiException("The Web application not found. Make sure <load-on-startup> is specified for "+DHtmlLayoutServlet.class.getName());
 		return wapp;
 	}
-	/*package*/ static final WebApp getWebAppIfAny(ServletContext ctx) {
+	/** Returns the Web application of the specified context, or null
+	 * if not available.
+	 * @since 5.0.3
+	 */
+	public static final WebApp getWebAppIfAny(ServletContext ctx) {
 		final WebManager webman = getWebManagerIfAny(ctx);
 		return webman != null ? webman.getWebApp(): null;
 	}
 
-	/**  Returns the session associated with the specified request request,
-	 * or if the request does not have a session, creates one.
+	/**  Returns the session associated with the specified request request.
+	 * If the request does not have a session, creates one.
 	 */
 	public static final
 	Session getSession(ServletContext ctx, HttpServletRequest request) {

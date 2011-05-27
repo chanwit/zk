@@ -17,11 +17,6 @@ Copyright (C) 2008 Potix Corporation. All Rights Reserved.
 package org.zkoss.zul;
 
 import java.io.IOException;
-
-import javax.swing.SpinnerNumberModel;
-
-import org.zkoss.lang.Objects;
-import org.zkoss.html.HTMLs;
 import org.zkoss.zk.ui.WrongValueException;
 import org.zkoss.zul.impl.NumberInputElement;
 import org.zkoss.zul.mesg.MZul;
@@ -50,10 +45,6 @@ public class Spinner extends NumberInputElement implements org.zkoss.zul.api.Spi
 	public Spinner(int value) throws WrongValueException {
 		this();
 		setValue(new Integer(value));
-	}
-
-	public Spinner(SpinnerNumberModel model) {
-		setCols(11);
 	}
 	
 	/** Returns the value (in Integer), might be null unless
@@ -114,6 +105,10 @@ public class Spinner extends NumberInputElement implements org.zkoss.zul.api.Spi
 		return _zclass == null ?  "z-spinner" : _zclass;
 	}
 	
+	/**
+	 * @param constr a list of constraints separated by comma.
+	 * Example: no positive, no zero
+	 */
 	// -- super --//
 	public void setConstraint(String constr) {
 		setConstraint(constr != null ? new SimpleSpinnerConstraint(constr): null); //Bug 2564298

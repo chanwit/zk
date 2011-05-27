@@ -15,10 +15,10 @@ it will be useful, but WITHOUT ANY WARRANTY.
 (function () {
 
 	function _isPE() {
-		return zk.feature.pe && zk.isLoaded('zkex.sel');
+		return zk.isLoaded('zkex.sel');
 	}
 /**
- * A list item.
+ * A listitem.
  *
  * <p>Default {@link #getZclass}: z-listitem
  */
@@ -34,7 +34,7 @@ zul.sel.Listitem = zk.$extends(zul.sel.ItemWidget, {
 	getListgroup: function () {
 		// TODO: this performance is not good.
 		if (_isPE() && this.parent && this.parent.hasGroup())
-			for (var w = this.previousSibling; w; w = w.previousSibling)
+			for (var w = this; w; w = w.previousSibling)
 				if (w.$instanceof(zkex.sel.Listgroup)) return w;
 				
 		return null;
@@ -85,17 +85,20 @@ zul.sel.Listitem = zk.$extends(zul.sel.ItemWidget, {
 		this.$supers('replaceWidget', arguments);
 	},
 	_syncListitems: function (newwgt) {
-		var list = this.getListbox();
-		if (list) {
-			if (list.firstItem.uuid == newwgt.uuid)
-				list.firstItem = newwgt;
-			if (list.lastItem.uuid == newwgt.uuid)
-				list.lastItem = newwgt;
-			if (this.isSelected()) {
-				var items = list._selItems;
-				if (items && items.$remove(this))
-					items.push(newwgt);
-			}
+		var box = this.getListbox();
+		if (box) {
+			if (box.firstItem.uuid == newwgt.uuid)
+				box.firstItem = newwgt;
+			if (box.lastItem.uuid == newwgt.uuid)
+				box.lastItem = newwgt;
+
+			var items = box._selItems, b1, b2;
+			if (b1 = this.isSelected())
+				items.$remove(this);
+			if (b2 = newwgt.isSelected())
+				items.push(newwgt);
+			if (b1 != b2)
+				box._updHeaderCM();
 		}
 	}
 });

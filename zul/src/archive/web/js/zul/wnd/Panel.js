@@ -44,6 +44,7 @@ zul.wnd.Panel = zk.$extends(zul.Widget, {
 	$init: function () {
 		this.$supers('$init', arguments);
 		this.listen({onMaximize: this, onClose: this, onMove: this, onSize: this.onSizeEvent}, -1000);
+		this._skipper = new zul.wnd.PanelSkipper(this);
 	},
 
 	$define: {
@@ -92,19 +93,6 @@ zul.wnd.Panel = zk.$extends(zul.Widget, {
 			}
 		},
 		/**
-		 * Sets whether to render the panel with custom rounded borders.
-		 * <p>Default: false.
-		 * @param boolean framable
-		 */
-		/**
-		 * Returns whether to render the panel with custom rounded borders.
-		 * <p>Default: false.
-		 * @return boolean
-		 */
-		framable: _zkf = function () {
-			this.rerender(); //TODO: like Window, use _updateDomOuter
-		},
-		/**
 		 * Sets whether to move the panel to display it inline where it is rendered.
 		 * 
 		 * <p>Default: false;
@@ -116,7 +104,9 @@ zul.wnd.Panel = zk.$extends(zul.Widget, {
 		 * <p>Default: false.
 		 * @return boolean
 		 */
-		movable: _zkf,
+		movable: _zkf = function () {
+			this.rerender(this._skipper);
+		},
 		/**
 		 * Sets whether to float the panel to display it inline where it is rendered.
 		 * 
@@ -198,20 +188,22 @@ zul.wnd.Panel = zk.$extends(zul.Widget, {
 		 */
 		closable: _zkf,
 		/** 
-		 * Sets the border (either none or normal).
+		 * Sets the border.
+		 * Allowed values include <code>none</code> (default), <code>normal</code>,
+		 * <code>rounded</code> and <code>rounded+</code>.
+		 * For more information, please refer to
+		 * <a href="http://books.zkoss.org/wiki/ZK_Component_Reference/Containers/Panel#Border">ZK Component Reference: Panel</a>.
 		 * @param String border the border. If null or "0", "none" is assumed.
 		 */
 		/** 
 		 * Returns the border.
-		 * The border actually controls via {@link zul.wnd.Panelchildren#getSclass()}. 
-		 * In fact, the name of the border (except "normal") is generate as part of 
-		 * the style class used for the content block.
-		 * Refer to {@link zul.wnd.Panelchildren#getSclass()} for more details.
 		 *
 		 * <p>Default: "none".
 		 * @return String
 		 */
-		border: _zkf,
+		border: function () {
+			this.rerender(); // no skipper, as body DOM depends on border
+		},
 		/** 
 		 * Sets the title.
 		 * @param String title
@@ -283,7 +275,7 @@ zul.wnd.Panel = zk.$extends(zul.Widget, {
 					jq(this.$n('max')).addClass(cls + '-maxd');
 					this._hideShadow();
 	
-					if (this.isCollapsible() && !this.isOpen()) {
+					if (this._collapsible && !this._open) {
 						$n.jq.removeClass(cls + '-colpsd');
 						var body = this.$n('body');
 						if (body) body.style.display = "";
@@ -296,24 +288,27 @@ zul.wnd.Panel = zk.$extends(zul.Widget, {
 						var layout = this.parent.parent;
 						if (layout.getMaximizedMode() == 'whole') {
 							this._inWholeMode = true;
-							var p = layout.$n();
+							var p = layout.$n(), ps = p.style;
 							sh = zk.ie6_ && p.clientHeight == 0 ? p.offsetHeight - jq(p).zk.borderHeight() : p.clientHeight;
-							node._scrollTop = p.parentNode.scrollTop; 
+							var oldinfo = this._oldNodeInfo = { _scrollTop: p.parentNode.scrollTop };
 							p.parentNode.scrollTop = 0;
 							$n.makeVParent();
 							
-							node._pos = node.style.position;
-							node._ppos = p.style.position;
-							node._zindex = node.style.zIndex;
-							node.style.position = 'absolute';
+							oldinfo._pos = s.position;
+							oldinfo._ppos = ps.position;
+							oldinfo._zIndex = s.zIndex;
+							
+							s.position = 'absolute';
 							this.setFloating_(true);
 							this.setTopmost();
 							p.appendChild(node);
-							p.style.position = 'relative';
-							if (!p.style.height) {
-								p.style.height = jq.px0(sh);
-								node._pheight = true;
+							ps.position = 'relative';
+							if (!ps.height) {
+								ps.height = jq.px0(sh);
+								oldinfo._pheight = true;
 							}
+							if (zk.ie7_)
+								zk(node).redoCSS();
 						}
 					}
 					var floated = this.isFloatable(),
@@ -362,7 +357,7 @@ zul.wnd.Panel = zk.$extends(zul.Widget, {
 					t = s.top;
 					w = s.width;
 					h = s.height;
-					if (this.isCollapsible() && !this.isOpen()) {
+					if (this._collapsible && !this._open) {
 						jq(node).addClass(cls + "-colpsd");
 						var body = this.$n('body');
 						if (body) body.style.display = "none";
@@ -373,15 +368,16 @@ zul.wnd.Panel = zk.$extends(zul.Widget, {
 						
 					if (this._inWholeMode) {
 						$n.undoVParent();
-						node.style.position = node._pos;
-						node.style.zIndex = node._zindex;
+						var oldinfo = this._oldNodeInfo;
+						node.style.position = oldinfo ? oldinfo._pos : "";
+						this.setZIndex((oldinfo ? oldinfo._zIndex : ""), {fire:true});
 						this.setFloating_(false);
 						var p = this.parent.parent.$n();
-						p.style.position = node._ppos;
-						p.parentNode.scrollTop = node._scrollTop;
-						if (node._pheight)
+						p.style.position = oldinfo ? oldinfo._ppos : "";
+						p.parentNode.scrollTop = oldinfo ? oldinfo._scrollTop : 0;
+						if (oldinfo && oldinfo._pheight)
 							p.style.height = "";
-						node._scrollTop = node._ppos = node._zindex = node._pos = node._pheight = null;
+						this._oldNodeInfo = null;
 						this._inWholeMode = false;
 					}
 				}
@@ -414,7 +410,7 @@ zul.wnd.Panel = zk.$extends(zul.Widget, {
 		 * @return boolean
 		 */
 		minimized: function (minimized, fromServer) {
-			if (this.isMaximized())
+			if (this._maximized)
 				this.setMaximized(false);
 				
 			var node = this.$n();
@@ -438,15 +434,42 @@ zul.wnd.Panel = zk.$extends(zul.Widget, {
 					});
 				}
 			}
+		},
+		//server use only
+		tbar: function (val) {
+			this.tbar = zk.Widget.$(val);
+			if (this.bbar == this.tbar)
+				this.bbar = null;
+			if (this.fbar == this.tbar)
+				this.fbar = null;
+			this.rerender();
+		},
+		//server use only
+		bbar: function (val) {
+			this.bbar = zk.Widget.$(val);
+			if (this.tbar == this.bbar)
+				this.tbar = null;
+			if (this.fbar == this.bbar)
+				this.fbar = null;
+			this.rerender();
+		},
+		//server use only
+		fbar: function(val) {
+			this.fbar = zk.Widget.$(val);
+			if (this.tbar == this.fbar)
+				this.tbar = null;
+			if (this.bbar == this.fbar)
+				this.bbar = null;
+			this.rerender();
 		}
 	},
 
 	//super//
 	setVisible: function (visible) {
 		if (this._visible != visible) {
-			if (this.isMaximized()) {
+			if (this._maximized) {
 				this.setMaximized(false);
-			} else if (this.isMinimized()) {
+			} else if (this._minimized) {
 				this.setMinimized(false);
 			}
 			this.$supers('setVisible', arguments);
@@ -557,14 +580,15 @@ zul.wnd.Panel = zk.$extends(zul.Widget, {
 	},
 	beforeSize: function() {
 		// Bug 2974370: IE 6 will get the wrong parent's width when self's width greater then parent's
-		if (this.isMaximized() && !this.__maximized)
-			jq(this.$n()).width(0);
+		if (this._maximized && !this.__maximized)
+			this.$n().style.width="";
 	},
 	//watch//
 	onSize: _zkf = (function() {
 		function syncMaximized (wgt) {
 			if (!wgt._lastSize) return;
 			var node = wgt.$n(),
+				$n = zk(node),
 				floated = wgt.isFloatable(),
 				$op = floated ? jq(node).offsetParent() : jq(node).parent(),
 				s = node.style;
@@ -573,21 +597,21 @@ zul.wnd.Panel = zk.$extends(zul.Widget, {
 			var sw = zk.ie6_ && $op[0].clientWidth == 0 ? $op[0].offsetWidth - $op.zk.borderWidth() : $op[0].clientWidth;
 			if (!floated) {
 				sw -= $op.zk.paddingWidth();
-				sw = $op.zk.revisedWidth(sw);
+				sw = $n.revisedWidth(sw);
 			}
 			s.width = jq.px0(sw);
-			if (wgt.isOpen()) {
+			if (wgt._open) {
 				var sh = zk.ie6_ && $op[0].clientHeight == 0 ? $op[0].offsetHeight - $op.zk.borderHeight() : $op[0].clientHeight;
 				if (!floated) {
 					sh -= $op.zk.paddingHeight();
-					sh = $op.zk.revisedHeight(sh);
+					sh = $n.revisedHeight(sh);
 				}
 				s.height = jq.px0(sh);
 			}
 		}
 		return function(ctl) {
 			this._hideShadow();
-			if (this.isMaximized()) {
+			if (this._maximized) {
 				if (!this.__maximized)
 					syncMaximized(this);
 				this.__maximized = false; // avoid deadloop
@@ -618,9 +642,19 @@ zul.wnd.Panel = zk.$extends(zul.Widget, {
 			zk(body).setOffsetHeight(this._offsetHeight(n));
 		if (zk.ie6_) zk(body).redoCSS();
 	},
+	//whether rounded border is required
+	_rounded: _zkf = function () {
+		return this._border.startsWith("rounded"); //rounded
+	},
+	isFramable: _zkf, //backward compatible with 5.0.6
+	//whether inner border is required
+	_bordered: function () {
+		var v;
+		return (v = this._border) != "none" && v != "rounded";
+	},
 	_offsetHeight: function (n) {
 		var h = n.offsetHeight - this._titleHeight(n);
-		if (this.isFramable()) {
+		if (this._rounded()) {
 			var body = this.panelchildren.$n(),
 				bl = jq(this.$n('body')).find(':last')[0],
 				title = this.$n('cap');
@@ -640,13 +674,13 @@ zul.wnd.Panel = zk.$extends(zul.Widget, {
 		return h;
 	},
 	_titleHeight: function (n) {
-		var isFramable = this.isFramable(),
-			cap = isFramable ? jq(n).find('> div:first-child').next()[0] : this.$n('cap'),
-			top = isFramable ? jq(n).find('> div:first-child')[0].offsetHeight: 0;
-		return cap ? cap.offsetHeight + top : top;
+		var rounded = this._rounded(),
+			cap = this.$n('cap'),
+			top = rounded ? jq(n).find('> div:first-child')[0].offsetHeight: 0;
+		return cap ? (rounded ? jq(n).find('> div:first-child').next()[0]: cap).offsetHeight + top: top;
 	},
 	onFloatUp: function (ctl) {
-		if (!this.isVisible() || !this.isFloatable())
+		if (!this._visible || !this.isFloatable())
 			return; //just in case
 
 		for (var wgt = ctl.origin; wgt; wgt = wgt.parent) {
@@ -663,9 +697,13 @@ zul.wnd.Panel = zk.$extends(zul.Widget, {
 	},
 	_makeSizer: function () {
 		if (!this._sizer) {
+			this.domListen_(this.$n(), 'onMouseMove');
+			this.domListen_(this.$n(), 'onMouseOut');
 			var Panel = this.$class;
 			this._sizer = new zk.Draggable(this, null, {
-				stackup: true, draw: Panel._drawsizing,
+				stackup: true, 
+				draw: Panel._drawsizing,
+				snap: Panel._snapsizing,
 				starteffect: Panel._startsizing,
 				ghosting: Panel._ghostsizing,
 				endghosting: Panel._endghostsizing,
@@ -675,7 +713,7 @@ zul.wnd.Panel = zk.$extends(zul.Widget, {
 	},
 	_initFloat: function () {
 		var n = this.$n();
-		if (!n.style.top && !n.style.left) {
+		if (!n.style.top || !n.style.left) {
 			var xy = zk(n).revisedOffset();
 			n.style.left = jq.px(xy[0]);
 			n.style.top = jq.px(xy[1]);
@@ -693,7 +731,7 @@ zul.wnd.Panel = zk.$extends(zul.Widget, {
 	_initMove: function (cmp) {
 		var handle = this.$n('cap');
 		if (handle && !this._drag) {
-			handle.style.cursor = "move";
+			jq(handle).addClass(this.getZclass() + '-header-move');
 			var $Panel = this.$class;
 			this._drag = new zk.Draggable(this, null, {
 				handle: handle, stackup: true,
@@ -718,7 +756,7 @@ zul.wnd.Panel = zk.$extends(zul.Widget, {
 						left: -4, right: 4, top: -2, bottom: 3
 					});
 					
-				if (this.isMaximized() || this.isMinimized())
+				if (this._maximized || this._minimized || !this._visible) //since action might be applied, we have to check _visible
 					this._hideShadow();
 				else this._shadow.sync();
 			}
@@ -744,8 +782,6 @@ zul.wnd.Panel = zk.$extends(zul.Widget, {
 		if (this._sizable)
 			this._makeSizer();
 		
-		this.domListen_(this.$n(), 'onMouseOver');
-			
 		if (this.isFloatable()) {
 			zWatch.listen({onFloatUp: this});
 			this.setFloating_(true);
@@ -754,7 +790,7 @@ zul.wnd.Panel = zk.$extends(zul.Widget, {
 				jq.onzsync(this); //sync shadow if it is implemented with div
 		}
 		
-		if (this.isMaximizable() && this.isMaximized()) {
+		if (this._maximizable && this._maximized) {
 			var self = this;
 			after.push(function() {
 				self._maximized = false;
@@ -764,14 +800,14 @@ zul.wnd.Panel = zk.$extends(zul.Widget, {
 	},
 	unbind_: function () {
 		if (this._inWholeMode) {
-			var node = this.$n();
+			var node = this.$n(),
+				oldinfo;
 			zk(node).undoVParent();
 			var p = this.parent;
-			if (p && (p = p.parent) && (p = p.$n())) {
-				p.style.position = node._ppos;
-				p.parentNode.scrollTop = node._scrollTop;
+			if (p && (p = p.parent) && (p = p.$n()) && (oldinfo = this._oldNodeInfo)) {
+				p.style.position = oldinfo._ppos;
+				p.parentNode.scrollTop = oldinfo._scrollTop;
 			}
-			node._scrollTop = node._ppos = node._zindex = node._pos = null;
 			this._inWholeMode = false;
 		}
 		zWatch.unlisten({onSize: this, onShow: this, onHide: this, onFloatUp: this});
@@ -789,45 +825,56 @@ zul.wnd.Panel = zk.$extends(zul.Widget, {
 			this._drag.destroy();
 			this._drag = null;
 		}
-		this.domUnlisten_(this.$n(), 'onMouseOver');
+		this.domUnlisten_(this.$n(), 'onMouseMove');
+		this.domUnlisten_(this.$n(), 'onMouseOut');
 		this.$supers(zul.wnd.Panel, 'unbind_', arguments);
 	},
-	_doMouseOver: function (evt) {
-		if (this._sizer) {
+	_doMouseMove: function (evt) {
+		if (this._sizer && (evt.target == this || evt.target == this.panelchildren)) {
 			var n = this.$n(),
 				c = this.$class._insizer(n, zk(n).revisedOffset(), evt.pageX, evt.pageY),
-				handle = this.isMovable() ? this.$n('cap') : false;
-			if (!this.isMaximized() && this.isOpen() && c) {
+				handle = this.isMovable() ? this.$n('cap') : false,
+				zcls = this.getZclass();
+			if (!this._maximized && this._open && c) {
 				if (this._backupCursor == undefined)
 					this._backupCursor = n.style.cursor;
 				n.style.cursor = c == 1 ? 'n-resize': c == 2 ? 'ne-resize':
 					c == 3 ? 'e-resize': c == 4 ? 'se-resize':
 					c == 5 ? 's-resize': c == 6 ? 'sw-resize':
 					c == 7 ? 'w-resize': 'nw-resize';
-				if (handle) handle.style.cursor = "";
+				if (handle) jq(handle).removeClass(zcls + '-header-move');
 			} else {
-				n.style.cursor = this._backupCursor;
-				if (handle) handle.style.cursor = "move";
+				n.style.cursor = this._backupCursor || '';
+				if (handle) jq(handle).addClass(zcls + '-header-move');
 			}
 		}
 	},
+	_doMouseOut: function (evt) {
+		this.$n().style.cursor = this._backupCursor || '';
+	},
 	doClick_: function (evt) {
+		var maxBtn = this.$n('max'),
+			minBtn = this.$n('min'),
+			zcls = this.getZclass();
+		
 		switch (evt.domTarget) {
 		case this.$n('close'):
 			this.fire('onClose');
 			break;
-		case this.$n('max'):
-			this.setMaximized(!this.isMaximized());
+		case maxBtn:
+			this.setMaximized(!this._maximized);
+			jq(maxBtn).removeClass(zcls + '-max-over');
 			break;
-		case this.$n('min'):
-			this.setMinimized(!this.isMinimized());
+		case minBtn:
+			this.setMinimized(!this._minimized);
+			jq(minBtn).removeClass(zcls + '-min-over');
 			break;
 		case this.$n('exp'):
 			var body = this.$n('body'),
-				open = body ? zk(body).isVisible() : this.isOpen();
+				open = body ? zk(body).isVisible() : this._open;
 				
 			// force to open
-			if (!open == this.isOpen())
+			if (!open == this._open)
 				this._open = open;
 			this.setOpen(!open);
 			break;
@@ -838,41 +885,43 @@ zul.wnd.Panel = zk.$extends(zul.Widget, {
 		evt.stop();
 	},
 	doMouseOver_: function (evt) {
+		var zcls = this.getZclass();
+		
 		switch (evt.domTarget) {
 		case this.$n('close'):
-			jq(this.$n('close')).addClass(this.getZclass() + '-close-over');
+			jq(this.$n('close')).addClass(zcls + '-close-over');
 			break;
 		case this.$n('max'):
-			var zcls = this.getZclass(),
-				added = this.isMaximized() ? ' ' + zcls + '-maxd-over' : '';
+			var added = this._maximized ? ' ' + zcls + '-maxd-over' : '';
 			jq(this.$n('max')).addClass(zcls + '-max-over' + added);
 			break;
 		case this.$n('min'):
-			jq(this.$n('min')).addClass(this.getZclass() + '-min-over');
+			jq(this.$n('min')).addClass(zcls + '-min-over');
 			break;
 		case this.$n('exp'):
-			jq(this.$n('exp')).addClass(this.getZclass() + '-exp-over');
+			jq(this.$n('exp')).addClass(zcls + '-exp-over');
 			break;
 		}
 		this.$supers('doMouseOver_', arguments);
 	},
 	doMouseOut_: function (evt) {
+		var zcls = this.getZclass();
+		
 		switch (evt.domTarget) {
 		case this.$n('close'):
-			jq(this.$n('close')).removeClass(this.getZclass() + '-close-over');
+			jq(this.$n('close')).removeClass(zcls + '-close-over');
 			break;
 		case this.$n('max'):
-			var zcls = this.getZclass(),
-				$n = jq(this.$n('max'));
-			if (this.isMaximized())
+			var $n = jq(this.$n('max'));
+			if (this._maximized)
 				$n.removeClass(zcls + '-maxd-over');
 			$n.removeClass(zcls + '-max-over');
 			break;
 		case this.$n('min'):
-			jq(this.$n('min')).removeClass(this.getZclass() + '-min-over');
+			jq(this.$n('min')).removeClass(zcls + '-min-over');
 			break;
 		case this.$n('exp'):
-			jq(this.$n('exp')).removeClass(this.getZclass() + '-exp-over');
+			jq(this.$n('exp')).removeClass(zcls + '-exp-over');
 			break;
 		}
 		this.$supers('doMouseOut_', arguments);
@@ -881,9 +930,9 @@ zul.wnd.Panel = zk.$extends(zul.Widget, {
 		var scls = this.$supers('domClass_', arguments);
 		if (!no || !no.zclass) {
 			var zcls = this.getZclass();
-			var added = "normal" == this.getBorder() ? '' : zcls + '-noborder';
+			var added = this._bordered() ? '' : zcls + '-noborder';
 			if (added) scls += (scls ? ' ': '') + added;
-			added = this.isOpen() ? '' : zcls + '-colpsd';
+			added = this._open ? '' : zcls + '-colpsd';
 			if (added) scls += (scls ? ' ': '') + added;
 		}
 		return scls;
@@ -918,6 +967,11 @@ zul.wnd.Panel = zk.$extends(zul.Widget, {
 			this.fbar = null;
 		if (!this.childReplacing_)
 			this.rerender();
+	},
+	onChildVisible_: function (child) {
+		this.$supers('onChildVisible_', arguments);
+		if((child == this.tbar || child == this.bbar || child == this.fbar) && this.$n())
+			this._fixHgh();
 	}
 }, { //static
 	//drag
@@ -953,7 +1007,7 @@ zul.wnd.Panel = zk.$extends(zul.Widget, {
 	_ignoresizing: function (dg, pointer, evt) {
 		var el = dg.node,
 			wgt = dg.control;
-		if (wgt.isMaximized() || !wgt.isOpen()) return true;
+		if (wgt._maximized || !wgt._open) return true;
 
 		var offs = zk(el).revisedOffset(),
 			v = wgt.$class._insizer(el, offs, pointer[0], pointer[1]);
@@ -970,6 +1024,40 @@ zul.wnd.Panel = zk.$extends(zul.Widget, {
 		}
 		return true;
 	},
+	_snapsizing: zul.wnd.Window._snapsizing,
 	_aftersizing: zul.wnd.Window._aftersizing,
 	_drawsizing: zul.wnd.Window._drawsizing
 });
+
+zul.wnd.PanelSkipper = zk.$extends(zk.Skipper, {
+	$init: function (p) {
+		this._p = p;
+	},
+	skip: function (wgt, skipId) {
+		var skip;
+		if (skip = jq(skipId || (wgt.uuid + '-body'), zk)[0]) {
+			skip.parentNode.removeChild(skip);
+				//don't use jq to remove, since it unlisten events
+			return skip;
+		}
+	},
+	restore: function () {
+		this.$supers('restore', arguments);
+		this._p.zsync();
+	}
+});
+
+/** @class zul.wnd.PanelRenderer
+ * The renderer used to render a panel.
+ * It is designed to be overriden
+ * @since 5.0.5
+ */
+zul.wnd.PanelRenderer = {
+	/** Check the panel whether to render the rounded frame.
+	 * 
+	 * @param zul.wnd.Panel wgt the window
+	 */
+	isFrameRequired: function (wgt) {
+		return wgt._rounded();
+	}
+};

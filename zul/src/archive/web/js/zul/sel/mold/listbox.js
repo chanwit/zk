@@ -41,17 +41,17 @@ function (out) {
 		for (var hds = this.heads, j = 0, len = hds.length; j < len;)
 			hds[j++].redraw(out);
 	
-		out.push('</table></div>');
+		out.push('</table></div><div class="', zcls, '-header-bg"></div>');
 	}
-	out.push('<div id="', uuid, '-body" class="', zcls, '-body"');
-
+	out.push('<div id="', uuid, '-body" class="', zcls, '-body');
+	if (this._autopaging)
+		out.push(' ', zcls, '-autopaging');
+	out.push('"');
 	var hgh = this.getHeight();
 	if (hgh) out.push(' style="overflow:hidden;height:', hgh, '"');
-	else if (this.getRows() > 1) out.push(' style="overflow:hidden;height:"', this.getRows() * 15, 'px"');
+	else if (this.getRows() > 1) out.push(' style="overflow:hidden;height:', this.getRows() * 15, 'px"');
 	
-	out.push('><table', wdAttr, zUtl.cellps0, ' id="', uuid, '-cave"');
-	if (!this.isSizedByContent())
-		out.push(' style="table-layout:fixed;', wdStyle,'"');		
+	out.push('><table', wdAttr, zUtl.cellps0, ' id="', uuid, '-cave"', ' style="table-layout:fixed;', wdStyle,'"');		
 	out.push('>');
 	
 	if(this.listhead)
@@ -66,6 +66,8 @@ function (out) {
 	if (this.domPad_ && !inPaging)
 		this.domPad_(out, '-bpad');
 	
+	this.redrawEmpty_(out);
+
 	out.push('</table><', tag, ' id="', uuid,
 		'-a" tabindex="-1" onclick="return false;" href="javascript:;" class="z-focus-a"></',
 		tag, '>', "</div>");

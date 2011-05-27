@@ -18,7 +18,7 @@ it will be useful, but WITHOUT ANY WARRANTY.
 
 (function () {
 	//Tooltip
-	var _tt_inf, _tt_tmClosing, _tt_tip, _tt_ref, _tt_params;
+	var _tt_inf, _tt_tmClosing, _tt_tip, _tt_ref;
 	function _tt_beforeBegin(ref) {
 		if (_tt_tip && !_tt_tip.isOpen()) { //closed by other (such as clicking on menuitem)
 			_tt_clearOpening_();
@@ -31,23 +31,21 @@ it will be useful, but WITHOUT ANY WARRANTY.
 		return !overTip;//disable tip in tip
 	}
 	function _tt_begin(tip, ref, params) {
-		_tt_params = params;
-		if (_tt_tip != tip) {
+		if (_tt_tip != tip || _tt_ref != ref) {
 			_tt_close_();
-
 			_tt_inf = {
-				tip: tip, ref: ref,
+				tip: tip, ref: ref, params: params,
 				timer: setTimeout(_tt_open_, params.delay !== undefined ? params.delay : zk.tipDelay)
 			};
-		} else if (_tt_ref == ref)
+		} else
 			_tt_clearClosing_();
 	}
 	function _tt_end(ref) {
-		if (_tt_ref == ref || _tt_tip == ref)
-			_tt_tmClosing =
-				setTimeout(_tt_close_, 100);
+		if (_tt_ref == ref || _tt_tip == ref) {
+			_tt_clearClosing_(); //just in case
+			_tt_tmClosing = setTimeout(_tt_close_, 100);
 			//don't cloes immediate since user might move from ref to toolip
-		else
+		} else
 			_tt_clearOpening_();
 	}
 	function _tt_clearOpening_() {
@@ -70,7 +68,12 @@ it will be useful, but WITHOUT ANY WARRANTY.
 			_tt_tip = inf.tip,
 			_tt_ref = inf.ref;
 			_tt_inf = null;
-			var params = _tt_params,
+
+			var n = _tt_ref.$n();
+			if (n && !zk(n).isRealVisible()) //gone
+				return _tt_tip = _tt_ref = null;
+
+			var params = inf.params,
 				xy = params.x !== undefined ? [params.x, params.y]
 							: zk.currentPointer;
 			_tt_tip.open(_tt_ref, xy, params.position ? params.position : params.x === null ? "after_pointer" : null, {sendOnOpen:true});
@@ -85,6 +88,9 @@ it will be useful, but WITHOUT ANY WARRANTY.
 			_tt_tip = _tt_ref = null;
 			tip.close({sendOnOpen:true});
 		}
+	}
+	function _setCtrlKeysErr(msg) {
+		zk.error("setCtrlKeys: " + msg);
 	}
 
 /** The base class for ZUL widget.
@@ -376,7 +382,7 @@ zul.Widget = zk.$extends(zk.Widget, {
 			case '$':
 			case '@':
 				if (which)
-					throw "Combination of Shift, Alt and Ctrl not supported: "+keys;
+					return _setCtrlKeysErr("Combination of Shift, Alt and Ctrl not supported: "+keys);
 				which = cc == '^' ? 1: cc == '@' ? 2: 3;
 				break;
 			case '#':
@@ -388,7 +394,7 @@ zul.Widget = zk.$extends(zk.Widget, {
 						break;
 				}
 				if (k == j + 1)
-					throw "Unexpected character "+cc+" in "+keys;
+					return _setCtrlKeysErr("Unexpected character "+cc+" in "+keys);
 
 				var s = keys.substring(j+1, k).toLowerCase();
 				if ("pgup" == s) cc = 33;
@@ -404,10 +410,10 @@ zul.Widget = zk.$extends(zk.Widget, {
 				else if (s.length > 1 && s.charAt(0) == 'f') {
 					var v = zk.parseInt(s.substring(1));
 					if (v == 0 || v > 12)
-						throw "Unsupported function key: #f" + v;
+						return _setCtrlKeysErr("Unsupported function key: #f" + v);
 					cc = 112 + v - 1;
 				} else
-					throw "Unknown #"+s+" in "+keys;
+					return _setCtrlKeysErr("Unknown #"+s+" in "+keys);
 
 				parsed[which][cc] = true;
 				which = 0;
@@ -416,9 +422,9 @@ zul.Widget = zk.$extends(zk.Widget, {
 			default:
 				if (!which || ((cc > 'Z' || cc < 'A') 
 				&& (cc > 'z' || cc < 'a') && (cc > '9' || cc < '0')))
-					throw "Unexpected character "+cc+" in "+keys;
+					return _setCtrlKeysErr("Unexpected character "+cc+" in "+keys);
 				if (which == 3)
-					throw "$a - $z not supported (found in "+keys+"). Allowed: $#f1, $#home and so on.";
+					return _setCtrlKeysErr("$a - $z not supported (found in "+keys+"). Allowed: $#f1, $#home and so on.");
 
 				if (cc <= 'z' && cc >= 'a')
 					cc = cc.toUpperCase();
@@ -500,25 +506,20 @@ zul.Widget = zk.$extends(zk.Widget, {
 		this.$supers('doRightClick_', arguments);
 	},
 	doTooltipOver_: function (evt) {
-		if (!evt._tiped && _tt_beforeBegin(this)) {
+		if (!evt.tooltipped && _tt_beforeBegin(this)) {
 			var params = this._tooltip ? this._parsePopParams(this._tooltip) : {},
 				tip = this._smartFellow(params.id);
 			if (tip) {
-				evt._tiped = true;
+				evt.tooltipped = true;
+					//still call parent's doTooltipOver_ for better extensibility (though not necessary)
 				_tt_begin(tip, this, params);
 			}
 		}
+		this.$supers('doTooltipOver_', arguments);
 	},
 	doTooltipOut_: function (evt) {
 		_tt_end(this);
-	},
-	doMouseOver_: function (evt) {
-		this.doTooltipOver_(evt);
-		this.$supers('doMouseOver_', arguments);
-	},
-	doMouseOut_: function (evt) {
-		this.doTooltipOut_(evt);
-		this.$supers('doMouseOut_', arguments);
+		this.$supers('doTooltipOut_', arguments);
 	},
 	_smartFellow: function (id) {
 		return id ? id.startsWith('uuid(') && id.endsWith(')') ?
@@ -529,11 +530,12 @@ zul.Widget = zk.$extends(zk.Widget, {
 	 * Called after {@link zk.Widget#doKeyDown_} is called and the event
 	 * propagation is not stopped.
 	 * <p>Default: handles the control keys, including onOK and onCancel,
-	 *  by searching up the ancestor chain to see if any one is listening.
-	 *  If found, it calls {@link #beforeCtrlKeys_} for each widget that were
-	 *  searched, and then fire the event.
-	 *  @param zk.Event evt the widget event.
-	 *  @see #setCtrlKeys
+	 * by searching up the ancestor chain to see if any one is listening.
+	 * If found, it calls {@link #beforeCtrlKeys_} for each widget that were
+	 * searched, and then fire the event.
+	 * @param zk.Event evt the widget event.
+	 * @return boolean true if the event has been processed
+	 * @see #setCtrlKeys
 	 */
 	afterKeyDown_: function (evt) {
 		var keyCode = evt.keyCode, evtnm = "onCtrlKey", okcancel;
@@ -579,17 +581,21 @@ zul.Widget = zk.$extends(zk.Widget, {
 				break; //found
 		}
 
-		for (var w = target;; w = w.parent) {
-			if (w.beforeCtrlKeys_ && w.beforeCtrlKeys_(evt))
-				return;
+		//Bug 3304408: SELECT fixes the selected index later than mousedown
+		//so we have to defer the firing of ctrl keys
+		setTimeout(function () {
+			for (var w = target;; w = w.parent) {
+				if (w.beforeCtrlKeys_ && w.beforeCtrlKeys_(evt))
+					return;
+				if (w == wgt) break;
+			}
+			wgt.fire(evtnm, zk.copy({reference: target}, evt.data),
+				{ctl: true});
+		}, 0);
 
-			if (w == wgt) break;
-		}
-
-		wgt.fire(evtnm, zk.copy({reference: target}, evt.data),
-			{ctl: true});
 		evt.stop();
-		//TODO: Bug 1756559
+		if (jq.nodeName(evt.domTarget, "select"))
+			evt.stop({dom:true, revoke: true}); //Bug 1756559: don't stop DOM since it affects IE and Opera's SELECT's closing dropdown
 
 		//Bug 2041347
 		if (zk.ie && keyCode == 112) {
@@ -597,6 +603,7 @@ zul.Widget = zk.$extends(zk.Widget, {
 			window.onhelp = function () {return false;}
 			setTimeout(function () {window.onhelp = zk._oldOnHelp; zk._oldOnHelp = null;}, 200);
 		}
+		return true; //handled
 	},
 	/**
 	 * Called before a control key is pressed. A control key includes onOK and
@@ -609,6 +616,14 @@ zul.Widget = zk.$extends(zk.Widget, {
 	 * 		key. In other words, if true is returned, the control key is ignored. 
 	 */
 	beforeCtrlKeys_: function (evt) {
+	}
+},{
+	/** Returns the tooltip that is opened, or null if no tooltip is opened.
+	 * @return zk.Widget
+	 * @since 5.0.5
+	 */
+	getOpenTooltip: function () {
+		return _tt_tip && _tt_tip.isOpen() ? _tt_tip: null;
 	}
 });
 

@@ -33,7 +33,7 @@ import org.zkoss.xel.VariableResolver;
 import org.zkoss.xel.FunctionMapper;
 import org.zkoss.xel.taglib.Taglibs;
 import org.zkoss.xel.taglib.Taglib;
-import org.zkoss.html.HTMLs;
+import org.zkoss.xml.HTMLs;
 
 import org.zkoss.zk.ui.Page;
 import org.zkoss.zk.ui.UiException;
@@ -91,7 +91,7 @@ public class PageDefinition extends NodeInfo {
 	private List _forwdefs;
 	/** Map(String name, ExValue value). */
 	private Map _rootAttrs;
-	private ExValue _contentType, _docType, _firstLine;
+	private ExValue _contentType, _docType, _firstLine, _wgtcls;
 	/** The expression factory (ExpressionFactory).*/
 	private Class _expfcls;
 	private final ComponentDefinitionMap _compdefs;
@@ -214,6 +214,23 @@ public class PageDefinition extends NodeInfo {
 		_style = style != null && style.length() > 0 ? style: null;
 	}
 
+	/** Returns the widget class of the given page, or null if the default is used.
+	 * @since 5.0.5
+	 */
+	public String getWidgetClass(Page page) {
+		return _wgtcls != null ?
+			(String)_wgtcls.getValue(_evalr, page): null;
+	}
+	/** Sets the widget class of the page.
+	 * @param wgtcls the widget class. It may contain EL expressions.
+	 * If null or empty, the default widget class is assumed.
+	 * @since 5.0.5
+	 */
+	public void setWidgetClass(String wgtcls) {
+		_wgtcls = wgtcls != null && wgtcls.length() > 0 ?
+			new ExValue(wgtcls, String.class): null;
+	}
+
 	/** Returns the request path of this page definition, or ""
 	 * if not available.
 	 * <p>It is the same as the servlet path
@@ -331,14 +348,14 @@ public class PageDefinition extends NodeInfo {
 			return Collections.EMPTY_LIST;
 
 		final List inits = new LinkedList();
-		for (Iterator it = _initdefs.iterator(); it.hasNext();) {
-			final InitiatorInfo def = (InitiatorInfo)it.next();
-			try {
-				final Initiator init = def.newInitiator(getEvaluator(), page);
-				if (init != null) inits.add(init);
-			} catch (Throwable ex) {
-				throw UiException.Aide.wrap(ex);
+		try {
+			for (Iterator it = _initdefs.iterator(); it.hasNext();) {
+				final InitiatorInfo def = (InitiatorInfo)it.next();
+					final Initiator init = def.newInitiator(getEvaluator(), page);
+					if (init != null) inits.add(init);
 			}
+		} catch (Throwable ex) {
+			throw UiException.Aide.wrap(ex);
 		}
 		return inits;
 	}
@@ -469,20 +486,33 @@ public class PageDefinition extends NodeInfo {
 	public void addHeaderInfo(HeaderInfo header) {
 		addHeaderInfo(header, "meta".equals(header.getName()));
 	}
-	/** Converts the header definitions (added by {@link #addHeaderInfo}) to
-	 * HTML tags.
+	/** Returns the content that shall be generated inside the head element
+	 * and before ZK's default tags (never null).
+	 * For example, it might consist of &ltmeta&gt; and &lt;link&gt;.
 	 *
-	 * @param before whether to return the headers that shall be shown
-	 * before ZK's CSS/JS headers.
-	 * If true, only the headers that shall be shown before (such as meta)
-	 * are returned.
-	 * If true, only the headers that shall be shown after (such as link)
-	 * are returned.
-	 * @see #getHeaders(Page)
-	 * @since 3.6.1
+	 * <p>Since it is generated before ZK's default tags (such as CSS and JS),
+	 * it cannot override ZK's default behaviors.
+	 *
+	 * @see #getAfterHeadTags
+	 * @since 5.0.5
 	 */
-	public String getHeaders(Page page, boolean before) {
-		final List defs = before ? _hdBfrDefs: _hdAftDefs;
+	public String getBeforeHeadTags(Page page) {
+		return getHeadTags(page, _hdBfrDefs);
+	}
+	/** Returns the content that shall be generated inside the head element
+	 * and after ZK's default tags (never null).
+	 * For example, it might consist of &ltmeta&gt; and &lt;link&gt;.
+	 *
+	 * <p>Since it is generated after ZK's default tags (such as CSS and JS),
+	 * it could override ZK's default behaviors.
+	 *
+	 * @see #getBeforeHeadTags
+	 * @since 5.0.5
+	 */
+	public String getAfterHeadTags(Page page) {
+		return getHeadTags(page, _hdAftDefs);
+	}
+	private String getHeadTags(Page page, List defs) {
 		if (defs == null)
 			return "";
 
@@ -494,14 +524,19 @@ public class PageDefinition extends NodeInfo {
 		}
 		return sb.toString();
 	}
-	/** Converts all header definitions (added by {@link #addHeaderInfo}) to
-	 * HTML tags, no matter that shall be shown before or after ZK's
-	 * CSS/JS headers.
-	 * To have better control, use {@link #getHeaders(Page,boolean)} instead.
+	/** @deprecated As of release 5.0.5, replaced with {@link #getBeforeHeadTags}
+	 * and {@link #getAfterHeadTags}.
+	 */
+	public String getHeaders(Page page, boolean before) {
+		return before ? getBeforeHeadTags(page): getAfterHeadTags(page);
+	}
+	/** @deprecated As of release 5.0.5, replaced with {@link #getBeforeHeadTags}
+	 * and {@link #getAfterHeadTags}.
 	 */
 	public String getHeaders(Page page) {
-		return getHeaders(page, true) + getHeaders(page, false);
+		return getBeforeHeadTags(page) + getAfterHeadTags(page);
 	}
+
 	/** Adds a forward definition ({@link ForwardInfo}).
 	 */
 	public void addForwardInfo(ForwardInfo forward) {
@@ -558,19 +593,19 @@ public class PageDefinition extends NodeInfo {
 	 * @since 3.0.0
 	 */
 	public String getDocType(Page page) {
-		return _docType != null ?
-			(String)_docType.getValue(_evalr, page): null;
+		return _docType != null ? (String)_docType.getValue(_evalr, page): null;
 	}
 	/** Sets the doc type (&lt;!DOCTYPE&gt;).
 	 *
 	 * <p>Default: null (use the device default).
 	 *
 	 * @param docType the doc type. It may coontain EL expressions.
+	 * If null, it means device's default will be used.
+	 * If empty, it means no doc type will be generated.
 	 * @since 3.0.0
 	 */
 	public void setDocType(String docType) {
-		_docType = docType != null && docType.length() > 0 ?
-			new ExValue(docType, String.class): null;
+		_docType = docType != null ? new ExValue(docType, String.class): null;
 	}
 	/** Returns the first line to be generated to the output
 	 * (after evaluation), or null if nothing to generate.
@@ -867,13 +902,21 @@ public class PageDefinition extends NodeInfo {
 				public String getUuid() {return null;}
 				public String getTitle() {return _title;}
 				public String getStyle() {return _style;}
-				public String getHeaders(boolean before) {
+				public String getBeforeHeadTags() {
 					return evalHeaders ?
-						PageDefinition.this.getHeaders(page, before): "";
+						PageDefinition.this.getBeforeHeadTags(page): "";
 				}
-				public String getHeaders() {
+				public String getAfterHeadTags() {
 					return evalHeaders ?
-						PageDefinition.this.getHeaders(page): "";
+						PageDefinition.this.getAfterHeadTags(page): "";
+				}
+				/** @deprecated */
+				public String getHeaders(boolean before) {
+					return before ? getBeforeHeadTags(): getAfterHeadTags();
+				}
+				/** @deprecated */
+				public String getHeaders() {
+					return getBeforeHeadTags() + getAfterHeadTags();
 				}
 				public Collection getResponseHeaders() {
 					return evalHeaders ?
@@ -893,6 +936,9 @@ public class PageDefinition extends NodeInfo {
 
 		s = getFirstLine(page);
 		if (s != null) pageCtrl.setFirstLine(s);
+
+		s = getWidgetClass(page);
+		if (s != null) pageCtrl.setWidgetClass(s);
 
 		if (_cacheable != null) pageCtrl.setCacheable(_cacheable);
 		if (_autoTimeout != null) pageCtrl.setAutomaticTimeout(_autoTimeout);

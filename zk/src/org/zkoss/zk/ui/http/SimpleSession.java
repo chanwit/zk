@@ -394,9 +394,6 @@ public class SimpleSession implements Session, SessionCtrl {
 		_cache = cache;
 	}
 	public void recover(Object nativeSession) {
-		if (_invalidated)
-			log.info("Recover an invalidated session, "+this);
-
 		_invalidated = _invalid = false;
 		if (_navsess == null)
 			sessionDidActivate((HttpSession)nativeSession);
@@ -527,12 +524,18 @@ public class SimpleSession implements Session, SessionCtrl {
 	}
 	private void willPassivate(Object o) {
 		if (o instanceof SessionActivationListener) {
-			((SessionActivationListener)o).willPassivate(this);
+			try {
+				((SessionActivationListener)o).willPassivate(this);
+			} catch (AbstractMethodError ex) { //backward compatible
+			}
 		}
 	}
 	private void didActivate(Object o) {
 		if (o instanceof SessionActivationListener) {
-			((SessionActivationListener)o).didActivate(this);
+			try {
+				((SessionActivationListener)o).didActivate(this);
+			} catch (AbstractMethodError ex) { //backward compatible
+			}
 		}
 	}
 }

@@ -26,6 +26,13 @@ it will be useful, but WITHOUT ANY WARRANTY.
 		}
 	}
 
+	function _frames(ary, w) {
+		//Note: the access of frames is allowed for any window (even if it connects other website)
+		ary.push(w);
+		for (var fs = w.frames, j = 0, l = fs.length; j < l; ++j)
+			_frames(ary, fs[j]);
+	}
+
 /** @class zUtl
  * @import zk.Widget
  * @import zk.xml.Utl
@@ -135,9 +142,8 @@ zUtl.parseMap("a='b c',c=de", ',', "'\"");
 	 * @return String the encoded text.
 	 */
 	encodeXML: function (txt, opts) {
-		var out = "";
 		txt = txt != null ? String(txt):'';
-		var k = 0, tl = txt.length,
+		var tl = txt.length,
 			pre = opts && opts.pre,
 			multiline = pre || (opts && opts.multiline),
 			maxlength = opts ? opts.maxlength : 0;
@@ -146,32 +152,38 @@ zUtl.parseMap("a='b c',c=de", ',', "'\"");
 			var j = maxlength;
 			while (j > 0 && txt.charAt(j - 1) == ' ')
 				--j;
-			return txt.substring(0, j) + '...';
+			opts.maxlength = 0; //no limit
+			return zUtl.encodeXML(txt.substring(0, j) + '...', opts);
 		}
 
-		for (var j = 0; j < tl; ++j) {
-			var cc = txt.charAt(j);
-			if (cc == '\n') {
-				if (multiline) {
-					out += txt.substring(k, j) + "<br/>\n";
+		var out = [], k = 0, enc;
+		if (multiline || pre)
+			for (var j = 0; j < tl; ++j) {
+				var cc = txt.charAt(j);
+				if (enc = _encs[cc]) {
+					out.push(txt.substring(k, j), '&', enc, ';');
 					k = j + 1;
-				}
-			} else if (cc == ' ' || cc == '\t') {
-				if (pre) {
-					out += txt.substring(k, j) + '&nbsp;';
-					if (cc == '\t') out += '&nbsp;&nbsp;&nbsp;';
+				} else if (multiline && cc == '\n') {
+					out.push(txt.substring(k, j), "<br/>\n");
 					k = j + 1;
-				}
-			} else {
-				var enc = _encs[cc];
-				if (enc) {
-					out += txt.substring(k, j) + '&' + enc + ';';
+				} else if (pre && (cc == ' ' || cc == '\t')) {
+					out.push(txt.substring(k, j), "&nbsp;");
+					if (cc == '\t')
+						out.push("&nbsp;&nbsp;&nbsp;");
 					k = j + 1;
 				}
 			}
-		}
-		return !k ? txt:
-			k < tl ? out + txt.substring(k): out;
+		else
+			for (var j = 0; j < tl; ++j)
+				if (enc = _encs[txt.charAt(j)]) {
+					out.push(txt.substring(k, j), '&', enc, ';');
+					k = j + 1;
+				}
+
+		if (!k) return txt;
+		if (k < tl)
+			out.push(txt.substring(k));
+		return out.join('');
 	},
 	/** Decodes the XML string into a normal string.
 	 * For example, &amp;lt; is convert to &lt;
@@ -189,9 +201,9 @@ zUtl.parseMap("a='b c',c=de", ',', "'\"");
 				var l = txt.indexOf(';', j + 1);
 				if (l >= 0) {
 					var dec = txt.charAt(j + 1) == '#' ?
-						String.fromCharCode(
-							parseInt(txt.substring(
-								txt.charAt(j + 2) == '0' ? j + 3: j + 2, l))):
+						String.fromCharCode(txt.charAt(j + 2).toLowerCase() == 'x' ?
+							parseInt(txt.substring(j + 3, l), 16):
+							parseInt(txt.substring(j + 2, l), 10)):
 						_decs[txt.substring(j + 1, l)];
 					if (dec) {
 						out += txt.substring(k, j) + dec;
@@ -219,29 +231,51 @@ zUtl.parseMap("a='b c',c=de", ',', "'\"");
  
  	/** Returns a long value representing the current time (unit: miliseconds).
  	 * @return long
+ 	 * @deprecated As of release 5.0.6, replaced with jq.now().
  	 */
-	now: function () {
-		return new Date().getTime();
-	},
-	/** Returns today (at 0:0AM).
-	 * @param boolean full if true, returns the full time, else only returns year, month
-	 * 		, and date
+	now: jq.now,
+	/** Returns today.
+	 * @param boolean full if true, returns the full time,
+	 * else only returns year, month, and day.
+	 * If omitted, false is assumed
 	 * @return Date
 	 */
-	today: function (full) {
-		var d = new Date();
-		return full ? d
-			: new Date(d.getFullYear(), d.getMonth(), d.getDate());
+	/** Returns today.
+	 * @param String fmt the time format, such as HH:mm:ss.SSS
+	 * If a time element such as seconds not specified in the format, it will
+	 * be considered as 0. For example, if the format is "HH:mm", then
+	 * the returned object will be today, this hour and this minute, but
+	 * the second and milliseconds will be zero.
+	 * @return Date
+	 * @since 5.0.6
+	 */
+	today: function (fmt) {
+		var d = new Date(), hr = 0, min = 0, sec = 0, msec = 0;
+		if (typeof fmt == "string") {
+			var fmt0 = fmt.toLowerCase();
+			if (fmt0.indexOf('h') >= 0 || fmt0.indexOf('k') >= 0) hr = d.getHours();
+			if (fmt.indexOf('m') >= 0) min = d.getMinutes();
+			if (fmt.indexOf('s') >= 0) sec = d.getSeconds();
+			if (fmt.indexOf('S') >= 0) msec = d.getMilliseconds();
+		} else if (fmt)
+			return d;
+		return new Date(d.getFullYear(), d.getMonth(), d.getDate(),
+			hr, min, sec, msec);
 	},
 
 	/** Returns if one is ancestor of the other.
 	 * It assumes the object has either a method called <code>getParent</code>
 	 * or a field called <code>parent</code>.
 	 * A typical example is used to test the widgets ({@link Widget}).
+	 *
+	 * <p>Notice that, if you want to test DOM elements, please use
+	 * {@link jq#isAncestor} instead.
+	 *
 	 * @param Object p the parent. This method return true if p is null
 	 or p is the same as c
 	 * @param Object c the child
 	 * @return boolean
+	 * @see jq#isAncestor
 	 */
 	isAncestor: function (p, c) {
 		if (!p) return true;
@@ -403,6 +437,20 @@ zUtl.parseMap("a='b c',c=de", ',', "'\"");
 		}
 	},
 
+	/** Returns all descendant frames of the given window.
+	 * <p>To retrieve all, invoke <code>zUtl.frames(top)</code>.
+	 * Notice: w is included in the returned array.
+	 * If you want to exclude it, invoke <code>zUtl.frames(w).$remove(w)</code>.
+	 * @param Window w the browser window
+	 * @return Array
+	 * @since 5.0.4
+	 */
+	frames: function (w) {
+		var ary = [];
+		_frames(ary, w);
+		return ary;
+	},
+
 	/** Converts an integer array to a string (separated by comma).
 	 * @param int[] ary the integer array to convert.
 	 * If null, an empty string is returned.
@@ -459,8 +507,27 @@ zUtl.parseMap("a='b c',c=de", ',', "'\"");
 			out.push(separator, v, assign, map[v]);
 		out[0] = '';
 		return out.join('');
+	},
+	/** Appends an attribute.
+	 * Notice that the attribute won't be appended if val is empty or false.
+	 * In other words, it is equivalent to<br/>
+	 * <code>val ? ' ' + nm + '="' + val + '"': ""</code>.
+	 * <p>If you want to generate the attribute no matter what val is, use
+	 * {@link #appendAttr(String, Object, boolean)}.
+	 * @param String nm the name of the attribute
+	 * @param Object val the value of the attribute
+	 * @since 5.0.3
+	 */
+	/** Appends an attribute.
+	 * Notice that the attribute won't be appended.
+	 * @param String nm the name of the attribute
+	 * @param Object val the value of the attribute
+	 * @param boolean force whether to append attribute no matter what value it is.
+	 * If false (or omitted), it is the same as {@link #appendAttr(String, Object)}.
+	 * @since 5.0.3
+	 */
+	appendAttr: function (nm, val, force)  {
+		return val || force ? ' ' + nm + '="' + val + '"': "";
 	}
 };
-
-zk._t0 = zk._t1 = zUtl.now(); //_t0 used by zk.js and _t1 by mount.js
 })();

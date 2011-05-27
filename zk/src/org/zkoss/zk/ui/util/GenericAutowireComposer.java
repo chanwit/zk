@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Set;
 
 import org.zkoss.idom.Document;
+import org.zkoss.lang.Library;
 import org.zkoss.lang.Classes;
 import org.zkoss.lang.Objects;
 import org.zkoss.xel.VariableResolver;
@@ -60,7 +61,15 @@ import org.zkoss.zk.xel.Evaluator;
  * componentScope, spaceScope, pageScope, desktopScope, sessionScope, 
  * applicationScope, and requestScope, so you can use them directly. Besides 
  * that, it also provides alert(String message) method, so you can call alert() 
- * without problems.</p>
+ * without problems. Since 3.5.2, the composer itself would be assigned as an 
+ * attribute of the supervised component per the naming convention of 
+ * the component id and composer class name or of component id and "composer". 
+ * e.g. If the component id is "mywin" and the composer class is org.zkoss.MyComposer, 
+ * then the composer can be referenced by the variable name of "mywin$MyController" or 
+ * "mywin$composer". Notice that the '$' separator can be changed to other character
+ * such as '_' for Groovy or other environment that '$' is not applicable. Simply
+ * extends this class and calling {@link #GenericAutowireComposer(char separator)}
+ * constructor with proper separator character.</p>
  * 
  * <p>Notice that since this composer kept references to the components, single
  * instance composer object cannot be shared by multiple components.</p>
@@ -68,7 +77,8 @@ import org.zkoss.zk.xel.Evaluator;
  * <p>The following is an example. The onOK event listener is registered into 
  * the target window, and the Textbox component with id name "mytextbox" is
  * injected into the "mytextbox" field automatically (so you can use 
- * mytextbox variable directly in onOK).</p>
+ * mytextbox variable directly in onOK). The "value" property of "mytextbox" 
+ * is assigned with composer's getTitle(), i.e. "ZK".</p>
  * 
  * <pre><code>
  * MyComposer.java
@@ -80,12 +90,15 @@ import org.zkoss.zk.xel.Evaluator;
  *         mytextbox.setValue("Enter Pressed");
  *         alert("Hi!");
  *     }
+ *     public String getTitle() {
+ *         return "ZK";
+ *     }
  * }
  * 
  * test.zul
  * 
  * &lt;window id="mywin" apply="MyComposer">
- *     &lt;textbox id="mytextbox"/>
+ *     &lt;textbox id="mytextbox" value="${mywin$composer.title}"/>
  * &lt;/window>
  * </code></pre>
  * 
@@ -94,7 +107,7 @@ import org.zkoss.zk.xel.Evaluator;
  * @see org.zkoss.zk.ui.Components#wireFellows
  */
 abstract public class GenericAutowireComposer extends GenericComposer
-implements ComponentCloneListener {
+implements ComponentCloneListener, ComponentActivationListener {
 	private static final long serialVersionUID = 20091006115726L;
 	private static final String COMPOSER_CLONE = "COMPOSER_CLONE";
 	private static final String ON_CLONE_DO_AFTER_COMPOSE = "onCLONE_DO_AFTER_COMPOSE";
@@ -164,21 +177,90 @@ implements ComponentCloneListener {
 	 */
 	protected transient Map param;
 	
-	/** The separator. */
+	/** The separator used to separate the component ID and event name.
+	 * By default, it is '$'. For Grooy and other environment that '$'
+	 * is not applicable, you can specify '_'.
+	 */
 	protected final char _separator;
+	/** Indicates whether to ignore variables defined in zscript when wiring
+	 * a member.
+	 * <p>Default: false (not to ignore).
+	 */
+	private boolean _ignoreZScript;
+	/** Indicates whether to ignore variables defined in varible resolver
+	 * ({@link Page#addVariableResolver}) when wiring a member.
+	 * <p>Default: false (not to ignore).
+	 */
+	private boolean _ignoreXel;
 
+	/** The default constructor.
+	 * It is a shortcut of <code>GenericAutowireComposer('$',
+	 * !"true".equals(Library.getProperty("org.zkoss.zk.ui.composer.autowire.zscript", "true")),
+	 * !"true".equals(Library.getProperty("org.zkoss.zk.ui.composer.autowire.xel", "true")))</code>.
+	 * In other words, whether to ignore variables defined in ZSCRIPT and XEL depends
+	 * on the library vairables called <code>org.zkoss.zk.ui.composer.autowire.zscript</code>
+	 * and <code>org.zkoss.zk.ui.composer.autowire.xel</code>.
+	 * Furthermore, if not specified, their values are default to true, i.e., 
+	 * they shall be wired (i.e., <i>NOT</i> to ignore)
+	 * <p>If you want to control whether to wire ZSCRIPT's or XEL's variable
+	 * explicitly, you could use
+	 * {@link #GenericAutowireComposer(char,boolean,boolean)} instead.
+	 */
 	protected GenericAutowireComposer() {
 		_separator = '$';
+		initIgnores();
 	}
 	/** Constructor with a custom separator.
 	 * The separator is used to separate the component ID and event name.
 	 * By default, it is '$'. For Grooy and other environment that '$'
 	 * is not applicable, you can specify '_'.
+	 * <p>It is a shortcut of <code>GenericAutowireComposer(separator,
+	 * !"true".equals(Library.getProperty("org.zkoss.zk.ui.composer.autowire.zscript", "true")),
+	 * !"true".equals(Library.getProperty("org.zkoss.zk.ui.composer.autowire.xel", "true")))</code>.
+	 * In other words, whether to ignore variables defined in ZSCRIPT and XEL depends
+	 * on the library vairables called <code>org.zkoss.zk.ui.composer.autowire.zscript</code>
+	 * and <code>org.zkoss.zk.ui.composer.autowire.xel</code>.
+	 * Furthermore, if not specified, their values are default to true, i.e., 
+	 * they shall be wired (i.e., <i>NOT</i> to ignore)
+	 * <p>If you want to control whether to wire ZSCRIPT's or XEL's variable
+	 * explicitly, you could use
+	 * {@link #GenericAutowireComposer(char,boolean,boolean)} instead.
+	 * @param separator the separator used to separate the component ID and event name.
+	 * Refer to {@link #_separator} for details.
 	 * @since 3.6.0
 	 */
 	protected GenericAutowireComposer(char separator) {
 		_separator = separator;
+		initIgnores();
 	}
+	/** Constructors with full control, including separator, whether to
+	 * search zscript and xel variables
+	 * @param separator the separator used to separate the component ID and event name.
+	 * Refer to {@link #_separator} for details.
+	 * @param ignoreZScript whether to ignore variables defined in zscript when wiring
+	 * a member.
+	 * @param ignoreXel whether to ignore variables defined in varible resolver
+	 * ({@link Page#addVariableResolver}) when wiring a member.
+	 * @since 5.0.3
+	 */
+	protected GenericAutowireComposer(char separator, boolean ignoreZScript,
+	boolean ignoreXel) {
+		_separator = separator;
+		_ignoreZScript = ignoreZScript;
+		_ignoreXel = ignoreXel;
+	}
+	private void initIgnores() {
+		if (!_sIgnoreChecked) {
+			_sIgnoreZScript = !"true".equals(Library.getProperty(
+				"org.zkoss.zk.ui.composer.autowire.zscript", "true"));
+			_sIgnoreXel = !"true".equals(Library.getProperty(
+				"org.zkoss.zk.ui.composer.autowire.xel", "true"));
+			_sIgnoreChecked = true;
+		}
+		_ignoreZScript = _sIgnoreZScript;
+		_ignoreXel = _sIgnoreXel;
+	}
+	private static boolean _sIgnoreChecked, _sIgnoreZScript, _sIgnoreXel;
 
 	/**
 	 * Auto wire accessible variables of the specified component into a 
@@ -190,7 +272,7 @@ implements ComponentCloneListener {
 		super.doAfterCompose(comp);
 		
 		//wire variables to reference fields (include implicit objects) ASAP
-		Components.wireVariables(comp, this, _separator);
+		Components.wireVariables(comp, this, _separator, _ignoreZScript, _ignoreXel);
 	
 		//register event to wire variables just before component onCreate
 		comp.addEventListener("onCreate", new BeforeCreateWireListener());
@@ -199,7 +281,7 @@ implements ComponentCloneListener {
 	private class BeforeCreateWireListener implements EventListener, Express {
 		public void onEvent(Event event) throws Exception {
 			//wire variables again so some late created object can be wired in(e.g. DataBinder)
-			Components.wireVariables(event.getTarget(), GenericAutowireComposer.this, _separator);
+			Components.wireVariables(event.getTarget(), GenericAutowireComposer.this, _separator, _ignoreZScript, _ignoreXel);
 			//called only once
 			event.getTarget().removeEventListener("onCreate", this);
 		}
@@ -269,7 +351,7 @@ implements ComponentCloneListener {
 		//the composer somewhere other than the original component
 		if (comp != null && Objects.equals(comp.getUuid(), _applied)) {
 			if (self == null) { //Bug #2873310. didActivate only once
-				Components.wireVariables(comp, this, _separator);
+				Components.wireVariables(comp, this, _separator, _ignoreZScript, _ignoreXel);
 			}
 		}
 	}

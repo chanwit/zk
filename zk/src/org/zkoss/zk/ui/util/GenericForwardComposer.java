@@ -71,16 +71,53 @@ import org.zkoss.zk.ui.Components;
 abstract public class GenericForwardComposer extends GenericAutowireComposer {
 	private static final long serialVersionUID = 20091006115726L;
 	
+	/** The default constructor.
+	 * It is a shortcut of <code>GenericForwardComposer('$',
+	 * !"true".equals(Library.getProperty("org.zkoss.zk.ui.composer.autowire.zscript", "true")),
+	 * !"true".equals(Library.getProperty("org.zkoss.zk.ui.composer.autowire.xel", "true")))</code>.
+	 * In other words, whether to ignore variables defined in ZSCRIPT and XEL depends
+	 * on the library vairables called <code>org.zkoss.zk.ui.composer.autowire.zscript</code>
+	 * and <code>org.zkoss.zk.ui.composer.autowire.xel</code>.
+	 * Furthermore, if not specified, their values are default to true, i.e., 
+	 * they shall be wired (i.e., <i>NOT</i> to ignore)
+	 * <p>If you want to control whether to wire ZSCRIPT's or XEL's variable
+	 * explicitly, you could use
+	 * {@link #GenericForwardComposer(char,boolean,boolean)} instead.
+	 */
 	protected GenericForwardComposer() {
 	}
 	/** Constructor with a custom separator.
 	 * The separator is used to separate the component ID and event name.
 	 * By default, it is '$'. For Grooy and other environment that '$'
 	 * is not applicable, you can specify '_'.
+	 * <p>It is a shortcut of <code>GenericForwardComposer(separator,
+	 * !"true".equals(Library.getProperty("org.zkoss.zk.ui.composer.autowire.zscript", "true")),
+	 * !"true".equals(Library.getProperty("org.zkoss.zk.ui.composer.autowire.xel", "true")))</code>.
+	 * In other words, whether to ignore variables defined in ZSCRIPT and XEL depends
+	 * on the library vairables called <code>org.zkoss.zk.ui.composer.autowire.zscript</code>
+	 * and <code>org.zkoss.zk.ui.composer.autowire.xel</code>.
+	 * Furthermore, if not specified, their values are default to true, i.e., 
+	 * they shall be wired (i.e., <i>NOT</i> to ignore)
+	 * <p>If you want to control whether to wire ZSCRIPT's or XEL's variable
+	 * explicitly, you could use
+	 * {@link #GenericForwardComposer(char,boolean,boolean)} instead.
 	 * @since 3.6.0
 	 */
 	protected GenericForwardComposer(char separator) {
 		super(separator);
+	}
+	/** Constructor with full control.
+	 * @param separator the separator used to separate the component ID and event name.
+	 * Refer to {@link #_separator} for details.
+	 * @param ignoreZScript whether to ignore variables defined in zscript when wiring
+	 * a member.
+	 * @param ignoreXel whether to ignore variables defined in variable resolver
+	 * ({@link org.zkoss.zk.ui.Page#addVariableResolver}) when wiring a member.
+	 * @since 5.0.3
+	 */
+	protected GenericForwardComposer(char separator, boolean ignoreZScript,
+	boolean ignoreXel) {
+		super(separator, ignoreZScript, ignoreXel);
 	}
 
 	/**

@@ -80,22 +80,29 @@ public class Treechildren extends XulElement implements org.zkoss.zul.api.Treech
 	public org.zkoss.zul.api.Treerow getLinkedTreerowApi() {
 		return getLinkedTreerow();
 	}
-	/** Returns whether this is visible.
-	 * <p>Besides depends on {@link #setVisible}, it also depends on
-	 * whether all its ancestors is open.
-	 */
+//	/** Returns whether this is visible.
+//	 * <p>Besides depends on {@link #setVisible}, it also depends on
+//	 * whether all its ancestors is open.
+//	 */
+	/*
 	public boolean isVisible() {
 		if (!super.isVisible())
 			return false;
-
 		Component comp = getParent();
-		if (!(comp instanceof Treeitem))
-			return true;
-		if (!((Treeitem)comp).isOpen())
+		return !(comp instanceof Treeitem) || 
+			((Treeitem)comp).isOpen() && ((Treeitem)comp).isVisible(); //recursive
+	}
+	*/
+	/*package*/ boolean isRealVisible() {
+		if(!isVisible())
 			return false;
-		comp = comp.getParent();
-		return !(comp instanceof Treechildren)
-			|| ((Treechildren)comp).isVisible(); //recursive
+		Component comp = getParent();
+		if(comp == null)
+			return true;
+		if(!(comp instanceof Treeitem))
+			return comp.isVisible();
+		Treeitem item = (Treeitem) comp;
+		return item.isOpen() && item.isRealVisible();
 	}
 
 	/** Returns a readonly list of all descending {@link Treeitem}
@@ -167,15 +174,23 @@ public class Treechildren extends XulElement implements org.zkoss.zul.api.Treech
 		super.onChildRemoved(child);
 		addVisibleItemCount(-((Treeitem)child).getVisibleItemCount());
 	}
-	void addVisibleItemCount(int count) {
+	/*package*/ void addVisibleItemCount(int count) {
 		if (count == 0) return;
 		Component parent = getParent();
 		if (parent instanceof Treeitem) {
 			if (((Treeitem)parent).isOpen())
-				((Treeitem)parent).addVisibleItemCount(count, false);
+				((Treeitem)parent).addVisibleItemCount(count);
 		} else if (parent instanceof Tree)
 			((Tree)parent).addVisibleItemCount(count);
 		_visibleItemCount += count;
+	}
+	//bug #3051305: Active Page not update when drag & drop item to the end
+	public boolean insertBefore(Component newChild, Component refChild) {
+		final Tree tree = getTree();
+		if (newChild.getParent() == this && tree != null && tree.inPagingMold() && !tree.isInvalidated()) {//might change page, have to invalidate 
+			tree.invalidate();
+		}
+		return super.insertBefore(newChild, refChild);
 	}
 
 	//-- Component --//
@@ -214,25 +229,23 @@ public class Treechildren extends XulElement implements org.zkoss.zul.api.Treech
 	}
 	protected void smartUpdate(String name, Object value) {
 		Component comp = getParent();
-		if (comp instanceof Treeitem)
-			((Treeitem)comp).getTreerow().smartUpdate(name, value);
-		else
+		if (comp instanceof Treeitem) {
+			Treerow tr = ((Treeitem)comp).getTreerow();
+			if (tr != null)
+				tr.smartUpdate(name, value);
+		} else
 			((Tree)comp).smartUpdate(name, value);
 	}
-	/** Returns an iterator to iterate thru all visible children.
-	 * Unlike {@link #getVisibleItemCount}, it handles only the direct children.
-	 * Component developer only.
-	 * @since 3.0.7
-	 */
-	public Iterator getVisibleChildrenIterator() {
-		return new VisibleChildrenIterator();
-	}
+
 	/**
 	 * An iterator used by visible children.
 	 */
 	private class VisibleChildrenIterator implements Iterator {
 		private final Iterator _it = getChildren().iterator();
 		private Tree _tree = getTree();
+
+		private VisibleChildrenIterator() {
+		}
 
 		public boolean hasNext() {
 			if (_tree == null || !_tree.inPagingMold()) return _it.hasNext();
@@ -252,12 +265,12 @@ public class Treechildren extends XulElement implements org.zkoss.zul.api.Treech
 	
 	protected void redrawChildren(Writer out) throws IOException {
 		if (getAttribute(Attributes.SHALL_RENDER_ITEM) == null) {
-			for (Iterator it = getVisibleChildrenIterator(); it.hasNext();)
+			for (Iterator it = new VisibleChildrenIterator(); it.hasNext();)
 				((ComponentCtrl)it.next()).redraw(out);
 		}
 	}
 	//-- ComponentCtrl --//
-	protected Object newExtraCtrl() {
+	public Object getExtraCtrl() {
 		return new ExtraCtrl();
 	}
 	/** A utility class to implement {@link #getExtraCtrl}.

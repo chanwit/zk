@@ -34,7 +34,8 @@ import org.zkoss.zul.impl.LabelImageElement;
  * @author tomyeh
  * @see Combobox
  */
-public class Comboitem extends LabelImageElement implements org.zkoss.zul.api.Comboitem {
+public class Comboitem extends LabelImageElement
+implements org.zkoss.zul.api.Comboitem, org.zkoss.zk.ui.ext.Disable {
 	private String _desc = "";
 	private Object _value;
 	private String _content = "";
@@ -93,10 +94,6 @@ public class Comboitem extends LabelImageElement implements org.zkoss.zul.api.Co
 	 *
 	 * <p>It is useful to show the description in more versatile way.
 	 *
-	 * <p>Default: empty ("").
-	 *
-	 * <p>Deriving class can override it to return whatever it wants
-	 * other than null.
 	 * @see #getDescription
 	 * @since 3.0.0
 	 */
@@ -108,6 +105,17 @@ public class Comboitem extends LabelImageElement implements org.zkoss.zul.api.Co
 	 *
 	 * <p>It is useful to show the description in more versatile way.
 	 *
+	 * <p>Default: empty ("").
+	 *
+	 * <p>Deriving class can override it to return whatever it wants
+	 * other than null.
+	 *
+	 * <h3>Security Note</h3>
+	 * <p>Unlike other methods, the content assigned to this method
+	 * is generated directly to the browser without escaping.
+	 * Thus, it is better not to have something input by the user to avoid
+	 * any <a href="http://books.zkoss.org/wiki/ZK_Developer%27s_Reference/Security_Tips/Cross-site_scripting">XSS</a>
+	 * attach.
 	 * @see #setDescription
 	 * @since 3.0.0
 	 */

@@ -17,7 +17,7 @@ it will be useful, but WITHOUT ANY WARRANTY.
  */
 zul.sel.Select = zk.$extends(zul.Widget, {
 	_selectedIndex: -1,
-	_tabindex: -1,
+	//_tabindex: 0,
 	_rows: 0,
 	$init: function () {
 		this.$supers('$init', arguments);
@@ -62,14 +62,22 @@ zul.sel.Select = zk.$extends(zul.Widget, {
 		 * @param int selectedIndex
 		 */
 		selectedIndex: function (selectedIndex) {
-			var n = this.$n();
-			if (n) {
-				var i = 0, j = 0;
-				for (var w = this.firstChild; w && i < selectedIndex; w = w.nextSibling, i++)
-					if (!w.isVisible())
-						j++;
+			var i = 0, j = 0, w, n = this.$n();
+			this.clearSelection();
+			for (w = this.firstChild; w && i < selectedIndex; w = w.nextSibling, i++) {
+				if (w.$instanceof(zul.sel.Option)) {
+    				if (!w.isVisible())
+    					j++;
+				} else i--;			
+			}
+				
+			selectedIndex -= j;
+			if (n)
+				n.selectedIndex = selectedIndex;
 
-				n.selectedIndex = selectedIndex - j;
+			if (selectedIndex > -1 && w && w.$instanceof(zul.sel.Option)) {
+				w.setSelected(true);
+				this._selItems.push(w);
 			}
 		},
 		/**
@@ -84,7 +92,7 @@ zul.sel.Select = zk.$extends(zul.Widget, {
 		 */
 		tabindex: function (tabindex) {
 			var n = this.$n();
-			if (n) n.tabindex = tabindex >= 0 ? tabindex: '';
+			if (n) n.tabindex = tabindex||'';
 		},
 		/**
 		 * Returns the name of this component.
@@ -177,7 +185,7 @@ zul.sel.Select = zk.$extends(zul.Widget, {
 				if (index < this._selectedIndex || this._selectedIndex < 0) {
 					this._selectedIndex = index;
 				}
-				item._selected = true;
+				item._setSelectedDirectly(true);
 				this._selItems.push(item);
 			}
 		}
@@ -187,7 +195,7 @@ zul.sel.Select = zk.$extends(zul.Widget, {
 			if (!this._multiple) {
 				this.clearSelection();
 			} else {
-				item._selected = false;
+				item._setSelectedDirectly(false);
 				this._selItems.$remove(item);				
 			}
 		}
@@ -199,18 +207,19 @@ zul.sel.Select = zk.$extends(zul.Widget, {
 		if (this._selItems.length) {
 			var item;
 			for(;(item = this._selItems.pop());)
-				item._selected = false;
+				item._setSelectedDirectly(false);
 			this._selectedIndex = -1;
 		}
 	},
 	domAttrs_: function () {
+		var v;
 		return this.$supers('domAttrs_', arguments)
 			+ (this.isDisabled() ? ' disabled="disabled"' :'')
 			+ (this.isMultiple() ? ' multiple="multiple"' : '')
-			+ (this.getSelectedIndex() > -1 ? ' selectedIndex=' + this.getSelectedIndex() : '')
-			+ (this.getTabindex() > -1 ? ' tabindex=' + this.getTabindex(): '')
-			+ (this.getRows() > 0 ? ' size=' + this.getRows(): '')
-			+ (this.getName() ? ' name="' + this.getName() + '"': '');
+			+ ((v=this.getSelectedIndex()) > -1 ? ' selectedIndex="' + v + '"': '')
+			+ ((v=this.getTabindex()) ? ' tabindex="' + v + '"': '')
+			+ ((v=this.getRows()) > 0 ? ' size="' + v + '"': '')
+			+ ((v=this.getName()) ? ' name="' + v + '"': '');
 	},
 	bind_: function () {
 		this.$supers(zul.sel.Select, 'bind_', arguments);
@@ -218,7 +227,7 @@ zul.sel.Select = zk.$extends(zul.Widget, {
 		this.domListen_(n, 'onChange')
 			.domListen_(n, 'onFocus', 'doFocus_')
 			.domListen_(n, 'onBlur', 'doBlur_');
-		
+
 		if (this._selectedIndex < 0)
 			n.selectedIndex = -1;
 	},
@@ -231,38 +240,42 @@ zul.sel.Select = zk.$extends(zul.Widget, {
 	},
 	_doChange: function (evt) {		
 		var data = [], reference, n = this.$n();
-		if (this.isMultiple()) {
-			var opts = n.options;
+		if (this._multiple) {
+			var opts = n.options, changed;
 			for (var j = 0, ol = opts.length; j < ol; ++j) {
 				var opt = opts[j],
-					o = zk.Widget.$(opt.id);
-				if (o) o.setSelected(opt.selected);
-				if (opt.selected) {
+					o = zk.Widget.$(opt.id),
+					v = opt.selected;
+				if (o && o._selected != v) {
+					o.setSelected(v);
+					changed = true;
+				}
+				if (v) {
 					data.push(opt.id);
 					if (!reference) reference = opt.id;
 				}
 			}
+			if (!changed)
+				return;
 		} else {
-			var opt = n.options[n.selectedIndex];
-			this.setSelectedIndex(n.selectedIndex);
-			data.push(opt.id);
-			reference = opt.id;
+			var v = n.selectedIndex;
+			if (this._selectedIndex == v)
+				return;
+
+			this.setSelectedIndex(v);
+			data.push(reference = n.options[v].id);
 		}
-		
+
 		this.fire('onSelect', {items: data, reference: reference});
-	
-		// To Be Fixed: Bug 1756559: see au.js
-		/*if (zkau.lateReq) {
-			zkau.send(zkau.lateReq, 25);
-			delete zkau.lateReq;
-		}*/
 	},
-	doKeyUp_: function (evt) {
-		if (zk.gecko || zk.safari) {
-			if (this.isMultiple() || this.getSelectedIndex() === evt.domTarget.selectedIndex) 
-				return; //not change or unnecessary.
-			this._doChange(evt);
-		} else this.$supers('doKeyUp_', arguments);
+	//Bug 3304408: IE does not fire onchange
+	doBlur_: function (evt) {
+		this._doChange(evt);
+		return this.$supers('doBlur_', arguments); 		
+	},
+	//Bug 1756559: ctrl key shall fore it to be sent first
+	beforeCtrlKeys_: function (evt) {
+		this._doChange(evt);
 	},
 	onChildAdded_: function (/*child*/) {
 		this.rerender();

@@ -22,19 +22,15 @@ Copyright (C) 2005 Potix Corporation. All Rights Reserved.
 
 	<version>
 		<version-class>org.zkoss.zul.Version</version-class>
-		<version-uid>5.1.0</version-uid>
+		<version-uid>5.0.8</version-uid>
 	</version>
 
 	<renderer-class>org.zkoss.zul.impl.PageRenderer</renderer-class>
 
-	<!-- Note: JavaScript/CSS that are listed here will be loaded no matter
-		what language is used.
-
-		<javascript package="xxx"/> is equivalent to
-		<javascript src="~./js/xx.wpd"/>
-	-->
 	<javascript package="zk"/>
 	<javascript package="zul.lang"/>
+	<javascript package="zul" merge="true"/><!-- merge since usually required though optional -->
+	<javascript package="zul.wgt" merge="true"/><!-- merge since usually required though optional -->
 
 	<stylesheet href="~./zul/css/zk.wcs" type="text/css"/>
 
@@ -89,7 +85,7 @@ Copyright (C) 2005 Potix Corporation. All Rights Reserved.
 		Java::Messagebox.show m
 	end
 	</zscript>
-		<zscript language="Python">
+	<zscript language="Python">
 import java.util
 import java.lang
 import org.zkoss.zk.ui.util.Clients
@@ -129,6 +125,8 @@ def alert(m):
 		<component-name>foo</component-name> //the component name
 		<component-class>x.Foo</component-class> //the component class
 		<widget-class>x.Foo</widget-class> //the widget class (at client)
+			//EL is allowed in widget-class. However, if EL is used,
+			//mold-uri will be ignored (so zk.Widget's redraw must be implemented)
 
 		//Any number of molds are allowed and
 		//where mold-uri could be an expression or contain '~ctx/'
@@ -351,7 +349,7 @@ def alert(m):
 		<mold>
 			<mold-name>default</mold-name>
  			<mold-uri>mold/caption.js</mold-uri>
-			<css-uri>css/caption.css</css-uri>
+			<css-uri>css/caption.css.dsp</css-uri>
 		</mold>
 		<preserve-blank/>
 	</component>
@@ -456,6 +454,11 @@ def alert(m):
 			<mold-uri>mold/input.js</mold-uri>
 			<css-uri>css/input.css.dsp</css-uri>
 		</mold>
+		<mold>
+			<mold-name>rounded</mold-name>
+			<mold-uri>mold/input.js</mold-uri>
+			<css-uri>css/input.css.dsp</css-uri>
+		</mold>
 	</component>
 	<component>
 		<component-name>div</component-name>
@@ -475,6 +478,27 @@ def alert(m):
 			<mold-name>default</mold-name>
 			<mold-uri>mold/input.js</mold-uri>
 			<css-uri>css/input.css.dsp</css-uri>
+		</mold>
+		<mold>
+			<mold-name>rounded</mold-name>
+			<mold-uri>mold/input.js</mold-uri>
+			<css-uri>css/input.css.dsp</css-uri>
+		</mold>
+	</component>
+	<component>
+		<component-name>doublespinner</component-name>
+		<component-class>org.zkoss.zul.Doublespinner</component-class>
+		<widget-class>zul.inp.Doublespinner</widget-class>
+		<mold>
+			<mold-name>default</mold-name>
+			<!-- same as spinner -->
+			<mold-uri>mold/spinner.js</mold-uri>
+			<css-uri>css/combo.css.dsp</css-uri>
+		</mold>
+		<mold>
+			<mold-name>rounded</mold-name>
+			<mold-uri>mold/spinner.js</mold-uri>
+			<css-uri>css/combo.css.dsp</css-uri>
 		</mold>
 	</component>
 	<component>
@@ -584,6 +608,16 @@ def alert(m):
 		</mold>
 	</component>
 	<component>
+		<component-name>hlayout</component-name>
+		<component-class>org.zkoss.zul.Hlayout</component-class>
+		<widget-class>zul.box.Hlayout</widget-class>
+		<mold>
+			<mold-name>default</mold-name>
+			<mold-uri>mold/layout.js</mold-uri>
+			<css-uri>css/layout.css.dsp</css-uri>
+		</mold>
+	</component>
+	<component>
 		<component-name>html</component-name>
 		<component-class>org.zkoss.zul.Html</component-class>
 		<widget-class>zul.wgt.Html</widget-class>
@@ -643,6 +677,11 @@ def alert(m):
 		<widget-class>zul.inp.Intbox</widget-class>
 		<mold>
 			<mold-name>default</mold-name>
+			<mold-uri>mold/input.js</mold-uri>
+			<css-uri>css/input.css.dsp</css-uri>
+		</mold>
+		<mold>
+			<mold-name>rounded</mold-name>
 			<mold-uri>mold/input.js</mold-uri>
 			<css-uri>css/input.css.dsp</css-uri>
 		</mold>
@@ -745,6 +784,11 @@ def alert(m):
 		<widget-class>zul.inp.Longbox</widget-class>
 		<mold>
 			<mold-name>default</mold-name>
+			<mold-uri>mold/input.js</mold-uri>
+			<css-uri>css/input.css.dsp</css-uri>
+		</mold>
+		<mold>
+			<mold-name>rounded</mold-name>
 			<mold-uri>mold/input.js</mold-uri>
 			<css-uri>css/input.css.dsp</css-uri>
 		</mold>
@@ -1034,6 +1078,7 @@ def alert(m):
 			<mold-uri>mold/tab.js</mold-uri>
 		</mold>
 		<preserve-blank/>
+		<text-as>label</text-as>
 	</component>
 	<component>
 		<component-name>tabpanels</component-name>
@@ -1063,18 +1108,23 @@ def alert(m):
 			<mold-uri>mold/textbox.js</mold-uri>
 			<css-uri>css/input.css.dsp</css-uri>
 		</mold>
+		<mold>
+			<mold-name>rounded</mold-name>
+			<mold-uri>mold/textbox.js</mold-uri>
+			<css-uri>css/input.css.dsp</css-uri>
+		</mold>
 	</component>
 	<component>
 		<component-name>timebox</component-name>
 		<component-class>org.zkoss.zul.Timebox</component-class>
-		<widget-class>zul.inp.Timebox</widget-class>
+		<widget-class>zul.db.Timebox</widget-class>
 		<mold>
 			<mold-name>default</mold-name>
-			<mold-uri>mold/spinner.js</mold-uri>
+			<mold-uri>mold/timebox.js</mold-uri>
 		</mold>
 		<mold>
 			<mold-name>rounded</mold-name>
-			<mold-uri>mold/spinner.js</mold-uri>
+			<mold-uri>mold/timebox.js</mold-uri>
 		</mold>
 	</component>
 	<component>
@@ -1211,6 +1261,16 @@ def alert(m):
 			<mold-name>vertical</mold-name>
 			<mold-uri>mold/vbox.js</mold-uri>
 			<css-uri>css/box.css.dsp</css-uri>
+		</mold>
+	</component>
+	<component>
+		<component-name>vlayout</component-name>
+		<component-class>org.zkoss.zul.Vlayout</component-class>
+		<widget-class>zul.box.Vlayout</widget-class>
+		<mold>
+			<mold-name>default</mold-name>
+			<mold-uri>mold/layout.js</mold-uri>
+			<css-uri>css/layout.css.dsp</css-uri>
 		</mold>
 	</component>
 	<component>

@@ -20,50 +20,37 @@ it will be useful, but WITHOUT ANY WARRANTY.
  * <p>Note: {@link Treecell} also accepts children.
  * <p>Default {@link #getZclass}: z-treefooter
  */
-zul.sel.Treefooter = zk.$extends(zul.LabelImageWidget, {
-	_span: 1,
-
-	$define: {
-    	/** Returns number of columns to span this footer.
-    	 * Default: 1.
-    	 * @return int
-    	 */
-    	/** Sets the number of columns to span this footer.
-    	 * <p>It is the same as the colspan attribute of HTML TD tag.
-    	 * @param int span
-    	 */
-		span: function (v) {
-			var n = this.$n();
-			if (n) n.colSpan = v;
-		}
-	},
+zul.sel.Treefooter = zk.$extends(zul.mesh.FooterWidget, {
 	/** Returns the tree that this belongs to.
 	 * @return Tree
 	 */
 	getTree: function () {
-		return this.parent ? this.parent.parent : null;
+		return this.getMeshWidget();
 	},
 	/** Returns the tree header that is in the same column as
 	 * this footer, or null if not available.
 	 * @return Treecol
 	 */
 	getTreecol: function () {
-		var tree = this.getTree();
-		if (tree) {
-			var cs = tree.treecols;
-			if (cs)
-				return cs.getChildAt(this.getChildIndex());
-		}
-		return null;
+		return this.getHeaderWidget();
 	},
+	/** Returns the maximal length for this cell.
+	 * It is the same as the correponding {@link #getTreecol}'s 
+	 * {@link Treecol#getMaxlength}.
+	 *
+	 * @return int
+	 * @since 5.0.5
+	 */
+	getMaxlength: function () {
+		var tc = this.getTreecol();
+		return tc ? tc.getMaxlength() : 0;
+	},
+	//@Override
 	getZclass: function () {
 		return this._zclass == null ? "z-treefooter" : this._zclass;
 	},
-	//super
-	domAttrs_: function () {
-		var attr = this.$supers('domAttrs_', arguments);
-		if (this._span > 1)
-			attr += ' colSpan="' + this._span + '"';
-		return attr;
+	//@Override
+	domLabel_: function () {
+		return zUtl.encodeXML(this.getLabel(), {maxlength: this.getMaxlength()});
 	}
 });

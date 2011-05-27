@@ -39,7 +39,7 @@ var Checkbox =
  * </ol>
  */
 zul.wgt.Checkbox = zk.$extends(zul.LabelImageWidget, {
-	_tabindex: -1,
+	//_tabindex: 0,
 	_checked: false,
 
 	$define: {
@@ -98,26 +98,44 @@ zul.wgt.Checkbox = zk.$extends(zul.LabelImageWidget, {
 		 */
 		tabindex: function (v) {
 			var n = this.$n('real');
-			if (n) n.tabIndex = v >= 0 ? v: '';
+			if (n) n.tabIndex = v||'';
+		},
+		/** Returns the value.
+		 * <p>Default: "".
+		 * @return String
+		 * @since 5.0.4
+		 */
+		/** Sets the value.
+		 * @param String value the value; If null, it is considered as empty.
+		 * @since 5.0.4
+		 */
+		value: function (v) {
+			var n = this.$n('real');
+			if (n) n.value = v || '';
 		}
 	},
 
 	//super//
+	focus_: function (timeout) {
+		zk(this.$n('real')||this.$n()).focus(timeout);
+		return true;
+	},
 	getZclass: function () {
 		var zcls = this._zclass;
 		return zcls != null ? zcls: "z-checkbox";
 	},
 	contentAttrs_: function () {
-		var html = '', v = this.getName(); // cannot use this._name for radio
-		if (v)
+		var html = '', v; // cannot use this._name for radio
+		if (v = this.getName())
 			html += ' name="' + v + '"';
 		if (this._disabled)
 			html += ' disabled="disabled"';
 		if (this._checked)
 			html += ' checked="checked"';
-		v = this._tabindex;
-		if (v >= 0)
+		if (v = this._tabindex)
 			html += ' tabindex="' + v + '"';
+		if (v = this.getValue())
+			html += ' value="' + v + '"';
 		return html;
 	},
 	bind_: function (desktop) {
@@ -154,10 +172,13 @@ zul.wgt.Checkbox = zk.$extends(zul.LabelImageWidget, {
 				checked = real.checked;
 			if (checked != this._checked) //changed
 				this.setChecked(checked) //so Radio has a chance to override it
-					.fire('onCheck', checked);
-			if (zk.safari) jq(real).focus();
+					.fireOnCheck_(checked);
+			if (zk.safari) zk(real).focus();
 			return this.$supers('doClick_', arguments);
 		}
+	},
+	fireOnCheck_: function (checked) {
+		this.fire('onCheck', checked);
 	},
 	beforeSendAU_: function (wgt, evt) {
 		if (evt.name != "onClick") //don't stop event if onClick (otherwise, check won't work)

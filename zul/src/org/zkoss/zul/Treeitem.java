@@ -26,6 +26,7 @@ import org.zkoss.zk.ui.UiException;
 import org.zkoss.zk.ui.event.*;
 import org.zkoss.zk.ui.sys.ComponentCtrl;
 
+import org.zkoss.zul.ext.Openable;
 import org.zkoss.zul.ext.Paginal;
 import org.zkoss.zul.impl.XulElement;
 
@@ -41,14 +42,16 @@ import org.zkoss.zul.impl.XulElement;
  *
  * @author tomyeh
  */
-public class Treeitem extends XulElement implements org.zkoss.zul.api.Treeitem {
+public class Treeitem extends XulElement
+implements org.zkoss.zul.api.Treeitem, org.zkoss.zk.ui.ext.Disable {
 	private transient Treerow _treerow;
 	private transient Treechildren _treechildren;
 	private Object _value;
 	private boolean _open = true;
 	private boolean _selected;
 	private boolean _disabled;
-	private boolean _checkable = true;;
+	private boolean _checkable = true;
+	private TreeNode _treeNode;
 	
 	/** whether the content of this item is loaded; used if
 	 * the tree owning this item is using a tree model.
@@ -76,6 +79,8 @@ public class Treeitem extends XulElement implements org.zkoss.zul.api.Treeitem {
 		return _checkable;
 	}
 	/** Sets whether it is checkable.
+	 * 
+	 * <p>Note that it is only applied when isCheckmark() of Tree is true.
 	 * <p>Default: true.
 	 * @since 3.0.4
 	 */
@@ -209,6 +214,20 @@ public class Treeitem extends XulElement implements org.zkoss.zul.api.Treeitem {
 	public void setValue(Object value) {
 		_value = value;
 	}
+	/**
+	 * Returns the {@link TreeNode} in corresponding position of {@link TreeModel}.
+	 * @since 5.0.7
+	 */
+	/*package*/ TreeNode getTreeNode() {
+		return _treeNode;
+	}
+	/** 
+	 * Sets the {@link TreeNode} in corresponding position of {@link TreeModel}.
+	 * @since 5.0.7
+	 */
+	/*package*/ void setTreeNode(TreeNode treeNode) {
+		_treeNode = treeNode;
+	}
 
 	/** Returns whether this container is open.
 	 * <p>Default: true.
@@ -225,15 +244,17 @@ public class Treeitem extends XulElement implements org.zkoss.zul.api.Treeitem {
 			//initialized before creating child components (for ZK pages)
 			smartUpdate("open", _open);
 			//If the item is open, its tree has model and not rendered, render the item
-			boolean shouldNotify = _treechildren != null && isVisible();
-			if(_open) {
-				if (shouldNotify) addVisibleItemCount(_treechildren.getVisibleItemCount(), false);
-				Tree tree = getTree();
-				if(tree != null && tree.getModel() !=null){
+			if (_treechildren != null) 
+				addVisibleItemCount((_open ? 1: -1) * _treechildren.getVisibleItemCount());
+			
+			Tree tree = getTree();
+			if(tree != null && tree.getModel() !=null){
+				if(_open)
 					tree.renderItem(this);
-				}
-			} else 
-				if (shouldNotify) addVisibleItemCount(-_treechildren.getVisibleItemCount(), true);
+				TreeModel model = tree.getModel();
+				if (model instanceof Openable)
+					((Openable)model).setOpen(_treeNode, open);
+			}
 		}
 	}
 	/** Returns whether this item is selected.
@@ -285,7 +306,11 @@ public class Treeitem extends XulElement implements org.zkoss.zul.api.Treeitem {
 	}
 	/** Sets the label of the {@link Treecell} it contains.
 	 *
-	 * <p>If it is not created, we automatically create it.
+	 * <p>If treerow and treecell are not created, we automatically create it.
+	 *
+	 * <p>Notice that this method will create a treerow and treecell automatically
+	 * if they don't exist. Thus, you cannot attach a treerow to it again if
+	 * set an image or a label.
 	 */
 	public void setLabel(String label) {
 		autoFirstCell().setLabel(label);
@@ -329,7 +354,11 @@ public class Treeitem extends XulElement implements org.zkoss.zul.api.Treeitem {
 	}
 	/** Sets the image of the {@link Treecell} it contains.
 	 *
-	 * <p>If it is not created, we automatically create it.
+	 * <p>If treerow and treecell are not created, we automatically create it.
+	 *
+	 * <p>Notice that this method will create a treerow and treecell automatically
+	 * if they don't exist. Thus, you cannot attach a treerow to it again if
+	 * set an image or a label.
 	 */
 	public void setImage(String image) {
 		autoFirstCell().setImage(image);
@@ -369,33 +398,36 @@ public class Treeitem extends XulElement implements org.zkoss.zul.api.Treeitem {
 	public org.zkoss.zul.api.Tree getTreeApi() {
 		return getTree();
 	}
-
+	/*package*/ boolean isRealVisible() {
+		if(!isVisible())
+			return false;
+		Component comp = getParent();
+		return comp == null || (comp instanceof Treechildren) ? 
+				((Treechildren)comp).isRealVisible() : comp.isVisible();
+	}
+	
 	//-- super --//
-	/** No callable. Use {@link Treerow#setDraggable} isntead.
-	 */
-	public void setDraggable(String draggable) {
-		if (draggable != null)
-			throw new UnsupportedOperationException("Use Treerow.setDraggable() instead");
+	/*
+	public boolean isVisible(){
+		if(!super.isVisible()) 
+			return false;
+		Component comp = getParent();
+		return comp == null || comp.isVisible();
 	}
-	/** No callable. Use {@link Treerow#setDroppable} isntead.
-	 */
-	public void setDroppable(String dropable) {
-		if (dropable != null)
-			throw new UnsupportedOperationException("Use Treerow.setDroppable() instead");
-	}
-
+	*/
 	public boolean setVisible(boolean visible) {
-		if(isVisible() != visible){
+		if (isVisible() != visible) {
 			smartUpdate("visible", visible);
-			int count = isOpen() && _treechildren != null ?
-					_treechildren.getVisibleItemCount() + 1: 1;
-					boolean result = super.setVisible(visible);
-					if (isVisible()) {
-						addVisibleItemCount(count, false);
-					} else {
-						addVisibleItemCount(-count, true);
-					}
-					return result;
+			int count = isOpen() && _treechildren != null ? _treechildren
+					.getVisibleItemCount() + 1 : 1;
+			if (visible) {
+				boolean result = super.setVisible(visible);
+				addVisibleItemCount(count);
+				return result;
+			} else {
+				addVisibleItemCount(-count);
+				return super.setVisible(visible);
+			}
 		}
 		return visible;
 	}
@@ -407,7 +439,7 @@ public class Treeitem extends XulElement implements org.zkoss.zul.api.Treeitem {
 	 * @since 3.6.1
 	 */
 	public int getVisibleItemCount() {
-		return isVisible() ? 1 + (_treechildren != null ? _treechildren.getVisibleItemCount() : 0 ): 0;
+		return isVisible() ? 1 + (_open && _treechildren != null ? _treechildren.getVisibleItemCount() : 0 ): 0;
 	}
 	/**
 	 * adds the number of the visible item to the count of its parent.
@@ -415,9 +447,9 @@ public class Treeitem extends XulElement implements org.zkoss.zul.api.Treeitem {
 	 * @param force if true, ignores {@link #isVisible()}
 	 * @since 3.0.7
 	 */
-	void addVisibleItemCount(int count, boolean force) {
+	void addVisibleItemCount(int count) {
 		Treechildren tc = (Treechildren) getParent();
-		if (tc != null && (force || isVisible()))
+		if (tc != null && super.isVisible())
 			tc.addVisibleItemCount(count);
 	}
 	
@@ -475,13 +507,13 @@ public class Treeitem extends XulElement implements org.zkoss.zul.api.Treeitem {
 	public void onChildAdded(Component child) {
 		super.onChildAdded(child);
 		if (_treechildren == child)
-			addVisibleItemCount(_treechildren.getVisibleItemCount(), false);
+			addVisibleItemCount(_treechildren.getVisibleItemCount());
 	}
 	public void onChildRemoved(Component child) {
 		if (child instanceof Treerow) {
 			_treerow = null;
 		} else if (child instanceof Treechildren) {
-			addVisibleItemCount(-_treechildren.getVisibleItemCount(), false);
+			addVisibleItemCount(-_treechildren.getVisibleItemCount());
 			_treechildren = null;
 		}
 		super.onChildRemoved(child);
@@ -528,7 +560,7 @@ public class Treeitem extends XulElement implements org.zkoss.zul.api.Treeitem {
 		Tree tree = getTree();
 		if (!tree.inPagingMold()) {
 			super.redrawChildren(out);
-		} else if (isVisible() && shallVisitTree(tree, this)) {
+		} else if (isRealVisible() && shallVisitTree(tree, this)) {
 			if (shallRenderTree(tree)) {
 				ComponentCtrl child = getTreerow();
 				if (child != null)
@@ -601,23 +633,32 @@ public class Treeitem extends XulElement implements org.zkoss.zul.api.Treeitem {
 		if (cmd.equals(Events.ON_OPEN)) {
 			OpenEvent evt = OpenEvent.getOpenEvent(request);
 
-			_open = evt.isOpen();
-			if (_treechildren != null && isVisible()) {
-				if (_open)
-					addVisibleItemCount(_treechildren.getVisibleItemCount(), false);
-				else {
-					addVisibleItemCount(-_treechildren.getVisibleItemCount(), true);
-				}
-			}
+			final boolean open = evt.isOpen();
 
 			final Tree tree = getTree();
-			if ( _open && !isLoaded() && tree != null && tree.getModel() != null) {
-				tree.renderItem(Treeitem.this);
-
-				// better client side performance with invalidate
-				if (_treechildren != null && _treechildren.getChildren().size() >= 5)
-					invalidate();
+			if (tree != null && tree.getModel() != null) {
+				if (open && !isLoaded()) {
+					tree.renderItem(Treeitem.this);
+					
+					// better client side performance with invalidate
+					if (_treechildren != null && _treechildren.getChildren().size() >= 5)
+						invalidate();
+				}
+				TreeModel model = tree.getModel();
+				if (model instanceof Openable)
+					((Openable)model).setOpen(_treeNode, open);
 			}
+			
+			if (_treechildren != null && super.isVisible()) {
+				if (open)
+					addVisibleItemCount(_treechildren.getVisibleItemCount());
+				else {
+					addVisibleItemCount(-_treechildren.getVisibleItemCount());
+				}
+			}
+			
+			// Bug #3170417 the status should update after update the visibleItemCount
+			_open = open;
 
 			// Bug #2838782
 			if (tree != null && tree.inPagingMold())

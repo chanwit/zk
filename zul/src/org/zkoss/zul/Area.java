@@ -17,7 +17,7 @@ Copyright (C) 2006 Potix Corporation. All Rights Reserved.
 package org.zkoss.zul;
 
 import org.zkoss.lang.Objects;
-import org.zkoss.html.HTMLs;
+import org.zkoss.xml.HTMLs;
 
 import org.zkoss.zk.ui.Component;
 import org.zkoss.zk.ui.AbstractComponent;
@@ -49,7 +49,7 @@ public class Area extends AbstractComponent implements org.zkoss.zul.api.Area {
 	/** Sets the shape of this area.
 	 *
 	 * @exception WrongValueException if shape is not one of
-	 * null, "rect", "rectangle", "circle", "circ", "ploygon", and "poly".
+	 * null, "rect", "rectangle", "circle", "circ", "polygon", and "poly".
 	 */
 	public void setShape(String shape) throws WrongValueException {
 		if (shape != null)
@@ -109,6 +109,12 @@ public class Area extends AbstractComponent implements org.zkoss.zul.api.Area {
 		}
 	}
 
+	/** Default: not childable.
+	 */
+	protected boolean isChildable() {
+		return false;
+	}
+	
 	//-- super --//
 	public void beforeParentChanged(Component parent) {
 		if (parent != null && !(parent instanceof Imagemap))

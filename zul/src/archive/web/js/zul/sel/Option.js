@@ -16,6 +16,7 @@ it will be useful, but WITHOUT ANY WARRANTY.
  * A HTML option tag.
  */
 zul.sel.Option = zk.$extends(zul.Widget, {
+	_selected: false,
 	$define: {
     	/**
     	 * Returns whether it is disabled.
@@ -50,6 +51,13 @@ zul.sel.Option = zk.$extends(zul.Widget, {
 		 */
 		value: null
 	},
+	//@Override
+	focus: function (timeout) {
+		var p = this.parent;
+		if (p) p.focus(timeout);
+	},
+
+	//@Override
 	setVisible: function (visible) {
 		if (this._visible != visible) {
 			this._visible = visible;
@@ -61,14 +69,17 @@ zul.sel.Option = zk.$extends(zul.Widget, {
 	 * @param boolean selected
 	 */
 	setSelected: function (selected) {
+		selected = selected || false;
 		if (this._selected != selected) {
 			if (this.parent)
 				this.parent.toggleItemSelection(this);
-			
-			var n = this.$n();
-			if (n) n.selected = selected ? 'selected' : '';
-			this._selected = selected;
+			this._setSelectedDirectly(selected);
 		}
+	},
+	_setSelectedDirectly: function (selected) {
+		var n = this.$n();
+		if (n) n.selected = selected ? 'selected' : '';
+		this._selected = selected;
 	},
 	/** Returns whether it is selected.
 	 * <p>Default: false.
@@ -97,6 +108,17 @@ zul.sel.Option = zk.$extends(zul.Widget, {
 	domAttrs_: function () {
 		var value = this.getValue();
 		return this.$supers('domAttrs_', arguments) + (this.isDisabled() ? ' disabled="disabled"' :'') +
-		(this.isSelected() ? ' selected="selected"' : '') + (value ? ' value=' + value : '');
+		(this.isSelected() ? ' selected="selected"' : '') + (value ? ' value="' + value + '"': '');
+	},
+	replaceWidget: function (newwgt) {
+		this._syncItems(newwgt);
+		this.$supers('replaceWidget', arguments);
+	},
+	_syncItems: function (newwgt) {
+		if (this.parent && this.isSelected()) {
+			var items = this.parent._selItems;
+			if (items && items.$remove(this))
+				items.push(newwgt);
+		}
 	}
 });

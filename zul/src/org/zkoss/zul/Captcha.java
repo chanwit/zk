@@ -23,11 +23,13 @@ import org.zkoss.zk.ui.WrongValueException;
 import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.Events;
 import org.zkoss.zk.ui.event.EventListener;
+import org.zkoss.zk.ui.event.SerializableEventListener;
 import org.zkoss.zul.impl.CaptchaEngine;
 import org.zkoss.image.AImage;
 import org.zkoss.lang.Classes;
 import org.zkoss.lang.Objects;
 import org.zkoss.lang.Strings;
+import org.zkoss.lang.Library;
 
 import java.awt.Font;
 import java.awt.Image;
@@ -47,7 +49,7 @@ import java.util.ArrayList;
 public class Captcha extends org.zkoss.zul.Image implements org.zkoss.zul.api.Captcha {
 	//control variable
 	private boolean _smartDrawCaptcha; //whether post the smartDraw event already?
-	private transient EventListener _smartDrawCaptchaListener; //the smartDrawListner
+	private EventListener _smartDrawCaptchaListener; //the smartDrawListner
 	
 	private static Random _random = new Random();//random used for various operation
 	private static final String EXCLUDE = "0123456789IOilo"; //default exclude list
@@ -72,7 +74,7 @@ public class Captcha extends org.zkoss.zul.Image implements org.zkoss.zul.api.Ca
 	private int _len = 5; //text length, default 5
 	private String _exclude = null;
 	private String _value = ""; //captcha text value 
-	private boolean _noise, _border; //whether generate noise
+	private boolean _noise, _frame; //whether generate noise
 	private CaptchaEngine _engine; //the captcha engine that generate the distortion image.
 
 	public Captcha() {
@@ -117,6 +119,7 @@ public class Captcha extends org.zkoss.zul.Image implements org.zkoss.zul.api.Ca
 
 	/**
 	 * Set font color.
+	 * Allowed value format: #RRGGBB
 	 */
 	public void setFontColor(String color) {
 		if (Objects.equals(color, _fontColor)) {
@@ -294,17 +297,35 @@ public class Captcha extends org.zkoss.zul.Image implements org.zkoss.zul.api.Ca
 	/** Sets whether generate border.
 	 * <p> Default to false.
 	 * @since 5.0.0
+	 * @deprecated As of release 5.0.4, use {@link #setFrame(boolean)} instead.
 	 */
 	public void setBorder(boolean b) {
-		_border = b;
+		setFrame(b);
 	}
 	
 	/** Returns whether generate border.
 	 * <p> Default to false.
 	 * @since 5.0.0
+	 * @deprecated As of release 5.0.4, use {@link #isFrame()} instead.
 	 */
 	public boolean isBorder() {
-		return _border;
+		return isFrame();
+	}
+
+	/** Sets whether generate border.
+	 * <p> Default to false.
+	 * @since 5.0.4
+	 */
+	public void setFrame(boolean frame) {
+		_frame = frame;
+	}
+
+	/** Returns whether generate border.
+	 * <p> Default to false.
+	 * @since 5.0.4
+	 */
+	public boolean isFrame(){
+		return _frame;
 	}
 	
 	/**
@@ -363,9 +384,10 @@ public class Captcha extends org.zkoss.zul.Image implements org.zkoss.zul.api.Ca
 	 * It is called, if {@link #setEngine} is not called with non-null
 	 * engine.
 	 *
-	 * <p>By default, it looks up the component attribute called
-	 * captcha-engine. If found, the value is assumed to be the class
-	 * or the class name of the default engine (it must implement
+	 * <p>By default, it looks up the libarry property called
+	 * org.zkoss.zul.captcha.engine.class.
+	 * If found, the value is assumed to be
+	 * the class name of the captcha engine (it must implement
 	 * {@link CaptchaEngine}.
 	 * If not found, {@link UiException} is thrown.
 	 *
@@ -376,22 +398,14 @@ public class Captcha extends org.zkoss.zul.Image implements org.zkoss.zul.api.Ca
 	 * @since 3.0.0
 	 */
 	protected CaptchaEngine newCaptchaEngine() throws UiException {
-		Object v = getAttribute("captcha-engine");
-		if (v == null)
-			v = "org.zkoss.zkex.zul.impl.JHLabsCaptchaEngine";
+		final String PROP = "org.zkoss.zul.captcha.engine.class";
+		final String klass = Library.getProperty(PROP);
+		if (klass == null)
+			throw new UiException("Library property,  "+PROP+", required");
 
+		final Object v;
 		try {
-			final Class cls;
-			if (v instanceof String) {
-				cls = Classes.forNameByThread((String)v);
-			} else if (v instanceof Class) {
-				cls = (Class)v;
-			} else {
-				throw new UiException(v != null ? "Unknown captcha-engine, "+v:
-					"The captcha-engine attribute is not defined");
-			}
-	
-			v = cls.newInstance();
+			v = Classes.newInstanceByThread(klass);
 		} catch (Exception ex) {
 			throw UiException.Aide.wrap(ex);
 		}
@@ -409,7 +423,7 @@ public class Captcha extends org.zkoss.zul.Image implements org.zkoss.zul.api.Ca
 		}
 		_smartDrawCaptcha = true;
 		if (_smartDrawCaptchaListener == null) {
-			_smartDrawCaptchaListener = new EventListener() {
+			_smartDrawCaptchaListener = new SerializableEventListener() {
 				public void onEvent(Event event) {
 					if (Strings.isBlank(getWidth()))
 						throw new UiException("captcha must specify width");

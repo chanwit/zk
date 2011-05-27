@@ -62,6 +62,14 @@ zul.tab.Tabpanel = zk.$extends(zul.Widget, {
 		var tab = this.getLinkedTab();
 		return tab && tab.isSelected();
 	},
+	// Bug 3026669
+	_changeSel: function (oldPanel) {
+		if (oldPanel) {
+			var cave = this.$n('cave');
+			if (cave && !cave.style.height && (oldPanel = oldPanel.$n('cave')))
+				cave.style.height = oldPanel.style.height;
+		}
+	},
 	_sel: function (toSel, animation) { //don't rename (zkmax counts on it)!!
 		var accd = this.getTabbox().inAccordionMold();
 		if (accd && animation) {
@@ -102,17 +110,30 @@ zul.tab.Tabpanel = zk.$extends(zul.Widget, {
     			var n = this.$n(),
     				hgh = zk(tbx).revisedHeight(tbx.offsetHeight);
     			hgh = zk(n.parentNode).revisedHeight(hgh);
+				
+				// fixed Opera 10.5+ bug
+				if (zk.opera) {
+					var parent;
+					if ((parent = tbx.parentNode) && tbx.style.height == '100%')
+						hgh = zk(parent).revisedHeight(parent.offsetHeight);
+				}
+				
     			for (var e = n.parentNode.firstChild; e; e = e.nextSibling)
     				if (e != n) hgh -= e.offsetHeight;
     			hgh -= n.firstChild.offsetHeight;
-    			hgh = zk(n.lastChild).revisedHeight(hgh);
+    			hgh = zk(n = n.lastChild).revisedHeight(hgh);
     			if (zk.ie8)
     				hgh -= 1; // show the bottom border
-    			var cave = this.getCaveNode();
-    			cave.style.height = jq.px0(hgh);
-        		if (zk.ie && !zk.ie8) {
-        			var s = cave.style,
-        			z = s.zoom;
+    			var cave = this.getCaveNode(),
+					s = cave.style;
+    			s.height = jq.px0(hgh);
+				//Bug-3303681: need to minus the scroll bar height
+				if (zk.ie < 8)
+					s.overflow = 'auto';
+				if (n.offsetHeight - n.clientHeight > 11)
+					s.height = jq.px0(hgh - jq.scrollbarWidth());
+        		if (zk.ie < 8) {
+        			var z = s.zoom;
         			s.zoom = 1;
         			s.zoom = z;
         			s.overflow = 'hidden';
@@ -127,10 +148,23 @@ zul.tab.Tabpanel = zk.$extends(zul.Widget, {
 		return cls;
 	},
 	onSize: _zkf = function() {
+		var tabbox = this.getTabbox();
+		if (tabbox.inAccordionMold() && !zk(this.$n("real")).isVisible())
+			return;
 		this._fixPanelHgh();		//Bug 2104974
-		if (zk.ie && !zk.ie8) zk(this.getTabbox().$n()).redoCSS(); //Bug 2526699 - (add zk.ie7)
+		if (zk.ie && !zk.ie8) zk(tabbox.$n()).redoCSS(); //Bug 2526699 - (add zk.ie7)
 	},
 	onShow: _zkf,
+	//bug #3014664
+	setVflex: function (v) { //vflex ignored for Tabpanel
+		if (v != 'min') v = false;
+		this.$super(zul.tab.Tabpanel, 'setVflex', v);
+	},
+	//bug #3014664
+	setHflex: function (v) { //hflex ignored for Tabpanel
+		if (v != 'min') v = false;
+		this.$super(zul.tab.Tabpanel, 'setHflex', v);
+	},
 	bind_: function() {
 		this.$supers(zul.tab.Tabpanel, 'bind_', arguments);
 		if (this.getTabbox().isHorizontal()) {

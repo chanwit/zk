@@ -50,6 +50,17 @@ public class Events {
 	/** The onDoubleClick event (used with {@link MouseEvent}).
 	 */
 	public static final String ON_DOUBLE_CLICK = "onDoubleClick";
+	/** The onMouseOver event (used with {@link MouseEvent}).
+	 * <p>Notice, if Internet connection is too far, the user might already move
+	 * the mouse out of a widget when the server receives onMouseOver.
+	 * @since 5.0.3
+	 */
+	public static final String ON_MOUSE_OVER = "onMouseOver";
+	/** The onMouseOut event (used with {@link MouseEvent}).
+	 * @since 5.0.3
+	 */
+	public static final String ON_MOUSE_OUT = "onMouseOut";
+
 	/** The onOK event (used with {@link KeyEvent}).
 	 */
 	public static final String ON_OK = "onOK";
@@ -144,6 +155,9 @@ public class Events {
 	 * @since 3.0.8
 	 */
 	public static final String ON_BOOKMARK_CHANGE = "onBookmarkChange";
+	/** @deprecated As of release 3.0.8, replaced with {@link #ON_BOOKMARK_CHANGE}.
+	 */
+	public static final String ON_BOOKMARK_CHANGED = "onBookmarkChanged";
 	/** The onURIChange event (used with {@link URIEvent})
 	 * to notify that the associated URI of a component is changed.
 	 * Currently only the iframe component supports this event.
@@ -160,6 +174,7 @@ public class Events {
 	public static final String ON_CREATE = "onCreate";
 	/** The onModal event (used with {@link Event}) to notify a component
 	 * shall become modal. Currently, only ZUL's window components support it.
+	 * <p>Notice that it is not fired if the event thread is disabled (default).
 	 */
 	public static final String ON_MODAL = "onModal";
 	/** The onPiggyback event (used with {@link Event}) used to notify
@@ -306,12 +321,19 @@ public class Events {
 			throw UiException.Aide.wrap(ex);
 		}
 	}
-	/** Sends the event the target specified in the event.
+	/** Sends the event to the target specified in the event, and processes it immedately.
 	 *
 	 * <p>Note: {@link Event#getTarget} cannot be null.
 	 */
 	public static void sendEvent(Event event) {
 		sendEvent(event.getTarget(), event);
+	}
+	/** Sends the event to the target, and processes it immedately.
+	 * @param target the target of the event (never null)
+	 * @since 5.0.4
+	 */
+	public static void sendEvent(String name, Component target, Object data) {
+		sendEvent(new Event(name, target, data));
 	}
 
 	/** Posts an event to the current execution.
@@ -325,7 +347,7 @@ public class Events {
 	 * <p>Note: if the target of an event is not attached to
 	 * the page yet, the event is ignored silently.
 	 * @see #sendEvent
-	 * @see #echoEvent
+	 * @see #echoEvent(String, Component, Object)
 	 * @see #postEvent(int, Event)
 	 */
 	public static final void postEvent(Event event) {
@@ -360,6 +382,32 @@ public class Events {
 	public static final void postEvent(int priority, Event event) {
 		Executions.getCurrent().postEvent(priority, event);
 	}
+	/** Queues the give event for the specified target to this execution.
+	 * The target could be different from {@link Event#getTarget}.
+	 * @param priority the priority of the event. The default priority is 0
+	 * and the higher value means higher priority.
+	 * @param realTarget the target component that will receive the event.
+	 * If null, it means broadcast, i.e., all root components will receive
+	 * this event.
+	 * <br/>Notice that postEvent(n, event) is the same as postEvent(n, event.getTarget(), event),
+	 * but different from postEvent(n, 0, event).
+	 * @since 5.0.7
+	 */
+	public static final void postEvent(int priority, Component realTarget, Event event) {
+		Executions.getCurrent().postEvent(priority, realTarget, event);
+	}
+	/** Queues the give event for the specified target to this execution.
+	 * The target could be different from {@link Event#getTarget}.
+	 * @param realTarget the target component that will receive the event.
+	 * If null, it means broadcast, i.e., all root components will receive
+	 * this event.
+	 * <br/>Notice that postEvent(n, event) is the same as postEvent(n, event.getTarget(), event),
+	 * but different from postEvent(n, 0, event).
+	 * @since 5.0.7
+	 */
+	public static final void postEvent(Component realTarget, Event event) {
+		Executions.getCurrent().postEvent(0, realTarget, event);
+	}
 	/** Posts an instance of {@link Event} to the current execution
 	 * with the specified priority.
 	 *
@@ -387,7 +435,7 @@ public class Events {
 	/** Echos an event.
 	 * By echo we mean the event is fired after the client receives the AU
 	 * responses and then echoes back.
-	 * In other words, the event won't be execute in the current execution.
+	 * In other words, the event won't be processed in the current execution.
 	 * Rather, it executes after the client receives the AU responses
 	 * and then echoes back the event back.
 	 *
@@ -395,15 +443,56 @@ public class Events {
 	 * operartion. A typical case is to open a hightlighted window to
 	 * prevent the user from clicking any button before the operation gets done.
 	 *
+	 * <p>It is the same as <code>echoEvent(name, target, (Object)data)</code>.
+	 *
 	 * @since 3.0.2
 	 * @see #sendEvent
-	 * @see #echoEvent
+	 * @see #echoEvent(String, Component, Object)
 	 * @param name the event name, such as onSomething
 	 * @param target the component to receive the event (never null).
 	 * @param data the extra information, or null if not available.
 	 * It will become {@link Event#getData}.
 	 */
 	public static final void echoEvent(String name, Component target, String data) {
+		echoEvent(name, target, (Object)data);
+	}
+	
+	/** Echos an event.
+	 * By echo we mean the event is fired after the client receives the AU
+	 * responses and then echoes back.
+	 * In other words, the event won't be processed in the current execution.
+	 * Rather, it executes after the client receives the AU responses
+	 * and then echoes back the event back.
+	 *
+	 * <p>It is usually if you want to prompt the user before doing a long
+	 * operartion. A typical case is to open a hightlighted window to
+	 * prevent the user from clicking any button before the operation gets done.
+	 *
+	 * @since 5.0.4
+	 * @see #sendEvent
+	 */
+	public static final void echoEvent(Event event) {
+		echoEvent(event.getName(), event.getTarget(), event.getData());
+	}
+	/** Echos an event.
+	 * By echo we mean the event is fired after the client receives the AU
+	 * responses and then echoes back.
+	 * In other words, the event won't be processed in the current execution.
+	 * Rather, it executes after the client receives the AU responses
+	 * and then echoes back the event back.
+	 *
+	 * <p>It is usually if you want to prompt the user before doing a long
+	 * operartion. A typical case is to open a hightlighted window to
+	 * prevent the user from clicking any button before the operation gets done.
+	 *
+	 * @since 5.0.4
+	 * @see #sendEvent
+	 * @param name the event name, such as onSomething
+	 * @param target the component to receive the event (never null).
+	 * @param data the extra information, or null if not available.
+	 * It will become {@link Event#getData}.
+	 */
+	public static final void echoEvent(String name, Component target, Object data) {
 		if (name == null || name.length() == 0 || target == null)
 			throw new IllegalArgumentException();
 

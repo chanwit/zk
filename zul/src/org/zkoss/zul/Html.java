@@ -64,7 +64,7 @@ import org.zkoss.zul.impl.XulElement;
  * <p>If you need to generate the HTML tags directly
  * without enclosing with SPAN, you can use the Native namespace,
  * http://www.zkoss.org/2005/zk/native.
- * Refer to the Developer's Guide for more information.
+ * Refer to <a href="http://books.zkoss.org/wiki/ZK_Developer%27s_Reference/UI_Patterns/HTML_Tags">ZK Developer's Reference</a> for more information.
  *
  * <p>A non-XUL extension.
  *
@@ -85,14 +85,21 @@ public class Html extends XulElement implements org.zkoss.zul.api.Html {
 	}
 
 	/** Returns the embedded content (i.e., HTML tags).
-	 * <p>Default: empty ("").
-	 * <p>Deriving class can override it to return whatever it wants
-	 * other than null.
 	 */
 	public String getContent() {
 		return _content;
 	}
 	/** Sets the embedded content (i.e., HTML tags).
+	 * <p>Default: empty ("").
+	 * <p>Deriving class can override it to return whatever it wants
+	 * other than null.
+	 *
+	 * <h3>Security Note</h3>
+	 * <p>Unlike other methods, the content assigned to this method
+	 * is generated directly to the browser without escaping.
+	 * Thus, it is better not to have something input by the user to avoid
+	 * any <a href="http://books.zkoss.org/wiki/ZK_Developer%27s_Reference/Security_Tips/Cross-site_scripting">XSS</a>
+	 * attach.
 	 */
 	public void setContent(String content) {
 		if (content == null) content = "";
@@ -120,7 +127,8 @@ public class Html extends XulElement implements org.zkoss.zul.api.Html {
 				cwout.write("\" style=\"display:none\">");
 				cwout.write(cnt);
 				cwout.write("</div>\n");
-				cnt = null; //means already generated
+				if (!rc.included) //Use z$ea only if not included (since the included page is rendered a bit late because of Include handles _childjs in bind_)
+					cnt = null; //means already generated
 			}
 			if (cnt == null) renderer.render("z$ea", "content");
 			else render(renderer, "content", cnt);

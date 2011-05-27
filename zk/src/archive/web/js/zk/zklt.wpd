@@ -2,7 +2,7 @@
 
 <!-- zklt.wpd
 	Purpose:
-		WPD used for ZK Light
+		WPD used for ZKuery
 	Description:
 		
 	History:
@@ -16,16 +16,18 @@ Copyright (C) 2008 Potix Corporation. All Rights Reserved.
 	<script src="zk.js"/>
 	<script src="js.js"/>
 
-	<script>zk.light='1.0.0-RC';zk.spaceless=true;zAu={};</script>
+	<script>zk.zkuery='1.0.1';zk.spaceless=true;zAu={};zk.feature={standard:true};</script>
 	<script src="dom.js"/>
 	<script>if(zk.ie){</script>
 		<script src="domie.js"/>
 		<script>if(zk.ie6_){</script>
 			<script src="domie6.js"/>
-	<script>}}else if(zk.opera){</script>
-		<script src="domopera.js"/>
+	<script>}}else if(zk.gecko){</script>
+		<script src="domgecko.js"/>
 	<script>}else if(zk.safari){</script>
 		<script src="domsafari.js"/>
+	<script>}else if(zk.opera){</script>
+		<script src="domopera.js"/>
 	<script>}</script>
 
 	<script src="anima.js"/>
@@ -43,4 +45,5 @@ Copyright (C) 2008 Potix Corporation. All Rights Reserved.
 	-->
 	
 	<script src="ext/jquery.json.js"/>
+	<script src="ext/jquery.mousewheel.js"/>
 </package>

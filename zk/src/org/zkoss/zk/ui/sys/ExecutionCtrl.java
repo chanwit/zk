@@ -67,6 +67,12 @@ public interface ExecutionCtrl {
 
 	/** Returns the next event queued by
 	 * {@link org.zkoss.zk.ui.Execution#postEvent}, or null if no event queued.
+	 * <p>Implementation Notes:
+	 * {@link org.zkoss.zk.ui.Execution#postEvent(int,Component,Event)}
+	 * proxies the event with {@link org.zkoss.zk.ui.impl.ProxyEvent}
+	 * if the real target is different from {@link Event#getTarget}.
+	 * Of course, it is transparent to the event listeners since the real
+	 * event will be passed to the listener (rather than the proxy event).
 	 */
 	public Event getNextEvent();
 
@@ -110,6 +116,35 @@ public interface ExecutionCtrl {
 	 */
 	public Visualizer getVisualizer();
 
+	/** Sets a response header with the given name and value.
+	 * @deprecated As of release 3.6.3, replaced with
+	 * {@link org.zkoss.zk.ui.Execution#setResponseHeader}.
+	 * @since 3.0.0
+	 */
+	public void setHeader(String name, String value);
+	/** Sets a response header with the given name and date-value.
+	 * The date is specified in terms of milliseconds since the epoch.
+	 * This method allows response headers to have multiple values.
+	 * @deprecated It is suggested to use {@link org.zkoss.zk.ui.Execution#getNativeResponse}
+	 * instead.
+	 * @since 3.0.0
+	 */
+	public void setDateHeader(String name, long value);
+	/** Adds a responseheader with the given name and value.
+	 * @deprecated As of release 3.6.3, replaced with
+	 * {@link org.zkoss.zk.ui.Execution#addResponseHeader}.
+	 * @since 3.0.0
+	 */
+	public void addHeader(String name, String value);
+	/** Adds a response header with the given name and date-value.
+	 * The date is specified in terms of milliseconds since the epoch.
+	 * This method allows response headers to have multiple values.
+	 * @deprecated It is suggested to use {@link org.zkoss.zk.ui.Execution#getNativeResponse}
+	 * instead
+	 * @since 3.0.0
+	 */
+	public void addDateHeader(String name, long value);
+
 	/** Sets the content type.
 	 * @since 5.0.0
 	 */
@@ -149,4 +184,17 @@ public interface ExecutionCtrl {
 	 * @since 5.0.0
 	 */
 	public void setResponses(Collection responses);
+
+	/** Returns the information of the event being served, or null
+	 * if the execution is not under serving an event.
+	 * <p>Unlike most of other methods, this method could be accessed
+	 * by another thread.
+	 * @since 5.0.6
+	 */
+	public ExecutionInfo getExecutionInfo();
+	/** Sets the information of the event being served, or null if not under
+	 * serving an event.
+	 * @since 5.0.6
+	 */
+	public void setExecutionInfo(ExecutionInfo evtinf);
 }

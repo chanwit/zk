@@ -16,10 +16,12 @@ Copyright (C) 2006 Potix Corporation. All Rights Reserved.
 */
 package org.zkoss.zul;
 
+import org.zkoss.lang.Objects;
 import org.zkoss.zul.event.ListDataEvent;
 import org.zkoss.zk.ui.UiException;
 
 import java.util.LinkedHashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Iterator;
 import java.util.ArrayList;
@@ -32,6 +34,9 @@ import java.util.SortedSet;
 /**
  * <p>This is the {@link ListModel} as a {@link java.util.List} to be used with {@link Listbox}.
  * Add or remove the contents of this model as a List would cause the associated Listbox to change accordingly.</p> 
+ *
+ * <p>For more information, please refer to
+ * <a href="http://books.zkoss.org/wiki/ZK_Developer%27s_Reference/MVC/Model/List_Model">ZK Developer's Reference: List Model</a>
  *
  * @author Henri Chen
  * @see ListModel
@@ -302,6 +307,7 @@ implements ListModelExt, List, java.io.Serializable {
 		int index = indexOf(o);
 		if (index >= 0) {
 			remove(index);
+			return true;
 		}
 		return false;
 	}
@@ -383,6 +389,6 @@ implements ListModelExt, List, java.io.Serializable {
 	 */
 	public void sort(Comparator cmpr, final boolean ascending) {
 		Collections.sort(_list, cmpr);
-		fireEvent(ListDataEvent.CONTENTS_CHANGED, -1, -1);
+		fireEvent(ListDataEvent.STRUCTURE_CHANGED, -1, -1);
 	}
 }

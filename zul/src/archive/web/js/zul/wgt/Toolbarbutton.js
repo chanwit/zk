@@ -12,6 +12,24 @@ Copyright (C) 2008 Potix Corporation. All Rights Reserved.
 This program is distributed under LGPL Version 3.0 in the hope that
 it will be useful, but WITHOUT ANY WARRANTY.
 */
+(function () {
+	
+	function _initUpld(wgt) {
+		zWatch.listen({onShow: wgt});
+		var v;
+		if (v = wgt._upload)
+			wgt._uplder = new zul.Upload(wgt, null, v);
+	}
+	
+	function _cleanUpld(wgt) {
+		var v;
+		if (v = wgt._uplder) {
+			zWatch.unlisten({onShow: wgt});
+			wgt._uplder = null;
+			v.destroy();
+		}
+	}
+	
 /**
  * A toolbar button.
  *
@@ -24,7 +42,7 @@ it will be useful, but WITHOUT ANY WARRANTY.
 zul.wgt.Toolbarbutton = zk.$extends(zul.LabelImageWidget, {
 	_orient: "horizontal",
 	_dir: "normal",
-	_tabindex: -1,
+	//_tabindex: 0,
 
 	$define: {
 		/** Returns whether it is disabled.
@@ -87,8 +105,50 @@ zul.wgt.Toolbarbutton = zk.$extends(zul.LabelImageWidget, {
 		 */
 		tabindex: function (v) {
 			var n = this.$n();
-			if (n) n.tabIndex = v < 0 ? '' : v;
+			if (n) n.tabIndex = v||'';
 		},
+		/** Returns a list of component IDs that shall be disabled when the user
+		 * clicks this button.
+		 *
+		 * <p>To represent the button itself, the developer can specify <code>self</code>.
+		 * For example, 
+		 * <pre><code>
+		 * button.setId('ok');
+		 * wgt.setAutodisable('self,cancel');
+		 * </code></pre>
+		 * is the same as
+		 * <pre><code>
+		 * button.setId('ok');
+		 * wgt.setAutodisable('ok,cancel');
+		 * </code></pre>
+		 * that will disable
+		 * both the ok and cancel buttons when an user clicks it.
+		 *
+		 * <p>The button being disabled will be enabled automatically
+		 * once the client receives a response from the server.
+		 * In other words, the server doesn't notice if a button is disabled
+		 * with this method.
+		 *
+		 * <p>However, if you prefer to enable them later manually, you can
+		 * prefix with '+'. For example,
+		 * <pre><code>
+		 * button.setId('ok');
+		 * wgt.setAutodisable('+self,+cancel');
+		 * </code></pre>
+		 *
+		 * <p>Then, you have to enable them manually such as
+		 * <pre><code>if (something_happened){
+		 *  ok.setDisabled(false);
+		 *  cancel.setDisabled(false);
+		 *</code></pre>
+		 *
+		 * <p>Default: null.
+		 * @return String
+		 */
+		/** Sets whether to disable the button after the user clicks it.
+		 * @param String autodisable
+		 */
+		autodisable: null,
 		/** Returns non-null if this button is used for file upload, or null otherwise.
 		 * Refer to {@link #setUpload} for more details.
 		 * @return String
@@ -124,9 +184,10 @@ zul.wgt.Toolbarbutton = zk.$extends(zul.LabelImageWidget, {
 		 */
 		upload: function (v) {
 			var n = this.$n();
-			if (n && !this._disabled) {
-				this._cleanUpld();
-				if (v && v != 'false') this._initUpld();
+			if (n) {
+				_cleanUpld(this);
+				if (v && v != 'false' && !this._disabled)
+					_initUpld(this);
 			}
 		}
 	},
@@ -146,27 +207,15 @@ zul.wgt.Toolbarbutton = zk.$extends(zul.LabelImageWidget, {
 			this.domListen_(n, "onFocus", "doFocus_")
 				.domListen_(n, "onBlur", "doBlur_");
 		}
-		if (!this._disabled && this._upload) this._initUpld();
+		if (!this._disabled && this._upload) _initUpld(this);
 	},
 	unbind_: function(){
-		if (!this._disabled && this._upload) this._cleanUpld();
+		_cleanUpld(this);
 		var n = this.$n();
 		this.domUnlisten_(n, "onFocus", "doFocus_")
 			.domUnlisten_(n, "onBlur", "doBlur_");
 
 		this.$supers(zul.wgt.Toolbarbutton, 'unbind_', arguments);
-	},
-	_initUpld: function () {
-		var v;
-		if (v = this._upload)
-			this._uplder = new zul.Upload(this, null, v);
-	},
-	_cleanUpld: function () {
-		var v;
-		if (v = this._uplder) {
-			this._uplder = null;
-			v.destroy();
-		}
 	},
 	domContent_: function(){
 		var label = zUtl.encodeXML(this.getLabel()), img = this.getImage();
@@ -192,9 +241,15 @@ zul.wgt.Toolbarbutton = zk.$extends(zul.LabelImageWidget, {
 		if (v)
 			attr += ' tabIndex="' + v + '"';
 		return attr;
-	},	
+	},
+	onShow: function () {
+		if (this._uplder)
+			this._uplder.sync();
+	},
 	doClick_: function(evt){
-		if (!this.isDisabled()) {
+		if (!this._disabled) {
+			if (!this._upload)
+				zul.wgt.ADBS.autodisable(this);
 			this.fireX(evt);
 
 			if (!evt.stopped) {
@@ -206,15 +261,16 @@ zul.wgt.Toolbarbutton = zk.$extends(zul.LabelImageWidget, {
 		}
 	},
 	doMouseOver_: function (evt) {
-		if (!this.isDisabled()) {
+		if (!this._disabled) {
 			jq(this).addClass(this.getZclass() + '-over');
 			this.$supers('doMouseOver_', arguments);
 		}
 	},
 	doMouseOut_: function (evt) {
-		if (!this.isDisabled()) {
+		if (!this._disabled) {
 			jq(this).removeClass(this.getZclass() + '-over');
 			this.$supers('doMouseOut_', arguments);
 		}
 	}
 });
+})();

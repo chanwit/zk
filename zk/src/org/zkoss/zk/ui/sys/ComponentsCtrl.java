@@ -25,11 +25,9 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.Date;
 import java.io.StringWriter;
 import java.net.URL;
 
-import org.zkoss.lang.Strings;
 import org.zkoss.lang.Classes;
 import org.zkoss.lang.Objects;
 import org.zkoss.lang.Library;
@@ -67,10 +65,8 @@ import org.zkoss.zk.xel.ExValue;
  * @author tomyeh
  */
 public class ComponentsCtrl {
-	/** The prefix for auto generated ID. */
-	private static final String
-		AUTO_ID_PREFIX = "z_";
-	/** The anonymous UUID. Used only internally.
+	/** @deprecated
+	 * The anonymous UUID. Used only internally.
 	 */
 	public static final String ANONYMOUS_ID = "z__i";
 
@@ -78,10 +74,33 @@ public class ComponentsCtrl {
 
 	/** Returns the automatically generate component's UUID/ID.
 	 */
-	public static final String toAutoId(String prefix, int id) {
-		final StringBuffer sb = new StringBuffer(16)
-			.append(AUTO_ID_PREFIX).append(prefix).append('_');
-		Strings.encode(sb, id);
+	public static final String toAutoId(String prefix, int val) {
+		return encodeId(new StringBuffer(16).append(prefix), val);
+	}
+	/** Returns an ID representing the specified number
+	 * The ID consists of 0-9, a-z and _.
+	 * @since 5.0.5
+	 */
+	public static final String encodeId(StringBuffer sb, int val) {
+		//Thus, the number will 0, 1... max, 0, 1..., max, 0, 1 (less conflict)
+		if (val < 0 && (val += Integer.MIN_VALUE) < 0)
+			val = -val; //impossible but just in case
+
+		do {
+			//IE6/7's ID case insensitive (safer, though jQuery fixes it)
+			int v = val % 37;
+			val /= 37;
+			if (v-- == 0) {
+				sb.append('_');
+			} else if (v < 10) {
+				sb.append((char)('0' + v));
+//			} else if (v < 36) {
+			} else {
+				sb.append((char)(v + ((int)'a' - 10)));
+//			} else {
+//				sb.append((char)(v + ((int)'A' - 36)));
+			}
+		} while (val != 0);
 		return sb.toString();
 	}
 
@@ -97,8 +116,28 @@ public class ComponentsCtrl {
 	 * @since 5.0.3
 	 */
 	public static final boolean isAutoUuid(String id) {
-		return id == null || (id.startsWith(AUTO_ID_PREFIX)
-			&& id.indexOf('_', AUTO_ID_PREFIX.length()) > 0);
+		if (id == null)
+			return true;
+
+		//0: lower, 1: digit or upper, 2: letter or digit, 3: upper
+		//See also DesktopImpl.updateUuidPrefix
+		if (id.length() < 5)
+			return false;
+		char cc;
+		return isLower(id.charAt(0))
+			&& (isUpper(cc = id.charAt(1))  || isDigit(cc))
+			&& (isUpper(cc = id.charAt(2)) || isLower(cc) || isDigit(cc))
+			&& isUpper(id.charAt(3));
+		
+	}
+	private static boolean isUpper(char cc) {
+		return cc >= 'A' && cc <= 'Z';
+	}
+	private static boolean isLower(char cc) {
+		return cc >= 'a' && cc <= 'z';
+	}
+	private static boolean isDigit(char cc) {
+		return cc >= '0' && cc <= '9';
 	}
 	/** @deprecated As of release 5.0.2, replaced with {@link #isAutoUuid(String)}.
 	 * If you want to varify UUID, use {@link #checkUuid}.
@@ -106,7 +145,6 @@ public class ComponentsCtrl {
 	public static final boolean isUuid(String id) {
 		return isAutoUuid(id);
 	}
-
 	/** Checks if the given UUID is valid.
 	 * UUID cannot be empty and can only have alphanumeric characters or underscore.
 	 * @exception UiException if uuid is not valid.
@@ -310,6 +348,12 @@ public class ComponentsCtrl {
 			comp.addForward(orgEvent, (Component)target, (String)result[1], data);
 	}
 
+	/** @deprecated As of release 5.0.0, use the script component instead.
+	 */
+	public static String parseClientScript(Component comp, String script) {
+		return "";
+	}
+
 	/** Returns the method for handling the specified event, or null
 	 * if not available.
 	 */
@@ -430,10 +474,22 @@ public class ComponentsCtrl {
 		public void addMold(String name, String widgetClass) {
 			throw new UnsupportedOperationException();
 		}
+		/** @deprecated */
+		public void addMold(String name, String moldURI, String z2cURI) {
+			throw new UnsupportedOperationException();
+		}
+		/** @deprecated */
 		public String getWidgetClass(String moldName) {
 			return null;
 		}
+		/** @deprecated */
 		public String getDefaultWidgetClass() {
+			return null;
+		}
+		public String getWidgetClass(Component comp, String moldName) {
+			return null;
+		}
+		public String getDefaultWidgetClass(Component comp) {
 			return null;
 		}
 		public void setDefaultWidgetClass(String widgetClass) {
@@ -449,6 +505,8 @@ public class ComponentsCtrl {
 			throw new UnsupportedOperationException();
 		}
 		public void applyProperties(Component comp) {
+		}
+		public void applyAttributes(Component comp) {
 		}
 		public Map evalProperties(Map propmap, Page owner, Component parent) {
 			return propmap != null ? propmap: new HashMap(3);

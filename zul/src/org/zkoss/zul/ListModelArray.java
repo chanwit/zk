@@ -23,6 +23,8 @@ import org.zkoss.lang.Objects;
 import org.zkoss.util.ArraysX;
 import java.util.Comparator;
 import java.util.Arrays;
+import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 
 /**
@@ -139,7 +141,7 @@ implements ListModelExt, java.io.Serializable {
 	 */
 	public void sort(Comparator cmpr, final boolean ascending) {
 		Arrays.sort(_array, cmpr);
-		fireEvent(ListDataEvent.CONTENTS_CHANGED, -1, -1);
+		fireEvent(ListDataEvent.STRUCTURE_CHANGED, -1, -1);
 	}
 
 	//Object//

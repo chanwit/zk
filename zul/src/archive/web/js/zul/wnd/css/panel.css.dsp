@@ -1,5 +1,7 @@
 <%@ taglib uri="http://www.zkoss.org/dsp/web/core" prefix="c" %>
 .z-panel-shadow {
+	border-radius: 4px;
+	box-shadow:0 0 3px rgba(0, 0, 0, 0.5);
 	-moz-border-radius: 4px;
 	-moz-box-shadow:0 0 3px rgba(0, 0, 0, 0.5);
 	-webkit-border-radius: 4px;
@@ -56,6 +58,9 @@
 	background-image: url(${c:encodeURL('~./zul/img/wnd/panel-hm.png')});
 	border: 1px solid #B1CBD5;
 	padding: 5px 3px 4px 5px;
+}
+.z-panel-header-move {
+	cursor: move;
 }
 <%-- Header Left --%>
 .z-panel-hl {

@@ -17,11 +17,13 @@ Copyright (C) 2005 Potix Corporation. All Rights Reserved.
 package org.zkoss.zul;
 
 import org.zkoss.lang.Objects;
-import org.zkoss.html.HTMLs;
+import org.zkoss.xml.HTMLs;
 
 import org.zkoss.zk.ui.Component;
 import org.zkoss.zk.ui.UiException;
+import org.zkoss.zk.ui.WrongValueException;
 import org.zkoss.zk.ui.event.*;
+import org.zkoss.zul.impl.Utils;
 
 /**
  * A radio button.
@@ -40,7 +42,11 @@ import org.zkoss.zk.ui.event.*;
  * @author tomyeh
  */
 public class Radio extends Checkbox implements org.zkoss.zul.api.Radio {
-	private String _value = "";
+	
+	/** At most one of _group and _groupId will be non-null. */
+	private Radiogroup _group;
+	/** At most one of _group and _groupId will be non-null. */
+	private String _groupId;
 
 	public Radio() {
 	}
@@ -59,6 +65,10 @@ public class Radio extends Checkbox implements org.zkoss.zul.api.Radio {
 	 * If not, this radio itself is a group.
 	 */
 	public Radiogroup getRadiogroup() {
+		resolveGroup(false);
+		if (_group != null)
+			return _group;
+
 		for (Component p = this;;) {
 			Component q = p.getParent();
 			if ((q instanceof Radiogroup) || q == null)
@@ -76,6 +86,59 @@ public class Radio extends Checkbox implements org.zkoss.zul.api.Radio {
 	 */
 	public org.zkoss.zul.api.Radiogroup getRadiogroupApi() {
 		return getRadiogroup();
+	}
+
+	/** Associates the radiogroup to this radio component.
+	 * The radio automatically belongs to the nearest ancestral radiogroup.
+	 * Use this method only if the radio group is not one of its ancestors.
+	 * @since 5.0.4
+	 */
+	public void setRadiogroup(Radiogroup radiogroup) {
+		boolean inGroup = _groupId != null;
+		_groupId = null;
+		if (inGroup || radiogroup != _group) {
+			if (_group != null)
+				_group.removeExternal(this);
+			_group = radiogroup;
+			if (_group != null)
+				_group.addExternal(this);
+
+			smartUpdate("$u$radiogroup", _group != null ? _group.getUuid(): null);
+		}
+	}
+	/** Associates the radiogroup to this radio component by giving ID.
+	 * The radio automatically belongs to the nearest ancestral radiogroup.
+	 * Use this method only if the radio group is not one of its ancestors.
+	 * @param radiogroupId the ID of the radiogroup. To specify UUID,
+	 * use the format: <code>uuid(comp_uuid)</code>.
+	 * @since 5.0.4
+	 */
+	public void setRadiogroup(String radiogroupId) {
+		if (radiogroupId == null) {
+			setRadiogroup((Radiogroup)null);
+			return;
+		}
+
+		_group = null;
+		_groupId = radiogroupId;
+		if (resolveGroup(true)) //try to bind as soon as possible since they relate to each other
+			smartUpdate("$u$radiogroup", _group != null ? _group.getUuid(): null);
+		else
+			invalidate(); //delay the retrieval of _group to redraw
+	}
+	/** @param silent whether NOT to throw an exception if not found. */
+	private boolean resolveGroup(boolean silent) {
+		if (_groupId != null) {
+			_group = (Radiogroup)Utils.getComponentById(this, _groupId);
+			if (_group == null) {
+				if (!silent)
+					throw new WrongValueException("Radiogroup not found: "+_groupId);
+				return false;
+			}
+			_groupId = null;
+			_group.addExternal(this);
+		}
+		return true;
 	}
 
 	/** Returns whether it is selected.
@@ -120,24 +183,6 @@ public class Radio extends Checkbox implements org.zkoss.zul.api.Radio {
 		}
 	}
 
-	/** Returns the value.
-	 * <p>Default: "".
-	 */
-	public String getValue() {
-		return _value;
-	}
-	/** Sets the value.
-	 * @param value the value; If null, it is considered as empty.
-	 */
-	public void setValue(String value) {
-		if (value == null)
-			value = "";
-		if (!Objects.equals(_value, value)) {
-			_value = value;
-			smartUpdate("value", _value);
-		}
-	}
-
 	/** Returns the name of this radio button.
 	 * <p>Don't use this method if your application is purely based
 	 * on ZK's event-driven model.
@@ -159,15 +204,6 @@ public class Radio extends Checkbox implements org.zkoss.zul.api.Radio {
 		return _zclass == null ? "z-radio" : _zclass;
 	}
 	
-	/** Process the onCheck event sent when the radio is checked.
-	 * @since 3.6.0
-	 */
-	public void onCheck(Event event) {
-		final Radiogroup rg = getRadiogroup();
-		if (rg != null)
-			Events.sendEvent(rg, event);
-	}
-	
 	//-- Component --//
 	public void setParent(Component parent) {
 		final Radiogroup oldgp = getRadiogroup();
@@ -183,8 +219,9 @@ public class Radio extends Checkbox implements org.zkoss.zul.api.Radio {
 	protected void renderProperties(org.zkoss.zk.ui.sys.ContentRenderer renderer)
 	throws java.io.IOException {
 		super.renderProperties(renderer);
-		if (_value != null)
-			render(renderer, "value", _value);
+		resolveGroup(false);
+		if (_group != null)
+			render(renderer, "$u$radiogroup", _group.getUuid());
 	}
 	
 	//-- ComponentCtrl --//
@@ -199,6 +236,10 @@ public class Radio extends Checkbox implements org.zkoss.zul.api.Radio {
 			_checked = evt.isChecked();
 			fixSiblings(_checked, true);
 			Events.postEvent(evt);
+			// Bug: B50-3284663: Radio always sends onCheck event
+			final Radiogroup rg = getRadiogroup();
+			if (rg != null)
+				Events.postEvent(rg, evt);
 		} else
 			super.service(request, everError);
 	}

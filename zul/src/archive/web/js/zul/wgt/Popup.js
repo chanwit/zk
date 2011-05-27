@@ -60,12 +60,21 @@ zul.wgt.Popup = zk.$extends(zul.Widget, {
 	 * </ul></p>
 	 * @param Map opts 
 	 * 	if opts.sendOnOpen exists, it will fire onOpen event. If opts.disableMask exists,
-	 *  it will show a disable mask.
+	 *  it will show a disable mask. If opts.overflow exists, it allows the popup to appear
+	 *  out of the screen range. If opts.dodgeRef exists, it will avoid covering the reference
+	 *  element.
 	 */
 	open: function (ref, offset, position, opts) {
 		var posInfo = this._posInfo(ref, offset, position),
 			node = this.$n(),
+			top = node.style.top,
 			$n = jq(node);
+		
+		// the top is depend on children's height, if child will re-size after onSize/onShow, 
+		// popup need to re-position top after children height has calculated.
+		if (!top)
+			this._openInfo = arguments;
+
 		$n.css({position: "absolute"}).zk.makeVParent();
 		if (posInfo)
 			$n.zk.position(posInfo.dim, posInfo.pos, opts);
@@ -92,9 +101,11 @@ zul.wgt.Popup = zk.$extends(zul.Widget, {
 			if (!this._stackup)
 				this._stackup = jq.newStackup(node, node.id + "-stk");
 			else {
-				this._stackup.style.top = node.style.top;
-				this._stackup.style.left = node.style.left;
-				this._stackup.style.display = "block";
+				var dst, src;
+				(dst = this._stackup.style).top = (src = node.style).top;
+				dst.left = src.left;
+				dst.zIndex = src.zIndex;
+				dst.display = "block";
 			}
 		}
 		ref = zk.Widget.$(ref); // just in case, if ref is not a kind of zul.Widget.
@@ -193,31 +204,48 @@ zul.wgt.Popup = zk.$extends(zul.Widget, {
 		this.setFloating_(true);
 	},
 	unbind_: function () {
+		zk(this.$n()).undoVParent(); //Bug 3079480
 		if (this._stackup) {
 			jq(this._stackup).remove();
 			this._stackup = null;
 		}
-		
+		if (this._openInfo)
+			this._openInfo = null;
 		zWatch.unlisten({onFloatUp: this, onShow: this});
 		this.setFloating_(false);
 		this.$supers(zul.wgt.Popup, 'unbind_', arguments);
 	},
-	onShow: function () {
+	onShow: function (ctl) {
+		//bug 3034505: call children's onShow to calculate the height first
+		ctl.fire(this.firstChild);
+		var openInfo = this._openInfo;
+		if (openInfo) {
+			this.position.apply(this, openInfo);
+			this._openInfo = null;
+		}
 		this._fixWdh();
 		this._fixHgh();
 	},
 	_offsetHeight: function () {
 		var node = this.$n(),
-			h = node.offsetHeight - 1, 
-			tl = jq(node).find('> div:first-child')[0],
-			bl = jq(node).find('> div:last')[0],
-			n = this.getCaveNode().parentNode,
+			isFrameRequired = zul.wgt.PopupRenderer.isFrameRequired(),
+			h = node.offsetHeight - (isFrameRequired ? 1: 0), 
 			bd = this.$n('body');
+		
+		if (isFrameRequired) {
+			var tl = jq(node).find('> div:first-child')[0],
+				bl = jq(node).find('> div:last')[0],
+				n = this.getCaveNode().parentNode,
+				bd = this.$n('body');
 		
 			h -= tl.offsetHeight;
 			h -= bl.offsetHeight;
 			h -= zk(n).padBorderHeight();
 			h -= zk(bd).padBorderHeight();
+		} else {
+			h -= zk(bd).padBorderHeight();
+		}
+		
 		return h;
 	},
 	_fixHgh: function () {
@@ -230,6 +258,7 @@ zul.wgt.Popup = zk.$extends(zul.Widget, {
 			c.style.height = "auto";
 	},
 	_fixWdh: zk.ie7_ ? function () {
+		if (!zul.wgt.PopupRenderer.isFrameRequired()) return;
 		var node = this.$n(),
 			wdh = node.style.width,
 			cn = jq(node).children('div'),
@@ -252,12 +281,32 @@ zul.wgt.Popup = zk.$extends(zul.Widget, {
 			if (last) last.firstChild.style.width = "";
 		}
 	}: zk.$void,
+	setHeight: function (height) {
+		this.$supers('setHeight', arguments);
+		if (this.desktop)
+			zWatch.fireDown('onShow', this);
+	},
 	setWidth: function (width) {
 		this.$supers('setWidth', arguments);
-		zWatch.fireDown('onShow', this);
+		if (this.desktop)
+			zWatch.fireDown('onShow', this);
 	},
 	prologHTML_: function (out) {
 	},
 	epilogHTML_: function (out) {
 	}
 });
+/** @class zul.wgt.PopupRenderer
+ * The renderer used to render a Popup.
+ * It is designed to be overriden
+ * @since 5.0.5
+ */
+zul.wgt.PopupRenderer = {
+	/** Check the Popup whether to render the frame
+	 * 
+	 * @param zul.wgt.Popup wgt the window
+	 */
+	isFrameRequired: function () {
+		return true;
+	}
+};

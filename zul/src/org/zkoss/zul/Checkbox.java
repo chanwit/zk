@@ -17,7 +17,7 @@ Copyright (C) 2005 Potix Corporation. All Rights Reserved.
 package org.zkoss.zul;
 
 import org.zkoss.lang.Objects;
-import org.zkoss.html.HTMLs;
+import org.zkoss.xml.HTMLs;
 
 import org.zkoss.zk.ui.UiException;
 import org.zkoss.zk.ui.WrongValueException;
@@ -36,16 +36,18 @@ import org.zkoss.zul.impl.LabelImageElement;
  *
  * @author tomyeh
  */
-public class Checkbox extends LabelImageElement implements org.zkoss.zul.api.Checkbox {
+public class Checkbox extends LabelImageElement
+implements org.zkoss.zul.api.Checkbox, org.zkoss.zk.ui.ext.Disable {
+	private String _value = "";
 	/** The name. */
 	private String _name;
-	private int _tabindex = -1;
+	private int _tabindex;
 	/** Whether it is checked. */
 	/*package*/ boolean _checked;
 	private boolean _disabled;
 	
 	static {
-		addClientEvent(Checkbox.class, Events.ON_CHECK, CE_IMPORTANT);
+		addClientEvent(Checkbox.class, Events.ON_CHECK, CE_IMPORTANT|CE_REPEAT_IGNORE);
 		addClientEvent(Checkbox.class, Events.ON_FOCUS, CE_DUPLICATE_IGNORE);
 		addClientEvent(Checkbox.class, Events.ON_BLUR, CE_DUPLICATE_IGNORE);
 	}
@@ -89,6 +91,26 @@ public class Checkbox extends LabelImageElement implements org.zkoss.zul.api.Che
 		}
 	}
 
+	/** Returns the value.
+	 * <p>Default: "".
+	 * @since 5.0.4
+	 */
+	public String getValue() {
+		return _value;
+	}
+	/** Sets the value.
+	 * @param value the value; If null, it is considered as empty.
+	 * @since 5.0.4
+	 */
+	public void setValue(String value) {
+		if (value == null)
+			value = "";
+		if (!Objects.equals(_value, value)) {
+			_value = value;
+			smartUpdate("value", _value);
+		}
+	}
+	
 	/** Returns the name of this component.
 	 * <p>Default: null.
 	 * <p>Don't use this method if your application is purely based
@@ -120,7 +142,7 @@ public class Checkbox extends LabelImageElement implements org.zkoss.zul.api.Che
 	}
 
 	/** Returns the tab order of this component.
-	 * <p>Default: -1 (means the same as browser's default).
+	 * <p>Default: 0 (means the same as browser's default).
 	 */
 	public int getTabindex() {
 		return _tabindex;
@@ -130,12 +152,17 @@ public class Checkbox extends LabelImageElement implements org.zkoss.zul.api.Che
 	public void setTabindex(int tabindex) throws WrongValueException {
 		if (_tabindex != tabindex) {
 			_tabindex = tabindex;
-			if (tabindex < 0) smartUpdate("tabindex", (Object)null);
-			else smartUpdate("tabindex", _tabindex);
+			smartUpdate("tabindex", _tabindex);
 		}
 	}
 
 	//-- super --//
+	/** Default: not childable.
+	 */
+	protected boolean isChildable() {
+		return false;
+	}
+	
 	/** Returns the Style of checkbox label
 	 *
 	 * <p>Default: "z-checkbox"
@@ -149,16 +176,15 @@ public class Checkbox extends LabelImageElement implements org.zkoss.zul.api.Che
 	protected void renderProperties(org.zkoss.zk.ui.sys.ContentRenderer renderer)
 	throws java.io.IOException {
 		super.renderProperties(renderer);
-
-		if (_tabindex >= 0)
+		if (_value != null)
+			render(renderer, "value", _value);
+		if (_tabindex != 0)
 			renderer.render("tabindex", _tabindex);
 
 		render(renderer, "disabled", _disabled);
 		render(renderer, "name", _name);
 		if (_checked)
 			render(renderer, "checked", _checked);
-
-		org.zkoss.zul.impl.Utils.renderCrawlableText(getLabel());
 	}
 	//-- ComponentCtrl --//
 	/** Processes an AU request.

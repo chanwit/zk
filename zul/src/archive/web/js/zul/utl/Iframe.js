@@ -84,7 +84,7 @@ zul.utl.Iframe = zk.$extends(zul.Widget, {
 		 * above it. To resolve this, you have to specify autohide="true"
 		 * to this component, and specify the following in the page:
 		 * <pre><code>&lt;script content="zk.useStack='auto';"?>
-		 * <p>Refer to <a href="http://docs.zkoss.org/wiki/JavaScript_Customization">JavaScript Customization</a>
+		 * <p>Refer to <a href="http://books.zkoss.org/wiki/ZK_Client-side_Reference/Customization/Stackup_and_Shadow">Stackup and Shadow</a>
 		 * for more information.
 		 * @return boolean
 		 */
@@ -98,9 +98,16 @@ zul.utl.Iframe = zk.$extends(zul.Widget, {
 		}
 	},
 	//super//
+	bind_: function (desktop, skipper, after) {
+		this.$supers(zul.utl.Iframe, 'bind_', arguments);
+		if (this._src) {
+			var self = this;
+			after.push(function () {self.$n().src = self._src;});
+		}
+	},
 	domAttrs_: function(no){
 		var attr = this.$supers('domAttrs_', arguments)
-				+ ' src="' + (this._src || '') + '" frameborder="0"',
+				+ ' src="'+zjq.src0+'" frameborder="0"',
 			v = this._scrolling;
 		if ("auto" != v)
 			attr += ' scrolling="' + ('true' == v ? 'yes': 'false' == v ? 'no': v) + '"';

@@ -17,7 +17,7 @@ Copyright (C) 2006 Potix Corporation. All Rights Reserved.
 package org.zkoss.zul.impl;
 
 import org.zkoss.lang.Objects;
-import org.zkoss.html.HTMLs;
+import org.zkoss.xml.HTMLs;
 import org.zkoss.zk.ui.UiException;
 
 /**
@@ -70,7 +70,11 @@ abstract public class HeaderElement extends LabelImageElement implements org.zko
 		}
 	}
 	void setWidthByClient(String width) {
-		_width = width;
+		setWidthDirectly(width);
+	}
+	//feature#3177275: Listheader should override hflex when sized by end user
+	void setHflexByClient(String hflex) {
+		setHflexDirectly(hflex);
 	}
 	// super
 	protected void renderProperties(org.zkoss.zk.ui.sys.ContentRenderer renderer)

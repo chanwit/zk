@@ -220,29 +220,31 @@ public class ExecutionImpl extends AbstractExecution {
 		//However, the performance is not a major issue, so just skip
 		final ClassWebResource cwr =
 			WebManager.getWebManager(_ctx).getClassWebResource();
+		if (!isDirectInclude(cwr, page))
+			return false;
+		
+		Object old = null;
+		if (mode == PASS_THRU_ATTR) {
+			old = _request.getAttribute(Attributes.ARG);
+			if (params != null)
+				_request.setAttribute(Attributes.ARG, params);
+				//If params=null, use the 'inherited' one (same as Servlets.include)
+		}
+
 		final String attrnm = include ?
 			"org.zkoss.web.servlet.include": "org.zkoss.web.servlet.forward";
-		if (isDirectInclude(cwr, page)) {
-			Object old = null;
-			if (mode == PASS_THRU_ATTR) {
-				old = _request.getAttribute(Attributes.ARG);
-				if (params != null)
-					_request.setAttribute(Attributes.ARG, params);
-					//If params=null, use the 'inherited' one (same as Servlets.include)
-			}
-
-			_request.setAttribute(attrnm, Boolean.TRUE);
-				//so Servlets.isIncluded returns correctly
-			try {
-				cwr.service(_request,
-					HttpBufferedResponse.getInstance(_response, out),
-					page.substring(2));
-			} finally {
-				_request.removeAttribute(attrnm);
-				if (mode == PASS_THRU_ATTR)
-					_request.setAttribute(Attributes.ARG, old);
-			}
+		_request.setAttribute(attrnm, Boolean.TRUE);
+			//so Servlets.isIncluded returns correctly
+		try {
+			cwr.service(_request,
+				HttpBufferedResponse.getInstance(_response, out),
+				page.substring(2));
+		} finally {
+			_request.removeAttribute(attrnm);
+			if (mode == PASS_THRU_ATTR)
+				_request.setAttribute(Attributes.ARG, old);
 		}
+		
 		return true;
 	}
 	/** Returns whether the page can be directly included.
@@ -392,6 +394,30 @@ public class ExecutionImpl extends AbstractExecution {
 			dt, _request, PageDefinitions.getLocator(getDesktop().getWebApp(), uri));
 	}
 
+	/** @deprecated As of release 3.6.3, replaced with
+	 * {@link org.zkoss.zk.ui.Execution#setResponseHeader}.
+	 */
+	public void setHeader(String name, String value) {
+		_response.setHeader(name, value);
+	}
+	/** @deprecated It is suggested to use {@link org.zkoss.zk.ui.Execution#getNativeResponse}
+	 * instead.
+	 */
+	public void setDateHeader(String name, long value) {
+		_response.setDateHeader(name, value);
+	}
+	/** @deprecated As of release 3.6.3, replaced with
+	 * {@link org.zkoss.zk.ui.Execution#addResponseHeader}.
+	 */
+	public void addHeader(String name, String value) {
+		_response.addHeader(name, value);
+	}
+	/** @deprecated It is suggested to use {@link org.zkoss.zk.ui.Execution#getNativeResponse}
+	 * instead.
+	 */
+	public void addDateHeader(String name, long value) {
+		_response.addDateHeader(name, value);
+	}
 	public void setContentType(String contentType) {
 		if (_response instanceof HttpServletResponse)
 			((HttpServletResponse)_response).setContentType(contentType);
@@ -423,6 +449,11 @@ public class ExecutionImpl extends AbstractExecution {
 	}
 	public boolean isSafari() {
 		return Servlets.isSafari(_request);
+	}
+	/** @deprecated As of release 5.0.0, MIL is no longer supported.
+	 */
+	public boolean isMilDevice() {
+		return Servlets.isMilDevice(_request);
 	}
 	public boolean isHilDevice() {
 		return Servlets.isHilDevice(_request);

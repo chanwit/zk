@@ -14,10 +14,12 @@ it will be useful, but WITHOUT ANY WARRANTY.
 */
 (zk = function (sel) {
 	return jq(sel, zk).zk;
-}).copy = function (dst, src) {
+}).copy = function (dst, src, bu) {
 	dst = dst || {};
-	for (var p in src)
+	for (var p in src) {
+		if (bu) bu[p] = dst[p];
 		dst[p] = src[p];
+	}
 	return dst;
 };
 
@@ -25,7 +27,8 @@ it will be useful, but WITHOUT ANY WARRANTY.
 	var _oid = 0,
 		_statelesscnt = 0,
 		_logmsg,
-		_stamps = [];
+		_stamps = [],
+		_t0 = jq.now();
 
 	function newClass() {
 		return function () {
@@ -40,16 +43,51 @@ it will be useful, but WITHOUT ANY WARRANTY.
 			}
 		};
 	}
-	function def(nm, before, after) {
+	function regClass(jclass, superclass) {
+		var oid = jclass.$oid = ++_oid;
+		zk.classes[oid] = jclass;
+		jclass.prototype.$class = jclass;
+		jclass.$class = zk.Class;
+		(jclass._$extds = (jclass.superclass = superclass) ?
+			zk.copy({}, superclass._$extds): {})[oid] = jclass;
+			//_$extds is a map of all super classes and jclass
+		return jclass;
+	}
+
+	function defGet(nm) {
+		return new Function('return this.' + nm + ';');
+	}
+	function defSet00(nm) {
+		return function (v) {
+			this[nm] = v;
+			return this;
+		};
+	}
+	function defSet01(nm, after) {
 		return function (v, opts) {
-			if (before) v = before.apply(this, arguments);
 			var o = this[nm];
 			this[nm] = v;
-			if (after && (o !== v || (opts && opts.force)))
+			if (o !== v || (opts && opts.force))
 				after.apply(this, arguments);
 			return this;
 		};
 	}
+	function defSet10(nm, before) {
+		return function (/*v, opts*/) {
+			this[nm] = before.apply(this, arguments);
+			return this;
+		};
+	}
+	function defSet11(nm, before, after) {
+		return function (v, opts) {
+			var o = this[nm];
+			this[nm] = v = before.apply(this, arguments);;
+			if (o !== v || (opts && opts.force))
+				after.apply(this, arguments);
+			return this;
+		};
+	}
+
 	function showprgbInit() {
 		//don't use jq() since it will be queued after others
 		if (jq.isReady||zk.Page.contained.length)
@@ -66,8 +104,8 @@ it will be useful, but WITHOUT ANY WARRANTY.
 			zUtl.progressbox("zk_proc", window.msgzk?msgzk.PLEASE_WAIT:'Processing...', mask, icon);
 	}
 	function wgt2s(w) {
-		var s = w.className.substring(w.className.lastIndexOf('.') + 1);
-		return w.id ? s + '@' + w.id: s + '#' + w.uuid;
+		var s = w.widgetName;
+		return w.id ? s + '$' + w.id: s + '#' + w.uuid + '$' + w.$oid;
 	}
 	function toLogMsg(ars, isDetailed) {
 		var msg = [];
@@ -80,13 +118,13 @@ it will be useful, but WITHOUT ANY WARRANTY.
 				msg.push(wgt2s(ar));
 			else if (ar && ar.nodeType) {
 				var w = zk.Widget.$(ar);
-				if (w) msg.push(jq.nodeName(ar), ':', wgt2s(w));
+				if (w) msg.push(jq.nodeName(ar), (ar != w.$n() ? '#'+ar.id+'.'+ar.className:''), ':', wgt2s(w));
 				else msg.push(jq.nodeName(ar), '#', ar.id);
 			} else if (isDetailed && ar && (typeof ar == 'object') && !ar.nodeType) {
 				var s = ['{\n'];
-				for (var v in ar) 
+				for (var v in ar)
 					s.push(v, ':', ar[v], ',\n');
-				if (s[s.length - 1] == ',\n') 
+				if (s[s.length - 1] == ',\n')
 					s.pop();
 				s.push('\n}');
 				msg.push(s.join(''));
@@ -134,7 +172,7 @@ it will be useful, but WITHOUT ANY WARRANTY.
 			}
 		}
 	}
-
+	
 /** @class zk
  * @import zk.Package
  * @import zk.Class
@@ -146,18 +184,22 @@ it will be useful, but WITHOUT ANY WARRANTY.
  * <p>Refer to {@link jq} for DOM related utilities.
  */
 zk.copy(zk, {
-	/** The delay before showing the processing prompt (unit: milliseconds). 
+	/** A map of all classes, Map<int oid, zk.Class cls>.
+	 * @since 5.0.8
+	 */
+	classes: {},
+	/** The delay before showing the processing prompt (unit: milliseconds).
 	 * <p>Default: 900 (depending on the server's configuration)
 	 * @type int
 	 */
 	procDelay: 900,
 	/** The delay before showing a tooltip (unit: milliseconds).
-	 * Default: 800 (depending on the server's configuration) 
+	 * Default: 800 (depending on the server's configuration)
 	 * @type int
 	 */
 	tipDelay: 800,
 	/** The delay before resending the AU request, i.e., assuming the last AU request fails (unit: milliseconds). A negative value means not to resend at all.
-	 * Default: -1 (depending on the server's configuration). 	
+	 * Default: -1 (depending on the server's configuration).
 	 * @type int
 	 */
 	resendDelay: -1,
@@ -169,11 +211,11 @@ zk.copy(zk, {
 	 * @type Offset
 	 */
 	currentPointer: [0, 0],
-	/** The widget that gains the focus now, or null if no one gains focus now. 
+	/** The widget that gains the focus now, or null if no one gains focus now.
 	 * @type Widget
 	 */
 	//currentFocus: null,
-	/** The topmost modal window, or null if no modal window at all. 
+	/** The topmost modal window, or null if no modal window at all.
 	 * @type zul.wnd.Window
 	 */
 	//currentModal: null,
@@ -182,7 +224,7 @@ zk.copy(zk, {
 	 * (and not yet complete).
 	 * <p>When the JavaScript files of widgets are loading, you shall not create
 	 * any widget. Rather, you can use {@link #afterLoad} to execute the creation
-	 * and other tasks after all required JavaScript files are loaded. 
+	 * and other tasks after all required JavaScript files are loaded.
 	 * @see #load
 	 * @see #afterLoad
 	 * @see #processing
@@ -203,7 +245,7 @@ zk.copy(zk, {
 	//mounting: false,
 	/** Whether Client Engine is processing something, such as processing
 	 * an AU response. This flag is set when {@link #startProcessing}
-	 * is called, and cleaned when {@link #endProcessing} is called. 
+	 * is called, and cleaned when {@link #endProcessing} is called.
 	 * @see #startProcessing
 	 * @see #loading
 	 * @see #mounting
@@ -211,14 +253,14 @@ zk.copy(zk, {
 	 */
 	//processing: false,
 	/** Indicates whether ZK Client Engine has been booted and created the initial widgets.
-	 * It is useful to know if it is caused by an asynchronous update (i.e., zk.booted is true). 
+	 * It is useful to know if it is caused by an asynchronous update (i.e., zk.booted is true).
 	 * @see #mounting
 	 * @see #unloading
 	 * @type boolean
 	 */
 	//booted: false,
 	/** Indicates whether the browser is unloading this document.
-	 * Note: when the function registered with {@link #beforeUnload} is called, this flag is not set yet. 
+	 * Note: when the function registered with {@link #beforeUnload} is called, this flag is not set yet.
 	 * @see #loading
 	 * @see #booted
 	 * @type boolean
@@ -233,6 +275,13 @@ zk.copy(zk, {
 	 * @since 5.0.1
 	 */
 	busy: 0,
+	/** The application's name, which will be initialized as server-side's
+	 * <code>WebApp.getAppName()</code>.
+	 * It will be used as title of {@link jq#alert}.
+	 * @type String
+	 * @since 5.0.6
+	 */
+	appName: "ZK",
 
 	/** The version of ZK, such as '5.0.0'
 	 * @type String
@@ -247,59 +296,92 @@ zk.copy(zk, {
 	 * @type String
 	 */
 	//agent: '',
-	/** Whether it is Internet Explorer.
-	 * @type boolean
+	/** Returns the DOM API's version
+	 * if the browser is Internet Explorer, or null if not.
+	 * <p>Note: it is DOM API's version, not the browser version.
+	 * In other words, it depends on if the browser is running in a compatible mode.
+	 * FOr the browser's version, please use {@link #iex} instead.
+	 * @type Double
 	 */
-	//ie: false,
+	//ie: null,
+	/** Returns the browser's version as double (only the first two part of the version, such as 8)
+	 * if the browser is Internet Explorer, or null if not.
+	 * <p>Notice that this is the browser's version, which might not be the
+	 * version of DOM API. For DOM API's version, please use {@link #ie} instead.
+	 * @type Double
+	 * @since 5.0.7
+	 */
+	//iex: null,
 	/** Whether it is Internet Exploer 6 (excluding 7 or others).
-	 * @type boolean
+	 * @type Boolean
 	 */
 	//ie6_: false,
 	/** Whether it is Internet Exploer 7 or later.
-	 * @type boolean
+	 * @type Boolean
 	 */
 	//ie7: false,
 	/** Whether it is Internet Exploer 7 (excluding 8 or others).
-	 * @type boolean
+	 * @type Boolean
 	 */
 	//ie7_: false,
 	/** Whether it is Internet Exploer 8 or later.
-	 * @type boolean
+	 * @type Boolean
 	 */
 	//ie8: false,
 	/** Whether it is Internet Exploer 8 or later, and running in
 	 * Internet Explorer 7 compatible mode.
-	 * @type boolean
+	 * @type Boolean
 	 */
 	//ie8c: false,
-	/** Whether it is Gecko-based browsers, such as Firefox.
-	 * @type boolean
+	/** Whether it is Internet Exploer 9 or later.
+	 * @type Boolean
+	 * @since 5.0.5
 	 */
-	//gecko: false,
+	//ie9: false,
+	/** Returns the version as double (only the first two part of the version, such as 1.9)if it is Gecko-based browsers,
+	 * such as Firefox. Notice that it is 1.9 (Firefox 3.*) and 2.0 (Firefox 4.*).
+	 * Otherwise, it is null.
+	 * <p>For detailed version, such as 1.9.2 (firefox 3.6), yo could check jq.browser.version
+	 * (which is a string, such as "1.9.2").
+	 * @type Double
+	 */
+	//gecko: null,
 	/** Whether it is Gecko-based browsers, such as Firefox, and it
 	 * is version 2 (excluding 3 or others).
-	 * @type boolean
+	 * <p>Though a bit confusion (backward compatibility), it is the same
+	 * as <code>zk.ff == 2</code>.
+	 * @type Boolean
 	 */
 	//gecko2_: false,
+	/** Returns the version as double (only the first two part of the version, such as 3.6) if it is Firefox,
+	 * such as Firefox. Notice that it is Firefox's version, such as
+	 * 3.5, 3.6 and 4.0.
+	 * If not a firefox, it is null.
+	 * @type Double
+	 * @since 5.0.6
+	 */
+	//ff: null,
 	/** Whether it is Gecko-based browsers, such as Firefox, and it
 	 * is version 3 and later.
-	 * @type boolean
+	 * <p>Though a bit confusion (backward compatibility), it is the same
+	 * as <code>zk.ff >= 3</code>.
+	 * @type Boolean
 	 */
 	//gecko3: false,
-	/** Whether it is Safari.
-	 * @type boolean
+	/** Returns the version as double (only the first two part of the version, such as 533.1) if it is Safari-based, or null if not.
+	 * @type Double
 	 */
-	//safari: false,
-	/** Whether it is Opera.
-	 * @type boolean
+	//safari: null,
+	/** Returns the version as double (only the first two part of the version, such as 10.1) if it is Opera, or null if not.
+	 * @type Double
 	 */
-	//opera: false,
+	//opera: null,
 	/** Whether it is Adobe AIR.
-	 * @type boolean
+	 * @type Boolean
 	 */
 	//air: false,
 	/** Whether it supports CSS3.
-	 * @type boolean
+	 * @type Boolean
 	 */
 	//css3: false,
 
@@ -332,7 +414,7 @@ zk.copy(zk, {
 	//alerting: false,
 	/** Indicates whether {@link Widget#id} is always the same
 	 * as {@link Widget#uuid}.
-	 * By default, it is false. It is true if <a href="http://docs.zkoss.org/wiki/ZK_Light">ZK Light</a>
+	 * By default, it is false. It is true if <a href="http://code.google.com/p/zkuery/">ZKuery</a>
 	 * is used
 	 * @type boolean
 	 */
@@ -346,7 +428,7 @@ doKeyDown_: function () {
  this.$supers('doKeyDown_', arguments);
 }
 </code></pre>
-	 * <p>Notice that the key capture is reset automatically after processing onKeyUp_. 
+	 * <p>Notice that the key capture is reset automatically after processing onKeyUp_.
 	 * @see #mouseCapture
 	 * @type Widget
 	 */
@@ -359,24 +441,54 @@ doMouseDown_: function () {
  this.$supers('doMouseDown_', arguments);
 }
 </code></pre>
-	 * <p>Notice that the mouse capture is reset automatically after processing onMouseUp_. 
+	 * <p>Notice that the mouse capture is reset automatically after processing onMouseUp_.
 	 * @see #keyCapture
 	 * @type Widget
 	 */
 	//mouseCapture: null,
 
-	/** Copies a map of properties (or options) from one map to another.
-	 * Example: extending Array 
+	/** Copies a map of properties (or options) from one object to another.
+	 * Example: extending Array
 <pre><code>
 zk.copy(Array.prototoype, {
- $add: function (o) {
-  this.push(o);
+ $addAll: function (o) {
+  return this.push.apply(this, o);
  }
 });
 </code></pre>
+	 * <p>Notice that {@link #copy} copies the properties directly regardless
+	 * if the target object has a setter or not. It is fast but if you want
+	 * to go thru the setter, if any, use {@link #set(Object, Object, Array, boolean)}
+	 * instead.
 	 * @param Object dst the destination object to copy properties to
 	 * @param Object src the source object to copy properties from
 	 * @return Object the destination object
+	 */
+	/** Copies a map of properties (or options) from one object to another
+	 * and copies the original value to another map.
+	 * Example: copy style and restore back
+<pre><code>
+var backup = {};
+zk.copy(n.style, {
+	visibility: 'hidden',
+	position: 'absolute',
+	display: 'block'
+	}, backup);
+try {
+	//do whatever
+} finally {
+	zk.copy(n.style, backup);
+}
+</code></pre>
+	 * <p>Notice that {@link #copy} copies the properties directly regardless
+	 * if the target object has a setter or not. It is fast but if you want
+	 * to go thru the setter, if any, use {@link #set(Object, Object, Array, boolean)}
+	 * instead.
+	 * @param Object dst the destination object to copy properties to
+	 * @param Object src the source object to copy properties from
+	 * @param Map backup the map to stor the original value
+	 * @return Object the destination object
+	 * @since 5.0.3
 	 */
 	//copy: function () {},
 
@@ -395,13 +507,17 @@ zk.copy(Array.prototoype, {
 		return v;
 	},
 
-	/** Defines a package. It creates the package if not defined yet.
+	/** Defines a package. It creates and returns the package if not defined yet.
+	 * If the package is already defined, it does nothing but returns the package.
 	 * It is similar to Java's package statement except it returns the package
 	 * object.
+	 * <p>Notice the package is usually defined automatically by use of
+	 * <a href="http://books.zkoss.org/wiki/ZK_Client-side_Reference/Widget_Package_Descriptor>WPD</a>,
+	 * so you're rarely need to use this method.
 	 *
 	 * <p>Example:
 	 * <pre><code>var foo = zk.$package('com.foo');
-	 *foo.Cool = zk.$extends(zk.Object);</code></pre> 
+	 *foo.Cool = zk.$extends(zk.Object);</code></pre>
 	 *
 	 * @param String name the name of the package.
 	 * @return Package
@@ -426,14 +542,14 @@ zk.copy(Array.prototoype, {
 		}
 	},
 	/** Imports a class or a package. It returns null if the package or class is not defined yet.
-	 * <p>Example: 
+	 * <p>Example:
 <pre><code>
 var foo = zk.$import('com.foo');
 var cool = new foo.Cool();
 var Cool = zk.$import('com.foo.Cooler');
 var cooler = new Cooler();
 </code></pre>
-	 * @param String name The name of the package or the class. 
+	 * @param String name The name of the package or the class.
 	 * @return Object a package ({@link Package}) or a class ({@link Class})
 	 * @see #$package
 	 * @see #load
@@ -442,7 +558,7 @@ var cooler = new Cooler();
 	/** Imports a package or class, and load it if <code>fn</code> is specified.
 	 * It returns null if the package or class is not defined yet and
 	 * <code>fn</code> is null.
-	 * <p>If an additional function, <code>fn</code> is specified, 
+	 * <p>If an additional function, <code>fn</code> is specified,
 	 * this method assumes <code>name</code>
 	 * is a class and it will load the package of the class first.
 	 * If not found. Then, invoke the function after the class is loaded.
@@ -451,10 +567,10 @@ var cooler = new Cooler();
 <pre><code>
 zk.$import('zul.sel.Listbox', function (cls) {new cls();});
 </code></pre>
-	 * @param String name The name of the package or the class. 
+	 * @param String name The name of the package or the class.
 	 * @param Function fn The function to call after the class is loaded.
 	 * If specified, it assumes <code>name</code> is a class, and it will
-	 * load the package of the class automatically. 
+	 * load the package of the class automatically.
 	 * In additions, the function is called with the class as the argument.
 	 * @return Object a package ({@link Package}) or a class ({@link Class})
 	 * @see #$package
@@ -480,7 +596,7 @@ zk.$import('zul.sel.Listbox', function (cls) {new cls();});
 	},
 
 	/** Defines a class. It returns the class being defined.
-	 * <p>Example: 
+	 * <p>Example:
 <pre><code>
 zul.Label = zk.$extends(zk.Widget, {
  _value: '',
@@ -555,13 +671,13 @@ foo.Widget = zk.$extends(zk.Widget, {
 		if (!superclass)
 			throw 'unknown superclass';
 
-		var jclass = newClass();
-
-		var thispt = jclass.prototype,
+		var jclass = newClass(),
+			thispt = jclass.prototype,
 			superpt = superclass.prototype,
 			define = members['$define'];
 		delete members['$define'];
 		zk.copy(thispt, superpt); //inherit non-static
+		zk.define(jclass, define);
 		zk.copy(thispt, members);
 
 		for (var p in superclass) //inherit static
@@ -570,21 +686,15 @@ foo.Widget = zk.$extends(zk.Widget, {
 
 		zk.copy(jclass, staticMembers);
 
-		thispt.$class = jclass;
 		thispt._$super = superpt;
 		thispt._$subs = [];
 		superpt._$subs.push(thispt);
 			//maintain a list of subclasses (used zk.override)
-		jclass.$class = zk.Class;
-		jclass.superclass = superclass;
-
-		zk.define(jclass, define);
-
-		return jclass;
+		return regClass(jclass, superclass);
 	},
 
 	/** Provides the default values for the specified options.
-	 * <p>Example: 
+	 * <p>Example:
 <pre><code>
 process: function (opts, defaultOptions) {
  opts = zk.$default(opts, defaultOptions);
@@ -635,9 +745,26 @@ zk.override(zul.inp.Combobox.prototype, _xCombobox, {
 	 * @param Map backup the map used to store the original members (or properties)
 	 * @param Map src the source map providing the new members
 	 * @return Object the destination object
+	 * @see #override(Function, Function)
 	 * @see #override(Object, String, Object)
 	 */
 	/** Overrides a particular method.
+	 * The old method will be returned, and the caller could store it for
+	 * calling back. For example,
+	 *
+	 * <pre><code>var superopen = zk.override(zul.inp.Combobox.prototype.open,
+	 *  function () {
+	 *    superopen.apply(this, arguments);
+	 *    //do whatever you want
+	 *  });</code></pre>
+	 *
+	 * @param Function oldfunc the old function that will be replaced
+	 * @param Function newfunc the new function that will replace the old function
+	 * @return Function the old function (i.e., oldfunc)
+	 * @since 5.0.6
+	 * @see #override(Object, Map, Map)
+	 */
+	/** Overrides a particular method or data member.
 	 * The old method will be stored in method called $nm (assuming nm is
 	 * the method name to override. For example,
 	 *
@@ -653,15 +780,23 @@ zk.override(zul.inp.Combobox.prototype, _xCombobox, {
 	 * to be an instance of {@link Function}.
 	 * @return Object the destination object
 	 * @since 5.0.2
+	 * @see #override(Function, Function)
 	 * @see #override(Object, Map, Map)
 	 */
 	override: function (dst, backup, src) {
-		if (typeof backup == "string") {
+		switch (typeof backup) {
+		case "function":
+			var old = dst;
+			dst = backup;
+			return old;
+		case "string":
 			dst['$' + backup] = dst[backup];
 			dst[backup] = src;
-		} else
-			for (var nm in src)
-				_overrideSub(dst, nm, backup[nm] = dst[nm], dst[nm] = src[nm]);
+			//break;
+		}
+
+		for (var nm in src)
+			_overrideSub(dst, nm, backup[nm] = dst[nm], dst[nm] = src[nm]);
 		return dst;
 	},
 
@@ -757,22 +892,23 @@ wgt.setSomething(somevalue, {force:true});
 				before = after.length ? after[0]: null;
 				after = after.length > 1 ? after[1]: null;
 			}
-			pt['set' + nm2] = def(nm1, before, after);
-			pt['get' + nm2] = pt['is' + nm2] =
-				new Function('return this.' + nm1 + ';');
+			pt['set' + nm2] = before ?
+				after ? defSet11(nm1, before, after): defSet10(nm1, before):
+				after ? defSet01(nm1, after): defSet00(nm1);
+			pt['get' + nm2] = pt['is' + nm2] = defGet(nm1);
 		}
 		return klass;
 	},
 
 	/** A does-nothing function.
-	 */ 
+	 */
 	$void: function () {},
 
 	/** Parses a string to an integer.
 	 * <p>It is the same as the built-in parseInt method except it never return
-	 * NaN (rather, it returns 0). 
+	 * NaN (rather, it returns 0).
 	 * @param String v the text to parse
-	 * @param int b represent the base of the number in the string. 10 is assumed if omitted. 
+	 * @param int b represent the base of the number in the string. 10 is assumed if omitted.
 	 * @return int the integer
 	 */
 	parseInt: function (v, b) {
@@ -780,7 +916,7 @@ wgt.setSomething(somevalue, {force:true});
 	},
 	/** Parses a string to a floating number.
 	 * <p>It is the same as the built-in parseFloat method except it never return
-	 * NaN (rather, it returns 0). 
+	 * NaN (rather, it returns 0).
 	 * @param String v the text to parse
 	 * @return double the floating number
 	 * @since 5.0.2
@@ -793,7 +929,7 @@ wgt.setSomething(somevalue, {force:true});
 	 * <p>For example, <code>zk.set(obj, "x", 123)</code>:<br/>
 	 * If setX is defined in obj, obj.setX(123) is called.
 	 * If not defined, obj.x = 123 is called.
-	 * <p>Anotehr example: 
+	 * <p>Anotehr example:
 <pre><code>
 zk.set(o, 'value', true); //set a single property
 </code></pre>
@@ -804,20 +940,61 @@ zk.set(o, 'value', true); //set a single property
 	 * as the extra argument (the second argument).
 	 * For example, <code>zk.set(obj, 'x', 123, true)</code> invokes <code>obj.setX(123, true)</code>.
 	 * @see #get
+	 * @return Object the destination object
+	 */
+	/** Sets the given properties from one object to another.
+	 * Example:
+<pre><code>
+zk.set(dst, src, ["foo", "mike"]);
+</code></pre>
+	 * If dst has a method called setFoo and src has method called getMike,
+	 * then it is equivalent to
+<pre><code>
+	dst.setFoo("foo", src["foo"]);
+	dst["mike"] = src.getMike();
+</code></pre>
+	 *
+	 * @param Object dst the destination object to copy properties to
+	 * @param Object src the source object to copy properties from
+	 * @param Array props an array of property names (String)
+	 * @param boolean ignoreUndefined whether to ignore undefined.
+	 * Optional (if not specified, false is assumed).
+	 * If true and src[name] is undefined, then dst[name] won't be assigned.
+	 * @return Object the destination object
+	 * @since 5.0.3
+	 * @see #copy
 	 */
 	set: function (o, name, value, extra) {
-		var m = o['set' + name.charAt(0).toUpperCase() + name.substring(1)];
-		if (!m) o[name] = value;
-		else if (arguments.length >= 4)
-			m.call(o, value, extra);
-		else
-			m.call(o, value);
+		if (typeof name == "string") {
+			zk._set(o, name, value, extra);
+		} else //o: dst, name: src, value: props
+			for (var j = 0, len = value.length, m, n, v; j < len;) {
+				n = value[j++];
+				m = name['get' + n.charAt(0).toUpperCase() + n.substring(1)];
+				if (!extra || m || name[n] !== undefined) //extra: ignoreUndefined in this case
+					zk._set(o, n, m ? m.call(name): name[n]);
+			}
+		return o;
+	},
+	_set: function (o, name, value, extra) { //called by widget.js (better performance)
+		zk._set2(o,
+			o['set' + name.charAt(0).toUpperCase() + name.substring(1)],
+			name, value, extra);
+	},
+	_set2: function (o, mtd, name, value, extra) { //called by widget.js (better performance)
+		if (mtd) {
+			if (extra !== undefined)
+				mtd.call(o, value, extra);
+			else
+				mtd.call(o, value);
+		} else
+			o[name] = value;
 	},
 	/** Retrieves a value from the specified property.
 	 * <p>For example, <code>zk.get(obj, "x")</code>:<br/>
 	 * If getX or isX is defined in obj, obj.isX() or obj.getX() is returned.
 	 * If not defined, obj.x is returned.
-	 * <p>Another example: 
+	 * <p>Another example:
 <pre><code>
 zk.get(o, 'value');
 </code></pre>
@@ -836,13 +1013,13 @@ zk.get(o, 'value');
 
 	//Processing//
 	/** Set a flag, {@link #processing}, to indicate that it starts a processing. It also shows a message to indicate "processing" after the specified timeout.
-	 * <p>Example: 
+	 * <p>Example:
 <pre></code>
 zk.startProcessing(1000);
 //do the lengthy operation
 zk.endProcessing();
 </code></pre>
-	 * @param int timeout the delay before showing a message to indicate "processing". 
+	 * @param int timeout the delay before showing a message to indicate "processing".
 	 * @see #processing
 	 * @see #endProcessing
 	 */
@@ -851,7 +1028,7 @@ zk.endProcessing();
 		setTimeout(jq.isReady ? showprgb: showprgbInit, timeout > 0 ? timeout: 0);
 	},
 	/** Clears a flag, {@link #processing}, to indicate that it the processing has done. It also removes a message, if any, that indicates "processing".
-	 * <p>Example: 
+	 * <p>Example:
 <pre><code>
 zk.startProcessing(1000);
 //do the lengthy operation
@@ -864,7 +1041,7 @@ zk.endProcessing();
 		zUtl.destroyProgressbox("zk_proc");
 	},
 
-	/** Disable the default behavior of ESC. In other words, after called, the user cannot abort the loading from the server. 
+	/** Disable the default behavior of ESC. In other words, after called, the user cannot abort the loading from the server.
 	 * <p>To enable ESC, you have to invoke {@link #enableESC} and the number
 	 * of invocations shall be the same.
 	 * @see #enableESC
@@ -872,7 +1049,7 @@ zk.endProcessing();
 	disableESC: function () {
 		++zk._noESC;
 	},
-	/** Enables the default behavior of ESC (i.e., stop loading from the server). 
+	/** Enables the default behavior of ESC (i.e., stop loading from the server).
 	 * @see #disableESC
 	 */
 	enableESC: function () {
@@ -881,8 +1058,8 @@ zk.endProcessing();
 	_noESC: 0, //# of disableESC being called (also used by mount.js)
 
 	//DEBUG//
-	/** Display an error message to indicate an error. 
-	 *  Example: 
+	/** Display an error message to indicate an error.
+	 *  Example:
 <pre><code>zk.error('Oops! Something wrong:(');</code></pre>
 	 * @param String msg the error message
 	 * @see #errorDismiss
@@ -890,19 +1067,18 @@ zk.endProcessing();
 	 * @see #stamp(String, boolean)
 	 */
 	error: function (msg) {
-		zAu.send(new zk.Event(null, "error", msg, {ignorable: true}), 800);
-		new _zErb(msg);
+		_zErb.push(msg);
 	},
 	/** Closes all error messages shown by {@link #error}.
-   	 * Example: 
+   	 * Example:
 <pre><code>zk.errorDismiss();</code></pre>
 	 * @see #error
 	 */
 	errorDismiss: function () {
-		_zErb.closeAll();
+		_zErb.remove();
 	},
 	/** Logs an message for debugging purpose.
-	 * Example: 
+	 * Example:
 <pre><code>
 zk.log('reach here');
 zk.log('value is", value);
@@ -910,7 +1086,7 @@ zk.log('value is", value);
 	 * @param Object... detailed varient number of arguments to log
 	 * @see #stamp(String, boolean)
 	 */
-	log: function (detailed) {		
+	log: function (detailed) {
 		var msg = toLogMsg(
 			(detailed !== zk) ? arguments :
 				(function (args) {
@@ -942,21 +1118,21 @@ zk.log('value is", value);
 		if (nm) {
 			if (!noAutoLog && !_stamps.length)
 				setTimeout(_stampout, 0);
-			_stamps.push({n: nm, t: zUtl.now()});
+			_stamps.push({n: nm, t: jq.now()});
 		} else if (_stamps.length) {
-			var t0 = zk._t0;
+			var t0 = _t0;
 			for (var inf; (inf = _stamps.shift());) {
-				zk.log(inf.n + ': ' + (inf.t - zk._t0));
-				zk._t0 = inf.t;
+				zk.log(inf.n + ': ' + (inf.t - _t0));
+				_t0 = inf.t;
 			}
-			zk.log("total: " + (zk._t0 - t0));
+			zk.log("total: " + (_t0 - t0));
 		}
 	},
 
 	/** Encodes and returns the URI to communicate with the server.
 	 * Example:
 <pre><code>document.createElement("script").src = zk.ajaxURI('/web/js/com/foo/mine.js',{au:true});</code></pre>
-	 * @param String uri - the URI related to the AU engine. If null, the base URI is returned. 
+	 * @param String uri - the URI related to the AU engine. If null, the base URI is returned.
 	 * @param Map opts [optinal] the options. Allowed values:<br/>
 	 * <ul>
 	 * <li>au - whether to generate an URI for accessing the ZK update engine. If not specified, it is used to generate an URL to access any servlet</li>
@@ -969,12 +1145,13 @@ zk.log('value is", value);
 		var ctx = zk.Desktop.$(opts?opts.desktop:null),
 			au = opts && opts.au;
 		ctx = (ctx ? ctx: zk)[au ? 'updateURI': 'contextURI'];
-		if (!uri) return ctx;
+		uri = uri || '';
 
 		var abs = uri.charAt(0) == '/';
 		if (au && !abs) {
 			abs = true;
-			uri = '/' + uri; //non-au supports relative path
+			if (uri)
+				uri = '/' + uri; //non-au supports relative path
 		}
 
 		var j = ctx.lastIndexOf(';'), k = ctx.lastIndexOf('?');
@@ -1017,39 +1194,47 @@ zk.log('value is", value);
 
 //zk.agent//
 (function () {
-	zk.agent = navigator.userAgent.toLowerCase();
-	zk.safari = zk.agent.indexOf("safari") >= 0;
-	zk.opera = zk.agent.indexOf("opera") >= 0;
-	zk.gecko = zk.agent.indexOf("gecko/") >= 0 && !zk.safari && !zk.opera;
+	function _ver(ver) {
+		return parseFloat(ver) || ver;
+	}
+	var browser = jq.browser,
+		agent = zk.agent = navigator.userAgent.toLowerCase();
+	zk.safari = browser.safari && _ver(browser.version);
+	zk.opera = browser.opera && _ver(browser.version);
+	zk.gecko = browser.mozilla && _ver(browser.version);
+	zk.ff = zk.gecko && ((zk.ff = agent.indexOf("firefox/")) > 0) && _ver(agent.substring(zk.ff + 8));
+	zk.ios = zk.safari && (agent.indexOf("iphone") >= 0 || agent.indexOf("ipad") >= 0);
+	zk.android = zk.safari && (agent.indexOf('android') >= 0);
+	zk.mobile = zk.ios || zk.android;
 	var bodycls;
 	if (zk.gecko) {
-		var j = zk.agent.indexOf("firefox/");
-		j = zk.parseInt(zk.agent.substring(j + 8));
-		zk.gecko3 = j >= 3;
+		zk.css3 = zk.gecko3 = zk.ff >= 3 || zk.gecko >= 1.9; //gecko 1.9.* => ff 3
 		zk.gecko2_ = !zk.gecko3;
-
-		bodycls = 'gecko gecko' + j;
+		bodycls = 'gecko gecko' + Math.floor(zk.ff);
 	} else if (zk.opera) {
 		bodycls = 'opera';
+		zk.css3 = zk.opera >= 10.5;
 	} else {
-		var j = zk.agent.indexOf("msie ");
-		zk.ie = j >= 0;
-		if (zk.ie) {
-			j = zk.parseInt(zk.agent.substring(j + 5));
-			zk.ie7 = j >= 7; //ie7 or later
-			zk.ie8c = j >= 8; //ie8 or later (including compatible)
-			zk.ie8 = j >= 8 && document.documentMode >= 8; //ie8 or later
-			zk.ie6_ = !zk.ie7;
-			zk.ie7_ = zk.ie7 && !zk.ie8;
-			bodycls = 'ie ie' + j;
-		} else if (zk.safari)
-			bodycls = 'safari';
+		zk.iex = browser.msie && _ver(browser.version); //browser version
+		if (zk.iex) {
+			if ((zk.ie = document.documentMode||zk.iex) < 6) //IE7 has no documentMode
+				zk.ie = 6; //assume quirk mode
+			zk.ie7 = zk.ie >= 7; //ie7 or later
+			zk.ie8 = zk.ie >= 8; //ie8 or later
+			zk.css3 = zk.ie9 = zk.ie >= 9; //ie9 or later
+			zk.ie6_ = zk.ie < 7;
+			zk.ie7_ = zk.ie == 7;
+			zk.ie8_ = zk.ie == 8;
+			bodycls = 'ie ie' + Math.floor(zk.ie);
+		} else {
+			if (zk.safari)
+				bodycls = 'safari safari' + Math.floor(zk.safari);
+			zk.css3 = true;
+		}
 	}
-	if (zk.air = zk.agent.indexOf("adobeair") >= 0)
-		bodycls = 'air';
+	if ((zk.air = agent.indexOf("adobeair") >= 0) && zk.safari)
+		bodycls = (bodycls || '') + ' air';
 
-	zk.css3 = !(zk.ie || zk.gecko2_ || zk.opera);
-	
 	if (bodycls)
 		jq(function () {
 			var n = document.body,
@@ -1065,7 +1250,7 @@ zk.log('value is", value);
 				return f.apply(o, arguments);
 			};
 	}
-zk.Object = function () {};
+regClass(zk.Object = newClass());
 /** @class zk.Object
  * The root of the class hierarchy.
  * @see zk.Class
@@ -1096,38 +1281,35 @@ zk.Object.prototype = {
 	/** The class that this object belongs to.
 	 * @type zk.Class
 	 */
-	$class: zk.Object,
+	//$class: zk.Object, //assigned in regClass()
 	/** The object ID. Each object has its own unique $oid.
 	 * It is mainly used for debugging purpose.
 	 * <p>Trick: you can test if a JavaScript object is a ZK object by examining this property, such as
 	 * <code>if (o.$oid) alert('o is a ZK object');</code>
+	 * <p>Notice: zk.Class extends from zk.Object (so a class also has $oid)
 	 * @type int
 	 */
 	//$oid: 0,
 	/** Determines if this object is an instance of the class represented by the specified Class parameter.
-	 * Example: 
+	 * Example:
 <pre><code>
 if (obj.$instanceof(zul.wgt.Label, zul.wgt.Image)) {
 }
 </code></pre>
-	 * @param Class klass the Class object to be checked. 
+	 * @param Class klass the Class object to be checked.
 	 * Any number of arguments can be specified.
 	 * @return boolean true if this object is an instance of the class
 	 */
 	$instanceof: function () {
-		for (var j = arguments.length, cls; j--;)
-			if (cls = arguments[j]) {
-				var c = this.$class;
-				if (c == zk.Class)
-					return this == zk.Object || this == zk.Class; //follow Java
-				for (; c; c = c.superclass)
+		for (var args = arguments, j = args.length, self = this.$class, cls; j--;)
+			if (cls = args[j])
+				for (var c = self; c; c = c.superclass)
 					if (c == cls)
 						return true;
-			}
 		return false;
 	},
 	/** Invokes a method defined in the superclass with any number of arguments. It is like Function's call() that takes any number of arguments.
-	 * <p>Example: 
+	 * <p>Example:
 <pre><code>
 multiply: function (n) {
  return this.$super('multiply', n + 2);
@@ -1143,7 +1325,7 @@ multiply: function (n) {
 	 * <p>It is similar to {@link #$super(String, Object...)}, but
 	 * this method works even if the superclass calls back the same member method.
 	 * In short, it is tedious but safer.
-	 * <p>Example: 
+	 * <p>Example:
 <pre><code>
 foo.MyClass = zk.$extends(foo.MySuper, {
   multiply: function (n) {
@@ -1167,7 +1349,7 @@ foo.MyClass = zk.$extends(foo.MySuper, {
 		return bCls ? this.$supers(arg0, arg1, args): this.$supers(arg0, args);
 	},
 	/** Invokes a method defined in the superclass with an array of arguments. It is like Function's apply() that takes an array of arguments.
-	 * <p>Example: 
+	 * <p>Example:
 <pre><code>
 multiply: function () {
  return this.$supers('multiply', arguments);
@@ -1183,7 +1365,7 @@ multiply: function () {
 	 * <p>It is similar to {@link #$supers(String, Array)}, but
 	 * this method works even if the superclass calls back the same member method.
 	 * In short, it is tedious but safer.
-	 * <p>Example: 
+	 * <p>Example:
 <pre><code>
 foo.MyClass = zk.$extends(foo.MySuper, {
   multiply: function () {
@@ -1243,13 +1425,14 @@ foo.MyClass = zk.$extends(foo.MySuper, {
 			supers[nm] = old; //restore
 		}
 	},
+	//a list of subclass's prototypes
 	_$subs: [],
 
 	/** Proxies a member function such that it can be called with this object in a context that this object is not available.
 	 * It sounds a bit strange at beginning but useful when passing a member
 	 * of an object that will be executed as a global function.
 	 *
-	 * <p>Example: Let us say if you want a member function to be called periodically, you can do as follows. 
+	 * <p>Example: Let us say if you want a member function to be called periodically, you can do as follows.
 <pre><code>
 setInterval(wgt.proxy(wgt.doIt), 1000); //assume doIt is a member function of wgt
 </code></pre>
@@ -1271,16 +1454,11 @@ setInterval(wgt.doIt, 1000); //WRONG! doIt will not be called with wgt
 	}
 };
 
-zk.Class = function () {}
-zk.Class.superclass = zk.Object;
-zk.Class.prototype.$class = zk.Class;
 /** @partial zk.Object
  */
 _zkf = {
-	//note we cannot generate javadoc for this because Java cannot have both static and non-static of the same name
-	$class: zk.Class,
 	/** Determines if the specified Object is assignment-compatible with this Class. This method is equivalent to [[zk.Object#$instanceof].
-	 * Example: 
+	 * Example:
 <pre><code>
 if (klass.isInstance(obj)) {
 }
@@ -1292,7 +1470,7 @@ if (klass.isInstance(obj)) {
 		return o && o.$instanceof && o.$instanceof(this);
 	},
 	/** Determines if the class by this Class object is either the same as, or is a superclass of, the class represented by the specified Class parameter.
-	 * Example: 
+	 * Example:
 <pre><code>
 if (klass1.isAssignableFrom(klass2)) {
 }
@@ -1305,34 +1483,28 @@ if (klass1.isAssignableFrom(klass2)) {
 			if (this == cls)
 				return true;
 		return false;
-	},
-	$instanceof: zk.Object.prototype.$instanceof
+	}
 };
-zk.copy(zk.Class, _zkf);
 zk.copy(zk.Object, _zkf);
+zk.copy(regClass(zk.Class = function () {}, zk.Object), _zkf);
 
 //error box//
-var _errs = [], _errcnt = 0;
+var _erbx, _errcnt = 0;
 
 _zErb = zk.$extends(zk.Object, {
 	$init: function (msg) {
-		var id = "zk_err" + _errcnt++,
-			$id = '#' + id;
-			x = (_errcnt * 5) % 50, y = (_errcnt * 5) % 50,
-			html =
-	'<div class="z-error" style="left:'+(jq.innerX()+x)+'px;top:'+(jq.innerY()+y)
-	+'px;" id="'+id+'"><table cellpadding="2" cellspacing="2" width="100%"><tr>'
-	+'<td align="right"><div id="'+id+'-p">';
-	if (!zk.light)
-		html += '<span class="btn" onclick="_zErb._redraw()">redraw</span>&nbsp;';
-	html += '<span class="btn" onclick="_zErb._close(\''+id+'\')">close</span></div></td></tr>'
-	+'<tr valign="top"><td class="z-error-msg">'+zUtl.encodeXML(msg, {multiline:true}) //Bug 1463668: security
-	+'</td></tr></table></div>';
+		var id = "zk_err",
+			$id = "#" + id,
+			// Use zUtl.encodeXML -- Bug 1463668: security
+ 			html = '<div class="z-error" id="' + id + '"><table cellpadding="2" cellspacing="2" width="100%">'
+ 					+ '<tr valign="top"><td class="msgcnt" colspan="3"><div class="msgs">'+ zUtl.encodeXML(msg, {multiline : true}) + '</div></td></tr>'
+ 					+ '<tr id="'+ id + '-p"><td class="errnum" align="left">'+ ++_errcnt+ ' Errors</td><td align="right"><div >';
+		if (!zk.zkuery)
+			html += '<div class="btn redraw" onclick="_zErb.redraw()"></div>';
+		html += '<div class="btn close" onclick="_zErb.remove()"></div></div></td></tr></table></div>';
 		jq(document.body).append(html);
-
+		_erbx = this;
 		this.id = id;
-		_errs.push(this);
-
 		try {
 			var n;
 			this.dg = new zk.Draggable(null, n = jq($id)[0], {
@@ -1341,32 +1513,31 @@ _zErb = zk.$extends(zk.Object, {
 				endeffect: zk.$void});
 		} catch (e) {
 		}
+		jq("#" + id).slideDown(1000);
 	},
 	destroy: function () {
-		_errs.$remove(this);
+		_erbx = null;
+		_errcnt = 0;
 		if (this.dg) this.dg.destroy();
 		jq('#' + this.id).remove();
 	}
 },{
-	_redraw: function () {
+	redraw: function () {
 		zk.errorDismiss();
 		zAu.send(new zk.Event(null, 'redraw'));
 	},
-	_close: function (id) {
-		for (var j = _errs.length; j--;) {
-			var e = _errs[j];
-			if (e.id == id) {
-				_errs.splice(j, 1);
-				e.destroy();
-				return;
-			}
-		}
+	push: function (msg) {
+		if (!_erbx)
+			return new _zErb(msg);
+
+		var id = _erbx.id;
+		jq("#" + id + " .errnum").html(++_errcnt + " Errors");
+		jq("#" + id + " .msgs").prepend('<div class="newmsg">' + msg + "</hr></div>");
+		jq("#" + id + " .newmsg")
+			.removeClass("newmsg").addClass("msg").slideDown(600)
 	},
-	closeAll: function () {
-		for (var j = _errs.length; j--;)
-			_errs[j].destroy();
-		_errs = [];
+	remove: function () {
+		if (_erbx) _erbx.destroy();
 	}
 });
-
 })();

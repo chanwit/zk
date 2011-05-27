@@ -133,12 +133,13 @@ public class Text extends AbstractComponent implements RawId {
 		super.renderProperties(renderer);
 
 		render(renderer, "value", _value);
+		render(renderer, "idRequired", isIdRequired());
 	}
 	protected boolean isChildable() {
 		return false;
 	}
 
-	protected Object newExtraCtrl() {
+	public Object getExtraCtrl() {
 		return new ExtraCtrl();
 	}
 	protected class ExtraCtrl implements org.zkoss.zk.ui.ext.render.DirectContent {

@@ -18,6 +18,7 @@ package org.zkoss.zk.ui.impl;
 
 import java.io.InputStream;
 
+import org.zkoss.lang.Library;
 import org.zkoss.util.Utils;
 import org.zkoss.util.logging.Log;
 import org.zkoss.io.Files;
@@ -41,6 +42,7 @@ import org.zkoss.zk.ui.sys.IdGenerator;
 import org.zkoss.zk.ui.sys.SessionCache;
 import org.zkoss.zk.ui.impl.SessionDesktopCacheProvider;
 import org.zkoss.zk.ui.impl.UiEngineImpl;
+import org.zkoss.zk.au.AuDecoder;
 
 /**
  * A skeletal implementation of {@link WebApp}.
@@ -50,7 +52,7 @@ import org.zkoss.zk.ui.impl.UiEngineImpl;
 abstract public class AbstractWebApp implements WebApp, WebAppCtrl {
 	private static final Log log = Log.lookup(AbstractWebApp.class);
 
-	private String _appnm = "ZK";
+	private String _appnm;
 	private Configuration _config;
 	private UiEngine _engine;
 	private DesktopCacheProvider _provider;
@@ -58,6 +60,7 @@ abstract public class AbstractWebApp implements WebApp, WebAppCtrl {
 	private FailoverManager _failover;
 	private IdGenerator _idgen;
 	private SessionCache _sesscache;
+	private AuDecoder _audec;
 
 	private static String _build;
 
@@ -74,7 +77,7 @@ abstract public class AbstractWebApp implements WebApp, WebAppCtrl {
 	}
 
 	public String getAppName() {
-		return _appnm;
+		return _appnm != null ? _appnm: "ZK";
 	}
 	public void setAppName(String name) {
 		_appnm = name != null ? name: "";
@@ -118,6 +121,8 @@ abstract public class AbstractWebApp implements WebApp, WebAppCtrl {
 			throw new IllegalArgumentException("config already belongs to other Web app, "+oldwapp);
 
 		_config = config;
+		if (_appnm == null)
+			_appnm = _config.getPreference("org.zkoss.zk.ui.WebApp.name", "ZK");
 		_config.setWebApp(this);
 
 		Class cls = _config.getUiEngineClass();
@@ -181,11 +186,23 @@ abstract public class AbstractWebApp implements WebApp, WebAppCtrl {
 			}
 		}
 
+		cls = _config.getAuDecoderClass();
+		if (cls != null) {
+			try {
+				_audec = (AuDecoder)cls.newInstance();
+			} catch (Exception ex) {
+				throw UiException.Aide.wrap(ex, "Unable to construct "+cls);
+			}
+		}
 		_engine.start(this);
 		_provider.start(this);
 		_factory.start(this);
-		if (_failover != null)
-			_failover.start(this);
+		if (_failover != null) {
+			try {
+				_failover.start(this);
+			} catch (AbstractMethodError ex) { //backward compatible
+			}
+		}
 		_sesscache.init(this);
 
 		_config.invokeWebAppInits();
@@ -195,12 +212,20 @@ abstract public class AbstractWebApp implements WebApp, WebAppCtrl {
 
 		_config.detroyRichlets();
 
-		_sesscache.destroy(this);
+		try {
+			_sesscache.destroy(this);
+		} catch (NoClassDefFoundError ex) { //Bug 3046360
+		} catch (AbstractMethodError ex) { //backward compatible
+		}
 		_factory.stop(this);
 		_provider.stop(this);
 		_engine.stop(this);
 		if (_failover != null) {
-			_failover.stop(this);
+			try {
+				_failover.stop(this);
+			} catch (NoClassDefFoundError ex) { //Bug 3046360
+			} catch (AbstractMethodError ex) { //backward compatible
+			}
 			_failover = null;
 		}
 		_factory = null;
@@ -209,7 +234,10 @@ abstract public class AbstractWebApp implements WebApp, WebAppCtrl {
 		_engine = null;
 		_sesscache = null;
 
-		org.zkoss.util.Cleanups.cleanup();
+		try {
+			org.zkoss.util.Cleanups.cleanup();
+		} catch (NoClassDefFoundError ex) { //Bug 3046360
+		}
 
 		//we don't reset _config since WebApp cannot be re-inited after stop
 	}
@@ -269,6 +297,12 @@ abstract public class AbstractWebApp implements WebApp, WebAppCtrl {
 		_sesscache = cache;
 		_sesscache.init(this);
 	}		
+	public AuDecoder getAuDecoder() {
+		return _audec;
+	}
+	public void setAuDecoder(AuDecoder audec) {
+		_audec = audec;
+	}
 
 	/** Invokes {@link #getDesktopCacheProvider}'s
 	 * {@link DesktopCacheProvider#sessionWillPassivate}.

@@ -17,10 +17,9 @@ Copyright (C) 2008 Potix Corporation. All Rights Reserved.
 package org.zkoss.zul;
 
 import org.zkoss.lang.Objects;
-import org.zkoss.html.HTMLs;
+import org.zkoss.zk.au.out.AuSetAttribute;
 import org.zkoss.zk.ui.Component;
 import org.zkoss.zk.ui.IdSpace;
-import org.zkoss.zk.ui.Page;
 import org.zkoss.zk.ui.UiException;
 import org.zkoss.zk.ui.event.*;
 import org.zkoss.zul.ext.Framable;
@@ -51,22 +50,22 @@ import org.zkoss.zul.impl.XulElement;
  * @author jumperchen
  * @since 3.5.0
  */
-public class Panel extends XulElement implements Framable, org.zkoss.zul.api.Panel {
+public class Panel extends XulElement implements org.zkoss.zul.api.Panel, Framable {
 	private transient Toolbar _tbar, _bbar, _fbar;
 	private transient Panelchildren _panelchildren;
 	private transient Caption _caption;
 
 	private String _border = "none";
 	private String _title = "";
-	private boolean _closable, _collapsible, _floatable, _framable, _movable, 
-		_maximizable, _minimizable, _maximized, _minimized, _sizable;
 	private int _minheight = 100, _minwidth = 200; 
-	private boolean  _open = true;
-	
+	private boolean _closable, _collapsible, _floatable, _movable, 
+		_maximizable, _minimizable, _maximized, _minimized, _sizable,
+		_open = true, _framableBC/*backward compatible*/;
 
 	static {
 		addClientEvent(Panel.class, Events.ON_CLOSE, 0);
 		addClientEvent(Panel.class, Events.ON_MOVE, CE_DUPLICATE_IGNORE|CE_IMPORTANT);
+		addClientEvent(Panel.class, Events.ON_SIZE, CE_DUPLICATE_IGNORE|CE_IMPORTANT);
 		addClientEvent(Panel.class, Events.ON_OPEN, CE_IMPORTANT);
 		addClientEvent(Panel.class, Events.ON_Z_INDEX, CE_DUPLICATE_IGNORE|CE_IMPORTANT);
 		addClientEvent(Panel.class, Events.ON_MAXIMIZE, CE_DUPLICATE_IGNORE|CE_IMPORTANT);
@@ -89,22 +88,25 @@ public class Panel extends XulElement implements Framable, org.zkoss.zul.api.Pan
 		}
 	}
 	/**
+	 * @deprecated As of release 5.0.6, replaced with {@link #getBorder}.
 	 * Returns whether to render the panel with custom rounded borders.
 	 * <p>Default: false.
 	 */
 	public boolean isFramable() {
-		return _framable;
+		return _border.startsWith("rounded"); //rounded or rounded+
 	}
 	/**
+	 * @deprecated As of release 5.0.6, replaced with {@link #setBorder}.
 	 * Sets whether to render the panel with custom rounded borders.
 	 * 
 	 * <p>Default: false.
 	 */
 	public void setFramable(boolean framable) {
-		if (_framable != framable) {
-			_framable = framable;
-			smartUpdate("framable", _framable);
-		}
+		_framableBC = true;
+		boolean bordered = "normal".equals(_border) || "rounded+".equals(_border);
+		setBorder0(
+			framable ?
+				bordered ? "rounded+": "rounded": bordered ? "normal": "none");
 	}
 	/**
 	 * Sets whether to move the panel to display it inline where it is rendered.
@@ -133,7 +135,7 @@ public class Panel extends XulElement implements Framable, org.zkoss.zul.api.Pan
 		return _floatable;
 	}
 	public boolean setVisible(boolean visible) {
-		if (visible == _visible)
+		if (visible == isVisible())
 			return visible;
 		_maximized = _minimized = false;
 		return setVisible0(visible);
@@ -273,6 +275,7 @@ public class Panel extends XulElement implements Framable, org.zkoss.zul.api.Pan
 	 * Sets whether to show a toggle button on the title bar.
 	 * <p>Default: false.
 	 * <p>Note: the toggle button won't be displayed if no title or caption at all.
+	 * <p>Note: onOpen event will be sent when you click the toggle button
 	 */
 	public void setCollapsible(boolean collapsible) {
 		if (_collapsible != collapsible) {
@@ -375,23 +378,50 @@ public class Panel extends XulElement implements Framable, org.zkoss.zul.api.Pan
 		return getCaption();
 	}
 	/** Returns the border.
-	 * The border actually controls via {@link Panelchildren#getSclass()}. 
-	 * In fact, the name of the border (except "normal") is generate as part of 
-	 * the style class used for the content block.
-	 * Refer to {@link Panelchildren#getSclass()} for more details.
 	 *
 	 * <p>Default: "none".
 	 */
 	public String getBorder() {
+		if (_framableBC && _border.startsWith("rounded")) //backward compatible
+			return "rounded".equals(_border) ? "none": "normal";
 		return _border;
 	}
-	/** Sets the border (either none or normal).
-	 *
-	 * @param border the border. If null or "0", "none" is assumed.
+	/** Sets the border.
+	 * Allowed values include <code>none</code> (default), <code>normal</code>,
+	 * <code>rounded</code> and <code>rounded+</code>.
+	 * For more information, please refer to
+	 * <a href="http://books.zkoss.org/wiki/ZK_Component_Reference/Containers/Panel#Border">ZK Component Reference: Panel</a>.
+	 * @param border the border. If null, "0" or "false", "none" is assumed.
+	 * If "true", "normal" is assumed (since 5.0.8).
 	 */
 	public void setBorder(String border) {
-		if (border == null || "0".equals(border))
+		if (border == null || "0".equals(border) || "false".equals(border))
 			border = "none";
+		else if ("true".equals(border))
+			border = "normal";
+		if (_framableBC) {
+			if (border.startsWith("rounded")) {
+				_framableBC = false;
+			} else if ("normal".equals(border)) {
+				if (_border.startsWith("rounded"))
+					border = "rounded+";
+			} else {
+				if (_border.startsWith("rounded"))
+					border = "rounded";
+			}
+		}
+	
+		setBorder0(border);
+	}
+	/** Enables or disables the border.
+	 * @param border whether to have a border. If true is specified,
+	 * it is the same as <code>setBorder("normal")</code>.
+	 * @since 5.0.8
+	 */
+	public void setBorder(boolean border) {
+		setBorder(border ? "normal": "none");
+	}
+	private void setBorder0(String border) {
 		if (!Objects.equals(_border, border)) {
 			_border = border;
 			smartUpdate("border", _border);
@@ -441,16 +471,19 @@ public class Panel extends XulElement implements Framable, org.zkoss.zul.api.Pan
 			if (_fbar != null)
 				throw new UiException("Only one foot toolbar child is allowed: "+this);
 		} else {
-			throw new UiException("Uknown toolbar: "+name);
+			throw new UiException("Unknown toolbar: "+name);
 		}
 
 		if (super.insertBefore(toolbar, refChild)) {
 			if ("tbar".equals(name)) {
 				_tbar = toolbar;
+				response(new AuSetAttribute(this, "tbar", toolbar.getUuid()));
 			} else if ("bbar".equals(name)) {
 				_bbar = toolbar;
+				response(new AuSetAttribute(this, "bbar", toolbar.getUuid()));
 			} else if ("fbar".equals(name)) {
 				_fbar = toolbar;
+				response(new AuSetAttribute(this, "fbar", toolbar.getUuid()));
 			}
 			return true;
 		}
@@ -646,7 +679,6 @@ public class Panel extends XulElement implements Framable, org.zkoss.zul.api.Pan
 		render(renderer, "closable", _closable);
 		render(renderer, "floatable", _floatable);
 		render(renderer, "collapsible", _collapsible);
-		render(renderer, "framable", _framable);
 		render(renderer, "movable", _movable);
 		render(renderer, "maximizable", _maximizable);
 		render(renderer, "minimizable", _minimizable);
@@ -677,21 +709,21 @@ public class Panel extends XulElement implements Framable, org.zkoss.zul.api.Pan
 			Events.postEvent(evt);
 		} else if (cmd.equals(Events.ON_MAXIMIZE)) {
 			MaximizeEvent evt = MaximizeEvent.getMaximizeEvent(request);
-			_left = evt.getLeft();
-			_top = evt.getTop();
-			_width = evt.getWidth();
-			_height = evt.getHeight();
+			setLeftDirectly(evt.getLeft());
+			setTopDirectly(evt.getTop());
+			setWidthDirectly(evt.getWidth());
+			setHeightDirectly(evt.getHeight());
 			_maximized = evt.isMaximized();
-			if (_maximized) _visible = true;
+			if (_maximized) setVisibleDirectly(true);
 			Events.postEvent(evt);
 		} else if (cmd.equals(Events.ON_MINIMIZE)) {
 			MinimizeEvent evt = MinimizeEvent.getMinimizeEvent(request);
-			_left = evt.getLeft();
-			_top = evt.getTop();
-			_width = evt.getWidth();
-			_height = evt.getHeight();
+			setLeftDirectly(evt.getLeft());
+			setTopDirectly(evt.getTop());
+			setWidthDirectly(evt.getWidth());
+			setHeightDirectly(evt.getHeight());
 			_minimized = evt.isMinimized();
-			if (_minimized) _visible = false;
+			if (_minimized) setVisibleDirectly(false);
 			Events.postEvent(evt);
 		} else
 			super.service(request, everError);

@@ -22,8 +22,6 @@ import java.util.Collection;
 import org.zkoss.util.media.Media;
 
 import org.zkoss.zk.ui.ext.Scope;
-import org.zkoss.zk.ui.util.EventInterceptor;
-import org.zkoss.zk.ui.util.Configuration;
 import org.zkoss.zk.device.Device;
 
 /**
@@ -100,23 +98,30 @@ public interface Desktop extends Scope {
 	 */
 	public WebApp getWebApp();
 
-	/** Returns the page of the specified ID.
+	/** Returns the page of the specified ID or UUID.
 	 *
 	 * <p>This is one of the only few method you could access
 	 * before activating an execution.
 	 *
+	 * @param pageId the page's ID or UUID. ID has the higher priority.
 	 * @exception ComponentNotFoundException if page not found
 	 */
 	public Page getPage(String pageId)
 	throws ComponentNotFoundException;
-	/** Returns the page of the specified ID, or null if no such page.
+	/** Returns the page of the specified ID or UUID, or null if no such page.
 	 *
+	 * @param pageId the page's ID or UUID. ID has the higher priority.
 	 * @since 2.4.1
 	 */
 	public Page getPageIfAny(String pageId);
 	/** Returns a readonly collection of all {@link Page} in this desktop.
 	 */
 	public Collection getPages();
+	/** Returns the first page, or null if no page at all (happens when the desktop
+	 * has been destroyed)
+	 * @since 5.0.3
+	 */
+	public Page getFirstPage();
 	/** Returns whether a page exists.
 	 */
 	public boolean hasPage(String pageId);
@@ -242,9 +247,14 @@ public interface Desktop extends Scope {
 	 * feature.
 	 * @see Executions#activate
 	 * @see Device#getServerPushClass
+	 * @see org.zkoss.zk.ui.sys.DesktopCtrl#enableServerPush(org.zkoss.zk.ui.sys.ServerPush)
 	 * @since 3.0.0
 	 */
 	public boolean enableServerPush(boolean enable);
+
+	/** @deprecated As of release 5.0.2
+	 */
+	public void setServerPushDelay(int min, int max, int factor);
 	/** Returns whether the server-push feature is enabled for this
 	 * desktop.
 	 *
@@ -265,7 +275,7 @@ public interface Desktop extends Scope {
 	 * {@link org.zkoss.zk.ui.util.ExecutionInit},
 	 * {@link org.zkoss.zk.ui.util.ExecutionCleanup},
 	 * {@link org.zkoss.zk.ui.util.UiLifeCycle},
-	 * {@link EventInterceptor}
+	 * {@link org.zkoss.zk.ui.util.EventInterceptor}
 	 * and/or {@link org.zkoss.zk.au.AuService}.<br/>
 	 * Note: {@link org.zkoss.zk.ui.util.DesktopInit},
 	 * {@link org.zkoss.zk.ui.event.EventThreadInit},

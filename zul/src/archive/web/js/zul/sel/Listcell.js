@@ -14,8 +14,11 @@ it will be useful, but WITHOUT ANY WARRANTY.
 */
 (function () {
 
-	function _isPE() {
-		return zk.feature.pe && zk.isLoaded('zkex.sel');
+	function _isListgroup(wgt) {
+		return zk.isLoaded('zkex.sel') && wgt.$instanceof(zkex.sel.Listgroup);
+	}	
+	function _isListgroupfoot(wgt) {
+		return zk.isLoaded('zkex.sel') && wgt.$instanceof(zkex.sel.Listgroupfoot);
 	}	
 /**
  * A list cell.
@@ -45,10 +48,10 @@ zul.sel.Listcell = zk.$extends(zul.LabelImageWidget, {
 	setLabel: function () {
 		this.$supers('setLabel', arguments);
 		if (this.desktop) {
-    		if (_isPE() && this.parent.$instanceof(zkex.sel.Listgroup))
-    			this.parent.rerender();
-    		else if (this.parent.$instanceof(zul.sel.Option))
-    			this.getListbox().rerender(); // for IE, we cannot use this.parent.rerender();
+	 		if (_isListgroup(this.parent))
+				this.parent.rerender();
+			else if (this.parent.$instanceof(zul.sel.Option))
+				this.getListbox().rerender(); // for IE, we cannot use this.parent.rerender();
 		}
 	},
 	/** Returns the list box that it belongs to.
@@ -106,8 +109,8 @@ zul.sel.Listcell = zk.$extends(zul.LabelImageWidget, {
 	},
 	domClass_: function (no) {
 		var scls = this.$supers('domClass_', arguments);
-		if (_isPE() && (!no || !no.zclass) && (this.parent.$instanceof(zkex.sel.Listgroup)
-			|| this.parent.$instanceof(zkex.sel.Listgroupfoot))) {
+		if ((!no || !no.zclass)
+		&& (_isListgroup(this.parent) || _isListgroupfoot(this.parent))) {
 			var zcls = this.parent.getZclass();
 			scls += ' ' + zcls + '-inner';
 		}
@@ -116,22 +119,20 @@ zul.sel.Listcell = zk.$extends(zul.LabelImageWidget, {
 	_colHtmlPre: function () {
 		var s = '',
 			box = this.getListbox(),
-			zcls = this.parent.getZclass();
-		if (box != null && this.parent.firstChild == this) {
-			if (_isPE() && this.parent.$instanceof(zkex.sel.Listgroup)) {
-				s = '<span id="' + this.parent.uuid + '-img" class="' + zcls + '-img ' + zcls
-					+ '-img-' + (this.parent._open ? 'open' : 'close') + '"></span>';
-			}
-				
-			if (box.isCheckmark()) {
-				var item = this.parent,
-					chkable = item.isCheckable(),
+			p = this.parent,
+			zcls = p.getZclass();
+		if (box != null && p.firstChild == this) {
+			var isGrp = _isListgroup(p);
+			// insert checkmark
+			if (box.isCheckmark() && !_isListgroupfoot(p) &&
+					(!isGrp || box.groupSelect)) {
+				var chkable = p.isCheckable(),
 					multi = box.isMultiple(),
 					img = zcls + '-img';
-				s += '<span id="' + item.uuid + '-cm" class="' + img + ' ' + img
+				s += '<span id="' + p.uuid + '-cm" class="' + img + ' ' + img
 					+ (multi ? '-checkbox' : '-radio');
 				
-				if (!chkable || item.isDisabled())
+				if (!chkable || p.isDisabled())
 					s += ' ' + img + '-disd';
 				
 				s += '"';
@@ -140,9 +141,25 @@ zul.sel.Listcell = zk.$extends(zul.LabelImageWidget, {
 					
 				s += '></span>';
 			}
+			// insert toggle icon
+			if (isGrp) {
+				s += '<span id="' + p.uuid + '-img" class="' + zcls + '-img ' + zcls
+					+ '-img-' + (p._open ? 'open' : 'close') + '"></span>';
+			}
 			if (s) return s;
 		}
 		return (!this.getImage() && !this.getLabel() && !this.firstChild) ? "&nbsp;": '';
+	},
+	doFocus_: function (evt) {
+		this.$supers('doFocus_', arguments);
+		
+		//sync frozen
+		var box, frozen, tbody, td, tds, node;
+		if ((box = this.getListbox()) && box.efrozen && 
+			(frozen = zk.Widget.$(box.efrozen.firstChild) && 
+			(node = this.$n()))) {
+			box._moveToHidingFocusCell(node.cellIndex);
+		}
 	},
 	doMouseOver_: function(evt) {
 		if (zk.gecko && (this._draggable || this.parent._draggable)
@@ -175,6 +192,20 @@ zul.sel.Listcell = zk.$extends(zul.LabelImageWidget, {
 		if (head && !head.isVisible())
 			style += "display:none;";
 		return style;
+	},
+	bindChildren_: function () {
+		var p;
+		if (!(p = this.parent) || !p.$instanceof(zul.sel.Option))
+			this.$supers("bindChildren_", arguments);
+	},
+	unbindChildren_: function () {
+		var p;
+		if (!(p = this.parent) || !p.$instanceof(zul.sel.Option))
+			this.$supers("unbindChildren_", arguments);
+	},
+	deferRedrawHTML_: function (out) {
+		out.push('<td', this.domAttrs_({domClass:1}), ' class="z-renderdefer"></td>');
 	}
+	
 });
 })();

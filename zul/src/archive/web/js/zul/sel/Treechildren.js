@@ -12,6 +12,22 @@ Copyright (C) 2009 Potix Corporation. All Rights Reserved.
 This program is distributed under LGPL Version 2.0 in the hope that
 it will be useful, but WITHOUT ANY WARRANTY.
 */
+(function () {
+	function _prevsib(child) {
+		var p;
+		if ((p=child.parent) && p.lastChild == child)
+			return child.previousSibling;
+	}
+	function _fixOnAdd(oldsib, child, ignoreDom) {
+		if (!ignoreDom) {
+			if (oldsib) oldsib._syncIcon();
+			var p;
+			if ((p=child.parent) && p.lastChild == child
+			&& (p=child.previousSibling))
+				p._syncIcon();
+		}
+	}
+
 /**
  * A treechildren.
  */
@@ -20,56 +36,45 @@ zul.sel.Treechildren = zk.$extends(zul.Widget, {
 	 * @return Tree
 	 */
 	getTree: function () {
-		for (var wgt = this.parent; wgt; wgt = wgt.parent)
-			if (wgt.$instanceof(zul.sel.Tree)) return wgt;
-		return null;
+		return this.isTopmost() ? this.parent : this.parent ? this.parent.getTree() : null;
 	},
 	/** Returns the {@link Treerow} that is associated with
 	 * this treechildren, or null if no such treerow.
 	 * @return Treerow
 	 */
 	getLinkedTreerow: function () {
-		return this.parent && this.parent.$instanceof(zul.sel.Treeitem) ?
-			this.parent.treerow: null;
+		// optimised to assume the tree doesn't have treerow property
+		return this.parent ? this.parent.treerow : null;
+	},
+	/** Returns whether this treechildren is topmost.
+	 * @return boolean
+	 * @since 5.0.6
+	 */
+	isTopmost: function () {
+		return this.parent && this.parent.$instanceof(zul.sel.Tree);
 	},
 	//@Override
 	insertBefore: function (child, sibling, ignoreDom) {
-		var oldsib = this._fixBeforeAdd(child);
-
+		var oldsib = _prevsib(child);
 		if (this.$supers('insertBefore', arguments)) {
-			this._fixOnAdd(oldsib, child, ignoreDom);
+			_fixOnAdd(oldsib, child, ignoreDom);
 			return true;
 		}
 	},
 	//@Override
 	appendChild: function (child, ignoreDom) {
-		var oldsib = this._fixBeforeAdd(child);
-
+		var oldsib = _prevsib(child);
 		if (this.$supers('appendChild', arguments)) {
 			if (!this.insertingBefore_)
-				this._fixOnAdd(oldsib, child, ignoreDom);
+				_fixOnAdd(oldsib, child, ignoreDom);
 			return true;
 		}
 	},
-	_fixBeforeAdd: function (child) {
-		var p;
-		if ((p=child.parent) && p.lastChild == child)
-			return child.previousSibling;
-	},
-	_fixOnAdd: function (oldsib, child, ignoreDom) {
-		if (!ignoreDom) {
-			if (oldsib) oldsib._syncIcon();
-			var p;
-			if ((p=child.parent) && p.lastChild == child
-        			&& (p=child.previousSibling))
-				p._syncIcon();
-		}
-	},
 	insertChildHTML_: function (child, before, desktop) {
-		var ben;
+		var ben, isTopmost = this.isTopmost();
 		if (before)
 			before = before.getFirstNode_();
-		if (!before && !this.parent.$instanceof(zul.sel.Tree))
+		if (!before && !isTopmost)
 			ben = this.getCaveNode() || this.parent.getCaveNode();
 
 		if (before)
@@ -77,7 +82,7 @@ zul.sel.Treechildren = zk.$extends(zul.Widget, {
 		else if (ben)
 			jq(ben).after(child.redrawHTML_());
 		else {
-			if (this.parent.$instanceof(zul.sel.Tree))
+			if (isTopmost)
 				jq(this.parent.$n('rows')).append(child.redrawHTML_());
 			else
 				jq(this).append(child.redrawHTML_());
@@ -97,17 +102,23 @@ zul.sel.Treechildren = zk.$extends(zul.Widget, {
 				return cn;	
 			}
 	},
+	/*
 	isVisible: function () {
 		if (!this.$supers('isVisible', arguments))
 			return false;
-
-		if (!this.parent) return false;
-		if (!(this.parent.$instanceof(zul.sel.Treeitem)))
-			return true;
-		if (!this.parent.isOpen())
-			return false;
-		return !(this.parent.parent.$instanceof(zul.sel.Treechildren))
-			|| this.parent.parent.isVisible(); //recursive
+		var p;
+		return this.isTopmost()
+			|| ((p = this.parent) && p.isOpen() && p.isVisible()); //recursive
+	},
+	*/
+	//@Override
+	isRealVisible: function () {
+		this._isRealVisible() && this.$supers('isRealVisible', arguments);
+	},
+	_isRealVisible: function () {
+		var p;
+		return this.isVisible() && (this.isTopmost() || 
+				((p = this.parent) && p.isOpen() && p._isRealVisible()));
 	},
 	/** Returns a readonly list of all descending {@link Treeitem}
 	 * (children's children and so on).
@@ -117,13 +128,15 @@ zul.sel.Treechildren = zk.$extends(zul.Widget, {
 	 * @param Array items
 	 * @return Array
 	 */
-	getItems: function (items) {
+	getItems: function (items, opts) {
 		items = items || [];
-		for (var w = this.firstChild; w; w = w.nextSibling) {
-			items.push(w);
-			if (w.treechildren) 
-				w.treechildren.getItems(items);
-		}
+		var skiphd = opts && opts.skipHidden;
+		for (var w = this.firstChild; w; w = w.nextSibling)
+			if (!skiphd || w.isVisible()) {
+				items.push(w);
+				if (w.treechildren && (!skiphd || w.isOpen())) 
+					w.treechildren.getItems(items, opts);
+			}
 		return items;
 	},
 	/** Returns the number of child {@link Treeitem}
@@ -150,6 +163,7 @@ zul.sel.Treechildren = zk.$extends(zul.Widget, {
 			var tree = newParent.$instanceof(zul.sel.Tree) ? newParent : newParent.getTree();
 			if (tree) tree._onTreechildrenAdded(this);
 		}
+		this.$supers("beforeParentChanged_", arguments);
 	},
 	removeHTML_: function (n) {
 		for (var cn, w = this.firstChild; w; w = w.nextSibling) {
@@ -158,6 +172,16 @@ zul.sel.Treechildren = zk.$extends(zul.Widget, {
 				w.removeHTML_(cn);
 		}
 		this.$supers('removeHTML_', arguments);
+	},
+	getOldWidget_: function (n) {
+		var old = this.$supers('getOldWidget_', arguments);
+		if (old && old.$instanceof(zul.sel.Treerow)) {
+			var ti = old.parent;
+			if (ti)
+				return ti.treechildren;
+			return null;
+		}
+		return old;
 	},
 	$n: function (nm) {
 		if (this.firstChild)
@@ -170,7 +194,11 @@ zul.sel.Treechildren = zk.$extends(zul.Widget, {
 		
 		if (this.firstChild && this.firstChild.treechildren)
 			this.firstChild.treechildren.detach();
-		
+
+		zul.sel.Treeitem._syncSelItems(this, newwgt);
+
 		this.$supers('replaceWidget', arguments);
 	}
 });
+
+})();

@@ -20,7 +20,7 @@ import java.util.Iterator;
 import java.io.Writer;
 
 import org.zkoss.lang.Objects;
-import org.zkoss.html.HTMLs;
+import org.zkoss.xml.HTMLs;
 
 import org.zkoss.zk.ui.Desktop;
 import org.zkoss.zk.ui.AbstractComponent;
@@ -83,13 +83,6 @@ public class Script extends AbstractComponent implements org.zkoss.zul.api.Scrip
 
 	public Script() {
 	}
-	/** Constructs a script component with the specified content.
-	 * @param content the content (the code snippet).
-	 * @since 5.1.0
-	 */
-	public Script(String content) {
-		setContent(content);
-	}
 
 	/** @deprecated As of release 5.0.0, it is meaningless since
 	 * text/javascript is always assumed.
@@ -112,6 +105,7 @@ public class Script extends AbstractComponent implements org.zkoss.zul.api.Scrip
 	}
 	/** Sets the character encoding of the source.
 	 * It is used with {@link #setSrc}.
+	 * <p>Refer to <a href="http://www.w3schools.com/TAGS/ref_charactersets.asp">HTML Character Sets</a>for more information.
 	 */
 	public void setCharset(String charset) {
 		if (charset != null && charset.length() == 0)
@@ -244,7 +238,7 @@ public class Script extends AbstractComponent implements org.zkoss.zul.api.Scrip
 		if (_src != null) {
 			final HtmlPageRenders.RenderContext rc =
 				_defer ? null: HtmlPageRenders.getRenderContext(null);
-			if (rc != null) {
+			if (rc != null && rc.perm != null) {
 				final Writer cwout = rc.perm;
 				cwout.write("\n<script type=\"text/javascript\" src=\"");
 				cwout.write(getEncodedSrcURL());

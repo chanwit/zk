@@ -35,6 +35,10 @@ import org.zkoss.zk.ui.metainfo.ZScript;
  * @author tomyeh
  */
 public interface PageCtrl {
+	/** @deprecated As of release 5.0.0, replaced with {@link org.zkoss.zk.ui.sys.Attributes#PAGE_REDRAW_CONTROL}.
+	 */
+	public static final String ATTR_REDRAW_BY_INCLUDE = "org.zkoss.zk.ui.redrawByInclude";
+
 	/** Pre-initializes this page.
 	 * It initializes {@link org.zkoss.zk.ui.Page#getDesktop},
 	 * but it doesn't add this page to the desktop yet
@@ -68,32 +72,56 @@ public interface PageCtrl {
 	 */
 	public void destroy();
 
-	/** Returns the content of the specified condition
-	 * that shall be generated inside the header element
-	 * (never null).
+	/** Returns the tags that shall be generated inside the head element
+	 * and before ZK's default tags (never null).
+	 * For example, it might consist of &ltmeta&gt; and &lt;link&gt;.
 	 *
-	 * <p>For HTML, the header element is the HEAD element.
+	 * <p>Since it is generated before ZK's default tags (such as CSS and JS),
+	 * it cannot override ZK's default behaviors.
 	 *
-	 * @param before whether to return the headers that shall be shown
-	 * before ZK's CSS/JS headers.
-	 * If true, only the headers that shall be shown before (such as meta)
-	 * are returned.
-	 * If true, only the headers that shall be shown after (such as link)
-	 * are returned.
-	 * @see #getHeaders()
-	 * @since 3.6.1
+	 * @see #getAfterHeadTags
+	 * @since 5.0.5
+	 */
+	public String getBeforeHeadTags();
+	/** Returns the tags that shall be generated inside the head element
+	 * and after ZK's default tags (never null).
+	 * For example, it might consist of &ltmeta&gt; and &lt;link&gt;.
+	 *
+	 * <p>Since it is generated after ZK's default tags (such as CSS and JS),
+	 * it could override ZK's default behaviors.
+	 *
+	 * @see #getBeforeHeadTags
+	 * @since 5.0.5
+	 */
+	public String getAfterHeadTags();
+	/** Adds the tags that will be generated inside the head element
+	 * and before ZK's default tags. For example,
+	 * <pre><code>((PageCtrl)page).addBeforeHeadTags("<meta name=\"robots\" content=\"index,follow\"/>");</code></pre>
+	 *
+	 * <p>You could specify the link, meta and script directive to have the similar
+	 * result.
+	 * @since 5.0.5
+	 */
+	public void addBeforeHeadTags(String tags);
+	/** Adds the tags that will be generated inside the head element
+	 * and after ZK's default tags. For example,
+	 * <pre><code>((PageCtrl)page).addBeforeHeadTags("<meta name=\"robots\" content=\"index,follow\"/>");</code></pre>
+	 *
+	 * <p>You could specify the link, meta and script directive to have the similar
+	 * result.
+	 * @since 5.0.5
+	 */
+	public void addAfterHeadTags(String tags);
+
+	/** @deprecated As of release 5.0.5, replaced with {@link #getBeforeHeadTags}
+	 * and {@link #getAfterHeadTags}.
 	 */
 	public String getHeaders(boolean before);
-	/** Returns all content that will be generated inside the header element
-	 * (never null).
-	 * <p>For HTML, the header element is the HEAD element.
-	 * <p>It returns all header no matter it shall be shown before or
-	 * after ZK's CSS/JS headers. To have more control, use
-	 * {@link #getHeaders(boolean)} instead.
-	 *
-	 * @see #getHeaders(boolean)
+	/** @deprecated As of release 5.0.5, replaced with {@link #getBeforeHeadTags}
+	 * and {@link #getAfterHeadTags}.
 	 */
 	public String getHeaders();
+
 	/** Returns a readonly collection of response headers (never null).
 	 * The entry is a three-element object array.
 	 * The first element is the header name.
@@ -156,6 +184,19 @@ public interface PageCtrl {
 	 */
 	public void setContentType(String contentType);
 
+	/** Returns the widget class of this page, or null to use the device default.
+	 *
+	 * @since 5.0.5
+	 */
+	public String getWidgetClass();
+	/** Sets the widget class of this page.
+	 *
+	 * @param wgtcls the widget class. The device default is assumed if wgtcls
+	 * is null or empty.
+	 * @since 5.0.5
+	 */
+	public void setWidgetClass(String wgtcls);
+
 	/** Returns if the client can cache the rendered result, or null
 	 * to use the device default.
 	 *
@@ -193,10 +234,12 @@ public interface PageCtrl {
 	/** Returns the owner of this page, or null if it is not owned by
 	 * any component.
 	 * A page is included by a component. We say it is owned by the component.
+	 * <p>Note: the owner, if not null, must implement {@link org.zkoss.zk.ui.ext.Includer}.
 	 */
 	public Component getOwner();
 	/** Sets the owner of this page.
-	 * <p>Used only internally.
+	 * <p>Called only internally
+	 * <p>Since 5.0.6, the owner must implement {@link org.zkoss.zk.ui.ext.Includer}.
 	 */
 	public void setOwner(Component comp);
 
@@ -218,6 +261,12 @@ public interface PageCtrl {
 	 * when the interpreter of the same language is being loaded.
 	 */
 	public void addDeferredZScript(Component parent, ZScript zscript);
+ 	/** @deprecated As of release 5.0.0, it is removed to simplify ZK.
+ 	 */
+ 	public Component getDefaultParent();
+ 	/** @deprecated As of release 5.0.0, it is removed to simplify ZK.
+ 	 */
+ 	public void setDefaultParent(Component comp);
 
 	/** Notification that the session, which owns this page,
 	 * is about to be passivated (aka., serialized).

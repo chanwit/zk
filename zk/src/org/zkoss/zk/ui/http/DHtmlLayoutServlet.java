@@ -106,21 +106,8 @@ public class DHtmlLayoutServlet extends HttpServlet {
 		if (_webman != null) {
 			log.info("Web Manager was created before ZK loader");
 		} else {
-			String updateURI = config.getInitParameter("update-uri");
-			if (updateURI == null
-			|| (updateURI = updateURI.trim()).length() == 0
-			|| updateURI.charAt(0) != '/')
-				throw new ServletException("The update-uri parameter must be specified and starts with /");
-			if (updateURI.indexOf(';') >= 0 || updateURI.indexOf('?') >= 0)
-				throw new ServletException("The update-uri parameter cannot contain ';' or '?'");
-				//Jetty will encode URL by appending ';jsess..' and we have to
-				//remove it under certain situations, so not alow it
-			if (updateURI.charAt(updateURI.length() - 1) == '\\') {
-				if (updateURI.length() == 1)
-					throw new ServletException("The update-uri parameter cannot contain only '/'");
-				updateURI = updateURI.substring(0, updateURI.length() - 1);
-					//remove the trailing '\\' if any
-			}
+			String updateURI = Utils.checkUpdateURI(
+				config.getInitParameter("update-uri"), "The update-uri parameter");
 			_webman = new WebManager(_ctx, updateURI);
 			_webmanCreated = true;
 		}
@@ -192,7 +179,7 @@ public class DHtmlLayoutServlet extends HttpServlet {
 		final Writer out = compress ? (Writer)new StringWriter(): response.getWriter();
 		final DesktopRecycle dtrc = bInclude ? null: config.getDesktopRecycle();
 		Desktop desktop = dtrc != null ?
-			Utils.beforeService(dtrc, _ctx, sess, request, response, path): null;
+			DesktopRecycles.beforeService(dtrc, _ctx, sess, request, response, path): null;
 
 		try {
 			if (desktop != null) { //recycle
@@ -260,7 +247,8 @@ public class DHtmlLayoutServlet extends HttpServlet {
 				}
 			}
 		} finally {
-			if (dtrc != null) Utils.afterService(dtrc, desktop);
+			if (dtrc != null)
+				DesktopRecycles.afterService(dtrc, desktop);
 		}
 		return true; //success
 	}

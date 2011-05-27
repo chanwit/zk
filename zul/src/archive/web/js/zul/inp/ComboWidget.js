@@ -74,7 +74,7 @@ zul.inp.ComboWidget = zk.$extends(zul.inp.InputWidget, {
 	onShow: _zkf,
 	
 	onFloatUp: function (ctl) {
-		if (jq(this.$n('pp')).is(':animated') || (!this._inplace && !this.isOpen()))
+		if (jq(this.getPopupNode_()).is(':animated') || (!this._inplace && !this.isOpen()))
 			return;
 		var wgt = ctl.origin;
 		if (!zUtl.isAncestor(this, wgt)) {
@@ -95,18 +95,18 @@ zul.inp.ComboWidget = zk.$extends(zul.inp.InputWidget, {
 		}
 	},
 	onResponse: function (ctl, opts) {
-		if (opts.rtags.onOpen && this.isOpen()) {
+		if ((opts.rtags.onOpen || opts.rtags.onChanging) && this.isOpen()) {
 			if (zk.animating()) {
 				var self = this;
 				setTimeout(function() {self.onResponse(ctl, opts);}, 50);
 				return;
 			}
-			var pp = this.$n('pp'),
+			var pp = this.getPopupNode_(),
 				pz = this.getPopupSize_(pp);
 			pp.style.height = pz[1];
 			
-			// Bug 2941343
-			if (!zk.ie6_)
+			// Bug 2941343, 2936095, and 3189142
+			if (zk.ie8)
 				pp.style.width = pz[0];
 			this._fixsz(pz);
 		}
@@ -137,10 +137,11 @@ zul.inp.ComboWidget = zk.$extends(zul.inp.InputWidget, {
 		if (opts && opts.focus)
 			this.focus();
 
-		var pp = this.$n('pp'),
+		var pp = this.getPopupNode_(),
 			inp = this.getInputNode();
 		if (!pp) return;
 
+		this.setFloating_(true, {node:pp});
 		zWatch.fire('onFloatUp', this); //notify all
 		var topZIndex = this.setTopmost();
 
@@ -149,7 +150,7 @@ zul.inp.ComboWidget = zk.$extends(zul.inp.InputWidget, {
 		pp.style.height = "auto";
 		pp.style.zIndex = topZIndex > 0 ? topZIndex : 1 ; //on-top of everything
 
-		var pp2 = this.$n("cave");
+		var pp2 = this.getPopupNode_(true);
 		if (pp2) pp2.style.width = pp2.style.height = "auto";
 
 		pp.style.position = "absolute"; //just in case
@@ -174,7 +175,7 @@ zul.inp.ComboWidget = zk.$extends(zul.inp.InputWidget, {
 		pp.style.display = "none";
 		pp.style.visibility = "";
 
-		zk(pp).slideDown(this, {afterAnima: this._afterSlideDown});
+		this.slideDown_(pp);
 
 		//FF issue:
 		//If both horz and vert scrollbar are visible:
@@ -200,14 +201,51 @@ zul.inp.ComboWidget = zk.$extends(zul.inp.InputWidget, {
 		if (opts && opts.sendOnOpen)
 			this.fire('onOpen', {open:true, value: inp.value}, {rtags: {onOpen: 1}});
 	},
+	/** Slides down the drop-down list.
+	 * <p>Default: <code>zk(pp).slideDown(this, {afterAnima: this._afterSlideDown});</code>
+	 * @param DOMElement pp the DOM element of the drop-down list.
+	 * @since 5.0.4
+	 */
+	slideDown_: function (pp) {
+		zk(pp).slideDown(this, {afterAnima: this._afterSlideDown});
+	},
+	/** Slides up the drop-down list.
+	 * <p>Default: <code>pp.style.display = "none";</code><br/>
+	 * In other words, it just hides it without any animation effect.
+	 * @param DOMElement pp the DOM element of the drop-down list.
+	 * @since 5.0.4
+	 */
+	slideUp_: function (pp) {
+		pp.style.display = "none";
+	},
+
 	zsync: function () {
 		this.$supers('zsync', arguments);
 		if (!zk.css3 && this.isOpen() && this._shadow)
 			this._shadow.sync();
 	},
 	_afterSlideDown: function (n) {
+		if (!this.desktop) {
+			//Bug 3035847: close (called by unbind) won't remove popup when animating
+			zk(n).undoVParent();
+			jq(n).remove();
+		}
 		if (this._shadow) this._shadow.sync();
 	},
+	/** Returns the DOM element of the popup.
+	 * Default: <code>inner ? this.$n("cave"): this.$n("pp")</code>.
+	 * Override it if it is not the case.
+	 * @param boolean inner whether to return the inner popup.
+	 * ComboWidget assumes there is at least one popup and returned by
+	 * <code>getPopupNode_()</code>, and there might be an inner DOM element
+	 * returned by <code>getPopupNode_(true)</code>.
+	 * @return DOMElement
+	 * @since 5.0.4
+	 */
+	getPopupNode_: function (inner) {
+		return inner ? this.$n("cave"): this.$n("pp");
+	},
+
 	/** Closes the list of combo items ({@link Comboitem} if it was
 	 * dropped down.
 	 * It is the same as setOpen(false).
@@ -223,12 +261,20 @@ zul.inp.ComboWidget = zk.$extends(zul.inp.InputWidget, {
 		this._open = false;
 		if (opts && opts.focus)
 			this.focus();
-
-		var pp = this.$n('pp');
+		else
+			jq(this.$n()).removeClass(this.getZclass() + '-focus');
+		
+		var pp = this.getPopupNode_();
 		if (!pp) return;
 
-		pp.style.display = "none";
-		zk(pp).undoVParent();
+		this.setFloating_(false);
+		zWatch.fireDown("onHide", this);
+		this.slideUp_(pp);
+
+		zk.afterAnimate(function() {
+			zk(pp).undoVParent();
+		}, -1);
+		
 		if (this._shadow) {
 			this._shadow.destroy();
 			this._shadow = null;
@@ -239,15 +285,14 @@ zul.inp.ComboWidget = zk.$extends(zul.inp.InputWidget, {
 		if (opts && opts.sendOnOpen)
 			this.fire('onOpen', {open:false, value: this.getInputNode().value}, {rtags: {onOpen: 1}});
 
-		zWatch.fireDown("onHide", this);
 	},
 	_fixsz: function (ppofs) {
-		var pp = this.$n('pp');
+		var pp = this.getPopupNode_();
 		if (!pp) return;
 
-		var pp2 = this.$n('cave');
-		if (ppofs[1] == "auto" && pp.offsetHeight > 250) {
-			pp.style.height = "250px";
+		var pp2 = this.getPopupNode_(true);
+		if (ppofs[1] == "auto" && pp.offsetHeight > 350) {
+			pp.style.height = "350px";
 		} else if (pp.offsetHeight < 10) {
 			pp.style.height = "10px"; //minimal
 		}
@@ -305,20 +350,27 @@ zul.inp.ComboWidget = zk.$extends(zul.inp.InputWidget, {
 	 */
 	redraw_: function (out) {
 		var uuid = this.uuid,
-			zcls = this.getZclass();
+			zcls = this.getZclass(),
+			isButtonVisible = this._buttonVisible;
+			
 		out.push('<i', this.domAttrs_({text:true}), '><input id="',
-			uuid, '-real" class="', zcls, '-inp" autocomplete="off"',
+			uuid, '-real" class="', zcls, '-inp');
+			
+		if(!isButtonVisible)
+			out.push(' ', zcls, '-right-edge');
+			
+		out.push('" autocomplete="off"',
 			this.textAttrs_(), '/><i id="', uuid, '-btn" class="',
 			zcls, '-btn');
 
 		if (this.inRoundedMold()) {
-			if (!this._buttonVisible)
+			if (!isButtonVisible)
 				out.push(' ', zcls, '-btn-right-edge');
 			if (this._readonly)
 				out.push(' ', zcls, '-btn-readonly');	
-			if (zk.ie6_ && !this._buttonVisible && this._readonly)
+			if (zk.ie6_ && !isButtonVisible && this._readonly)
 				out.push(' ', zcls, '-btn-right-edge-readonly');
-		} else if (!this._buttonVisible)
+		} else if (!isButtonVisible)
 			out.push('" style="display:none');
 
 		out.push('"></i>');
@@ -337,29 +389,11 @@ zul.inp.ComboWidget = zk.$extends(zul.inp.InputWidget, {
 	/** Synchronizes the input element's width of this component
 	 */
 	syncWidth: function () {
-		var node = this.$n();
-		if (!zk(node).isRealVisible() || (!this._inplace && !node.style.width))
-			return;
-		
-		if (this._buttonVisible && this._inplace) {
-			if (!node.style.width) {
-				var $n = jq(node),
-					inc = this.getInplaceCSS();
-				$n.removeClass(inc);
-				if (zk.opera)
-					node.style.width = jq.px0(zk(node).revisedWidth(node.clientWidth) + zk(node).borderWidth());
-				else
-					node.style.width = jq.px0(zk(node).revisedWidth(node.offsetWidth));
-				$n.addClass(inc);
-			}
-		}
-		var inp = this.getInputNode();
-		if (zk.ie6_)			
-			inp.style.width = jq.px(0);
-		var width = zk.opera ? zk(node).revisedWidth(node.clientWidth) + zk(node).borderWidth()
-							 : zk(node).revisedWidth(node.offsetWidth),
-			btn = this.$n('btn');
-		inp.style.width = jq.px0(zk(inp).revisedWidth(width - (btn ? btn.offsetWidth : 0)));
+		zul.inp.RoundUtl.syncWidth(this, this.$n('btn'));
+	},
+	beforeParentMinFlex_: function (attr) { //'w' for width or 'h' for height
+		if ('w' == attr)
+			this.syncWidth();
 	},
 	doFocus_: function (evt) {
 		var n = this.$n();
@@ -377,10 +411,11 @@ zul.inp.ComboWidget = zk.$extends(zul.inp.InputWidget, {
 	},
 	doBlur_: function (evt) {
 		var n = this.$n();
-		if (this._inplace && this._inplaceout) {
+		if (this._inplace && this._inplaceout)
 			n.style.width = jq.px0(zk(n).revisedWidth(n.offsetWidth));
-		}
+
 		this.$supers('doBlur_', arguments);
+
 		if (this._inplace && this._inplaceout) {
 			jq(n).addClass(this.getInplaceCSS());
 			this.onSize();
@@ -395,24 +430,18 @@ zul.inp.ComboWidget = zk.$extends(zul.inp.InputWidget, {
 	},
 	bind_: function () {
 		this.$supers(zul.inp.ComboWidget, 'bind_', arguments);
-
-		var btn = this.$n('btn'),
-			inp = this.getInputNode();
+		var btn, inp = this.getInputNode();
 			
 		if (this._inplace)
 			jq(inp).addClass(this.getInplaceCSS());
 			
-		if (btn) {
+		if (btn = this.$n('btn')) {
 			this._auxb = new zul.Auxbutton(this, btn, inp);
 			this.domListen_(btn, 'onClick', '_doBtnClick');
 		}
-		if (this._readonly && !this.inRoundedMold())
-			jq(inp).addClass(this.getZclass() + '-right-edge');
 		
 		zWatch.listen({onSize: this, onShow: this, onFloatUp: this, onResponse: this});
 		if (!zk.css3) jq.onzsync(this);
-		
-		this.setFloating_(true,{node:this.$n('pp')});
 	},
 	unbind_: function () {
 		this.close();
@@ -444,7 +473,7 @@ zul.inp.ComboWidget = zk.$extends(zul.inp.InputWidget, {
 	},
 	doClick_: function (evt) {
 		if (!this._disabled) {
-			if (evt.domTarget == this.$n('pp'))
+			if (evt.domTarget == this.getPopupNode_())
 				this.close({
 					focus: true,
 					sendOnOpen: true

@@ -46,20 +46,93 @@ body {
 <%-- paragraphs --%>
 img {border: 0;}
 
-<%-- ZK JavaScript debug box --%>
+<%-- ZK JavaScript utls --%>
 div.z-error {
-	position:absolute; z-index:99000;
-	width:550px; border:1px solid #963; background-color:#fcc090
+	display: none;
+	z-index: 9999999;
+	position: absolute;
+	top: 0;
+	left: 40%;
+	height: 90px;
+	width: 450px;
+	padding: 3px;
+	border-width: 1px;
+	border-style: solid;
+	border-color: #BC6464 #940000 #940000 #BC6464;
+	-moz-box-shadow: 0px 0px 6px gray; 
+	-webkit-box-shadow: 0px 0px 6px gray;
+	box-shadow: 0px 0px 6px gray; 
+	background-color: #FFEDED;
 }
+div.z-error .msgcnt {
+	padding: 0;
+	border: 1px solid #EE7373;
+	background-color: white;
+	height: 60px;
+}
+div.z-error .msgs {
+	padding: 2px 3px;
+	height: 60px;
+	width: 440px;
+	word-wrap: break-word;
+	overflow: auto;
+}
+div.z-error .msgs .msg {
+	padding: 3px 0 2px;
+	border-bottom: 1px solid #FF9696
+}
+div.z-error .newmsg {
+	background-color: #FFD6D6;
+	display: none;
+}
+
 div.z-error .btn {
-	color: #555; text-decoration: none; font-size: ${fontSizeS};
-	background-color: #ffd8a8; padding: 1px 3px;
-	border: 1px solid #766;
-	border-left: 1px solid #a89a9a; border-top: 1px solid #a89a9a;
+	cursor: pointer;	
+	color: #333; 
+	width: 16px;
+	height: 16px;
+	display: inline-block;
+	margin-left: 10px;
 }
-.z-error-msg {
-	border: 1px inset; background-color: #fc9;
+div.z-error #zk_err-p {
+	cursor: move;
 }
+div.z-error .errnum {
+	padding-left: 20px;
+	color: #C60303;
+	font-weight: bold;	
+}
+<c:if test="${!c:browser('ie6-')}">
+.ie7 div.z-error .btn {
+	display: inline;
+}
+div.z-error .errnum {
+	background: url(${c:encodeURL('~./zk/img/error.png')}) no-repeat scroll -33px 2px transparent;
+}
+div.z-error .redraw {
+	background: url(${c:encodeURL('~./zk/img/error.png')}) no-repeat scroll 0px 2px transparent;
+}
+div.z-error .close {
+	background: url(${c:encodeURL('~./zk/img/error.png')}) no-repeat scroll -17px 2px transparent;
+}
+</c:if>
+<%-- IE6 --%>
+<c:if test="${c:browser('ie6-')}">
+div.z-error .btn {
+	display: inline;
+	zoom: 1;
+}
+div.z-error .errnum {
+	background: url(${c:encodeURL('~./zk/img/error.gif')}) no-repeat scroll -33px 2px transparent;
+}
+div.z-error .redraw {
+	background: url(${c:encodeURL('~./zk/img/error.gif')}) no-repeat scroll 0px 2px transparent;
+}
+div.z-error .close {
+	background: url(${c:encodeURL('~./zk/img/error.gif')}) no-repeat scroll -17px 2px transparent;
+}
+</c:if>
+
 div.z-log {
 	text-align:right; width:50%; right:10px; bottom:5px;
 	position:absolute; z-index: 99000;
@@ -70,34 +143,7 @@ div.z-log textarea {
 div.z-log button {
 	font-size: ${fontSizeXS};
 }
-.z-debug-domtree {
-	width:80%; right:10px; bottom:5px;
-	position:absolute; z-index: 99000; 
-	overflow: auto; color: #7D9196;
-	height: 300px; background: white;
-	padding: 2px; border: 1px solid gray;
-}
-.z-debug-domtree .z-debug-domtree-header {
-	overflow: hidden; zoom: 1; color: #403E39; font: normal ${fontSizeM} ${fontFamilyT};
-	padding: 5px 3px 4px 5px; border: 1px solid #999884; line-height: 15px; 
-	background:transparent url(${c:encodeURL('~./zk/img/debug/hd-gray.png')}) repeat-x 0 -1px;
-	font-weight:bold;
-}
-.z-debug-domtree .z-debug-domtree-body {
-	border: 1px solid #999884;
-	border-top: 0;
-}
-.z-debug-domtree-close {
-	overflow: hidden; width: 15px; height: 15px; float: right; cursor: pointer;
-	background-color : transparent;
-	background-image : url(${c:encodeURL('~./zk/img/debug/tool-btn.gif')});
-	background-position : 0 0;
-	background-repeat : no-repeat;
-	margin-left: 2px;
-}
-.z-debug-domtree-close-over {
-	background-position: -15px 0;
-}
+
 <%-- General --%>
 .noscript {<%-- the content of noscript --%>
 	width: 100%;
@@ -214,6 +260,16 @@ div.z-log button {
 .z-word-wrap {
 	word-wrap: break-word;
 }
+.z-word-nowrap {
+	white-space: nowrap;
+}
+<c:if test="${c:browser('ie6-') or c:browser('ie7-')}">
+.z-word-nowrap  .z-row-inner,
+.z-word-nowrap  .z-cell,
+.z-word-nowrap  .z-listcell {
+	white-space: nowrap;
+}
+</c:if>
 .z-overflow-hidden {
 	overflow: hidden;
 }
@@ -341,6 +397,12 @@ div.z-drop-cnt {
 	font-family: ${fontFamilyC};
 }
 
+<%-- customized by users
+.z-drag-ghost {
+	border: 1px dotted #999;
+}
+--%>
+
 <%-- Focus Anchor --%>
 .z-focus-a {
 	position: absolute;
@@ -355,6 +417,7 @@ div.z-drop-cnt {
 	height:1px !important;
 	-moz-outline:0 none; outline:0 none;
 	-moz-user-select:text; -khtml-user-select:text;
+	overflow:hidden;
 }
 
 <%-- upload button --%>
@@ -377,7 +440,9 @@ span.z-upload input {
 	background-image: url(${c:encodeURL('~./zul/img/misc/prgmeter.png')});
 }
 
-<%-- fileupload dialog --%>
+<%-- fileupload dialog 
+
+// no longer used since 5.0.0
 .z-fileupload-img {
 	width: 16px;
 	padding-top: 4px;
@@ -389,6 +454,7 @@ span.z-upload input {
 	width: 16px;
 	height: 17px;
 }
+--%>
 .z-fileupload-rm {
 	cursor: pointer;
 	background: transparent no-repeat 0 0;

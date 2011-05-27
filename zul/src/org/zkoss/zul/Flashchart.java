@@ -190,7 +190,7 @@ public class Flashchart extends Flash implements org.zkoss.zul.api.Flashchart {
 		if(model != null && _type != null){
 			if("pie".equals(_type)) {	//Draw PieChart
 				PieModel tempModel = (PieModel)model;
-				for(int i = 0; i < tempModel.getCategories().size(); i++){
+				for(int i = 0, nCategories = tempModel.getCategories().size(); i < nCategories; i++){
 					Comparable category = tempModel.getCategory(i);
 					JSONObject json = new JSONObject();
 					json.put("categoryField", category);
@@ -199,9 +199,9 @@ public class Flashchart extends Flash implements org.zkoss.zul.api.Flashchart {
 				}
 			} else if("bar".equals(_type) || "line".equals(_type) || "column".equals(_type)) {
 				CategoryModel tempModel = (CategoryModel)model;
-				for (int j = 0; j < tempModel.getSeries().size(); j++) {
+				for (int j = 0,  nSeries = tempModel.getSeries().size(); j < nSeries; j++) {
 					Comparable series = tempModel.getSeries(j);
-					for (int i = 0; i < tempModel.getCategories().size(); i++) {
+					for (int i = 0, nCategories = tempModel.getCategories().size(); i < nCategories; i++) {
 						Comparable category = tempModel.getCategory(i);
 						JSONObject json = new JSONObject();
 						if ("line".equals(_type) || "column".equals(_type)) { // Draw, LineChart, and ColumnChart
@@ -219,14 +219,14 @@ public class Flashchart extends Flash implements org.zkoss.zul.api.Flashchart {
 			} else if(_type.startsWith("stackbar")){		//Draw StackedBarChart
 				_seriesList = new LinkedList();
 				CategoryModel tempModel = (CategoryModel)model;
-				for(int i = 0; i < tempModel.getCategories().size(); i++){
+				for(int i = 0, nSeries = tempModel.getSeries().size(); i < nSeries; i++){
 					Comparable series = tempModel.getSeries(i);	
 					JSONObject json = new JSONObject();			
 					json.put("xField", series);
 					json.put("displayName", series);
 					_seriesList.add(json);
 				}
-				for(int i = 0; i < tempModel.getCategories().size(); i++){
+				for(int i = 0, nCategories = tempModel.getCategories().size(); i < nCategories; i++){
 					Comparable category = tempModel.getCategory(i);					
 					JSONObject jData = new JSONObject();
 					jData.put("verticalField", category);
@@ -240,7 +240,7 @@ public class Flashchart extends Flash implements org.zkoss.zul.api.Flashchart {
 			} else if(_type.startsWith("stackcolumn")){		//Draw StackedColumnChart 
 				_seriesList = new LinkedList();
 				XYModel tempModel = (XYModel)model;
-				for(int i = 0; i < tempModel.getSeries().size(); i++){
+				for(int i = 0, nSeries = tempModel.getSeries().size(); i < nSeries; i++){
 					Comparable series = tempModel.getSeries(i);					
 					JSONObject jData = new JSONObject();
 					jData.put("horizontalField", series);
@@ -248,26 +248,37 @@ public class Flashchart extends Flash implements org.zkoss.zul.api.Flashchart {
 					jData.put(_yAxis, tempModel.getY(series, 0));
 					list.add(jData);
 				}
-				for(int j = 0; j < 2; j++){
-					JSONObject json = new JSONObject();
-					String tempType = _type.split(":")[1];
-					if(j == 0){
-						json.put("type", tempType.split(",")[0]);
-						json.put("displayName", _yAxis);
-						json.put("yField", _yAxis);
-					} else {
-						json.put("type", tempType.split(",")[1]);
-						json.put("displayName", _xAxis);
-						json.put("yField", _xAxis);
-					}
-					_seriesList.add(json);
+				
+				JSONObject[] json = new JSONObject[] {new JSONObject(), new JSONObject()};
+				
+				// Bug ID: 3126338
+				String tempType = getType();
+				String tempType_yAxis = "";
+				String tempType_xAxis = "";
+				
+				if (tempType != null) {
+					tempType = getType().indexOf(":") > -1 ? _type.split(":")[1] : getType();
+					tempType_yAxis = tempType.indexOf(",") > -1 ? tempType.split(",")[0] : "";
+					tempType_xAxis = tempType.indexOf(",") > -1 ? tempType.split(",")[1] : "";
 				}
+				
+				json[0].put("type", tempType_yAxis);
+				json[0].put("displayName", _yAxis);
+				json[0].put("yField", _yAxis);
+				_seriesList.add(json[0]);
+				json[1].put("type", tempType_xAxis);
+				json[1].put("displayName", _xAxis);
+				json[1].put("yField", _xAxis);
+				_seriesList.add(json[1]);
 			}
 		};
 		return list;
 	}
 		
 	private String getJSONResponse(List list) {
+		// list may be null.
+		if (list == null) return "";
+		
 	    final StringBuffer sb = new StringBuffer().append('[');
 	    for (Iterator it = list.iterator(); it.hasNext();) {
 	    	String s = String.valueOf(it.next());

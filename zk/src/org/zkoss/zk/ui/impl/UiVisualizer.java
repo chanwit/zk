@@ -22,6 +22,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.LinkedList;
+import java.util.ArrayList;
 import java.util.Set;
 import java.util.LinkedHashSet;
 import java.util.HashSet;
@@ -42,8 +43,11 @@ import org.zkoss.zk.ui.Page;
 import org.zkoss.zk.ui.Component;
 import org.zkoss.zk.ui.Components;
 import org.zkoss.zk.ui.Execution;
+import org.zkoss.zk.ui.StubComponent;
 import org.zkoss.zk.ui.UiException;
+import org.zkoss.zk.ui.ext.Native;
 import org.zkoss.zk.ui.ext.render.Cropper;
+import org.zkoss.zk.ui.ext.Includer;
 import org.zkoss.zk.ui.sys.Visualizer;
 import org.zkoss.zk.ui.sys.DesktopCtrl;
 import org.zkoss.zk.ui.sys.PageCtrl;
@@ -103,7 +107,7 @@ import org.zkoss.zk.au.out.*;
 	 * on {@link org.zkoss.zk.ui.sys.UiEngine}.
 	 */
 	private AbortingReason _aborting;
-	/** The counter used for smartUpdateMultiple. */
+	/** The counter used for smartUpdate(...append). */
 	private int _cntMultSU;
 	/** Whether the first execution is for async-update. */
 	private final boolean _1stau;
@@ -199,7 +203,7 @@ import org.zkoss.zk.au.out.*;
 			return; //nothing to do
 
 		if (_pgInvalid == null)
-			_pgInvalid = new LinkedHashSet(7);
+			_pgInvalid = new LinkedHashSet(8);
 		_pgInvalid.add(page);
 	}
 	/** Adds an invalidated component. Once invalidated, all invocations
@@ -557,9 +561,7 @@ import org.zkoss.zk.au.out.*;
 				//since UUID might be reused)
 
 			//1c. remove reduntant
-			removeRedundant(_invalidated);
-			removeRedundant(_attached);
-			removeCrossRedundant();
+			removeRedundant();
 
 			//1d. process Cropper
 			croppingInfos = doCrop();
@@ -648,8 +650,15 @@ import org.zkoss.zk.au.out.*;
 			tvals.addAll(attrs.values());
 		}
 		if (_responses != null) {
-			for (Iterator it = _responses.values().iterator(); it.hasNext();) {
-				final Map resps = (Map)it.next();
+			for (Iterator it = _responses.entrySet().iterator(); it.hasNext();) {
+				final Map.Entry me = (Map.Entry)it.next();
+				final Object depends = me.getKey();
+				if (depends instanceof Component) {
+					final Component cd = (Component)depends;
+					if (cd.getPage() == null || isCUDisabled(cd))
+						continue;
+				}
+				final Map resps = (Map)me.getValue();
 				final List keyless = (List)resps.remove(null); //key == null
 				if (keyless != null) tvals.addAll(keyless);
 				tvals.addAll(resps.values()); //key != null
@@ -761,140 +770,142 @@ import org.zkoss.zk.au.out.*;
 			parent = comp.getParent();
 			page = comp.getPage();
 		}
-		Collection sibs;
-		if (parent != null) {
-			sibs = getAvailableAtClient(parent, croppingInfos);
-			if (sibs == null) //no cropping
-				sibs = parent.getChildren();
-			else if (sibs.size() > 1 && !(sibs instanceof LinkedHashSet)) {
-//				log.warning("Use LinkedHashSet instead of "+sibs.getClass());
-				final Set s = new LinkedHashSet(sibs.size() * 2);
-				for (Iterator it = parent.getChildren().iterator(); it.hasNext();) {
-					final Object o = it.next();
-					if (sibs.remove(o)) {
-						s.add(o);
-						if (sibs.isEmpty())
-							break;
-					}
-				}
-				sibs = s;
-			}
-		} else {
-			sibs = page.getRoots();
-		}
+		Collection sibs = parent != null ?
+			getAvailableAtClient(parent, croppingInfos): null;
 //		if (D.ON && log.finerable()) log.finer("All sibs: "+sibs+" newsibs: "+newsibs);
 
-		/* Algorithm:
-	1. Locate a sibling, say <a>, that already exists.
-	2. Then, use AuInsertBefore for all sibling before <a>,
-		and AuInsertAfter for all after anchor.
-	3. If anchor is not found, use AuAppendChild for the first
-		and INSERT_AFTER for the rest
+		/* Algorithm: 5.0.7
+	1. Groups newsibs
+	2. For each group, see if it is better to use AuAppendChild/AuInsertBefore/AuInsertAfter
+	(Note: newsibs might not be ordered correctly, so we have to go through nextGroupedSiblings)
 		*/
-		final List before = new LinkedList();
-		Component anchor = null;
-		final ComponentCtrl parentCtrl = (ComponentCtrl)parent;
-		final Object parentxc =
-			parentCtrl != null ? parentCtrl.getExtraCtrl(): null;
-		for (Iterator it = sibs.iterator(); it.hasNext();) {
-			final Component comp = (Component)it.next();
-			if (anchor != null) {
-				if (newsibs.remove(comp)) {
-					responses.add(new AuInsertAfter(anchor, redraw(comp)));
-					if (newsibs.isEmpty())
-						return; //done (all newsibs are processed)
-					anchor = comp;
+		for (List group; (group = nextGroupedSiblings(newsibs)) != null;) {
+			final Collection contents = redrawComponents(group);
+			final Component last = (Component)group.get(group.size() - 1);
+			Component nxt, prv;
+			if ((nxt = last.getNextSibling()) == null
+			|| (sibs != null && !sibs.contains(nxt))) { //nextsib not available at client
+				if (parent != null //since page might not available, we try AuInsertAfter first if parent is null
+				&& !(parent instanceof Native) && !(parent instanceof StubComponent)) { //parent valid
+					responses.add(new AuAppendChild(parent, contents));
 				} else {
-					anchor = comp;
+					final Component first = (Component)group.get(0);
+					if ((prv = first.getPreviousSibling()) != null
+					&& (sibs == null || sibs.contains(prv)) //prv is available
+					&& !(prv instanceof Native) && !(prv instanceof StubComponent)) { //prv valid
+						responses.add(new AuInsertAfter(prv, contents));
+					} else {
+						if (parent != null)
+							throw new UiException("Adding child to a native component not allowed: "+parent);
+						responses.add(new AuAppendChild(page, contents));
+					}
 				}
-			} else if (newsibs.remove(comp)) {
-				before.add(comp);	
+			} else if (nxt instanceof Native || nxt instanceof StubComponent) { //native
+				final Component first = (Component)group.get(0);
+				if ((prv = first.getPreviousSibling()) == null
+				|| (sibs != null && !sibs.contains(prv))) //prv is not available
+					throw new UiException("Inserting a component before a native one not allowed: "+nxt);
+
+				//prv is avaiable, so use AuInsertAfter prv instead
+				responses.add(new AuInsertAfter(prv, contents));
 			} else {
-				//Generate before in the reverse order and INSERT_BEFORE
-				anchor = comp;
-				for (ListIterator i2 = before.listIterator(before.size());
-				i2.hasPrevious();) {
-					final Component c = (Component)i2.previous();
-					responses.add(new AuInsertBefore(anchor, redraw(c)));
-					anchor = c;
-				}
-				if (newsibs.isEmpty())
-					return; //done (all newsibs are processed)
-				anchor = comp;
-			}
-		}
-		assert D.OFF || (anchor == null && newsibs.isEmpty()): "anchor="+anchor+" newsibs="+newsibs+" sibs="+sibs;
-
-
-		//all siblings are changed (and none of them is processed)
-		final Iterator it = before.iterator();
-		if (it.hasNext()) {
-			anchor = (Component)it.next();
-			responses.add(
-				parent != null ?
-					new AuAppendChild(parent, redraw(anchor)):
-					new AuAppendChild(page, redraw(anchor)));
-
-			while (it.hasNext()) {
-				final Component comp = (Component)it.next();
-				responses.add(new AuInsertAfter(anchor, redraw(comp)));
-				anchor = comp;
+				//use AuInsertBefore nxt
+				responses.add(new AuInsertBefore(nxt, contents));
 			}
 		}
 	}
-	/** Removes redundant components (i.e., an descendant of another).
-	 */
-	private static void removeRedundant(Set comps) {
-		rudLoop:
-		for (Iterator j = comps.iterator(); j.hasNext();) {
-			final Component cj = (Component)j.next();
-			for (Iterator k = comps.iterator(); k.hasNext();) {
-				final Component ck = (Component)k.next();
-				if (ck != cj && Components.isAncestor(ck, cj)) {
-					j.remove();
-					continue rudLoop;
-				}
-			}
+	private static List nextGroupedSiblings(Set newsibs) {
+		if (newsibs.isEmpty())
+			return null;
+
+		final List group = new LinkedList();
+		final Component first;
+		{
+			final Iterator it = newsibs.iterator();
+			first = (Component)it.next();
+			it.remove();
 		}
+		group.add(first);
+
+		for (Component c = first; (c = c.getNextSibling()) != null
+		&& newsibs.remove(c);) //next is also new
+			group.add(c);
+		for (Component c = first; (c = c.getPreviousSibling()) != null
+		&& newsibs.remove(c);) //prev is also new
+			group.add(0, c);
+		return group;
 	}
-	/** Removes redundant components cross _invalidated, _smartUpdated
-	 * and _attached.
+
+	/** Removes redundant components in _invalidated, _smartUpdated and _attached.
 	 */
-	private void removeCrossRedundant() {
-		invLoop:
-		for (Iterator j = _invalidated.iterator(); j.hasNext();) {
-			final Component cj = (Component)j.next();
-
-			for (Iterator k = _attached.iterator(); k.hasNext();) {
-				final Component ck = (Component)k.next();
-				if (Components.isAncestor(ck, cj)) { //includes ck == cj
-					j.remove();
-					continue invLoop;
-				} else if (Components.isAncestor(cj, ck)) {
-					k.remove();
-				}
+	private void removeRedundant() {
+		int initsz = (_invalidated.size() + _attached.size()) / 2 + 30;
+		final Set ins = new HashSet(initsz), //one of ancestor in _invalidated or _attached
+			outs = new HashSet(initsz); //none of ancestor in _invalidated nor _attached
+		final List ancs = new ArrayList(50);
+		//process _invalidated
+		for (Iterator it = _invalidated.iterator(); it.hasNext();) {
+			Component p = (Component)it.next();
+			if (_attached.contains(p)) { //attached has higher priority
+				it.remove();
+				continue;
 			}
+			boolean removed = false;
+			while ((p = p.getParent()) != null) { //don't check p in _invalidated
+				if (outs.contains(p)) //checked
+					break;
+				if (ins.contains(p) || _invalidated.contains(p)
+				|| _attached.contains(p)) {
+					it.remove();
+					removed = true;
+					break;
+				}
+				ancs.add(p);
+			}
+			if (removed) ins.addAll(ancs);
+			else outs.addAll(ancs);
+			ancs.clear();
 		}
-		suLoop:
-		for (Iterator j = _smartUpdated.keySet().iterator(); j.hasNext();) {
-			final Component cj = (Component)j.next();
 
-			for (Iterator k = _invalidated.iterator(); k.hasNext();) {
-				final Component ck = (Component)k.next();
-
-
-				if (Components.isAncestor(ck, cj)) {
-					j.remove();
-					continue suLoop;
+		//process _attached
+		for (Iterator it = _attached.iterator(); it.hasNext();) {
+			Component p = (Component)it.next();
+			boolean removed = false;
+			while ((p = p.getParent()) != null) { //don't check p in _attached
+				if (outs.contains(p)) //checked
+					break;
+				if (ins.contains(p) || _invalidated.contains(p)
+				|| _attached.contains(p)) {
+					it.remove();
+					removed = true;
+					break;
 				}
+				ancs.add(p);
 			}
-			for (Iterator k = _attached.iterator(); k.hasNext();) {
-				final Component ck = (Component)k.next();
-				if (Components.isAncestor(ck, cj)) {
-					j.remove();
-					continue suLoop;
+			if (removed) ins.addAll(ancs);
+			else outs.addAll(ancs);
+			ancs.clear();
+		}
+
+		//process _smartUpdated
+		for (Iterator it = _smartUpdated.keySet().iterator(); it.hasNext();) {
+			Component p = (Component)it.next();
+			boolean removed = false, first = true;
+			for (; p != null; p = p.getParent()) { //check p in _smartUpdated
+				if (outs.contains(p)) //checked
+					break;
+				if (ins.contains(p) || _invalidated.contains(p)
+				|| _attached.contains(p)) {
+					it.remove();
+					removed = true;
+					break;
 				}
+				if (first) first = false; //No need to add 1st p
+				else ancs.add(p);
 			}
+			if (removed) ins.addAll(ancs);
+			else outs.addAll(ancs);
+			ancs.clear();
 		}
 	}
 
@@ -911,20 +922,30 @@ import org.zkoss.zk.au.out.*;
 		((PageCtrl)page).redraw(out);
 		return out.toString();
 	}
+	private static List redrawComponents(Collection comps) throws IOException {
+		final List list = new LinkedList();
+		for (Iterator it = comps.iterator(); it.hasNext();)
+			list.add(redraw((Component)it.next()));
+		return list;
+	}
 
 	/** Called before a component redraws itself if the component might
 	 * include another page.
+	 * <p>Since 5.0.6, the owner must implement {@link Includer}.
 	 * @return the previous owner
 	 * @since 5.0.0
 	 */
 	public Component setOwner(Component comp) {
 		Component old = _owner;
+		if (comp != null && !(comp instanceof Includer))
+			throw new IllegalArgumentException(comp.getClass() + " must implement " + Includer.class.getName());
 		_owner = comp;
 		return old;
 	}
 	/** Returns the owner component for this execution, or null if
 	 * this execution is not owned by any component.
 	 * The owner is the top of the stack pushed by {@link #setOwner}.
+	 * <p>Note: the owner, if not null, must implement {@link Includer}.
 	 */
 	public Component getOwner() {
 		return _owner;

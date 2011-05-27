@@ -27,12 +27,13 @@ import org.zkoss.zk.ui.event.EventListener;
  * <p>There are two kinds of event listeners: synchronous and asynchronous.
  * A synchronous listener works the same as a normal event listener
  * (listeners registered to a component ({@link org.zkoss.zk.ui.Component#addEventListener}).
- * It is executed one-by-one (no two even listener will be executed at the same time)
- * and under an execution (i.e., {@link org.zkoss.zk.ui.Executions#getCurrent} never null).
- * In additions, it is allowed to manipulate the components belonging
+ * It is executed one-by-one. No two event listeners belonging to the same desktop 
+ * will be executed at the same time.
+ * In additions, it is invoked under an execution (i.e., {@link org.zkoss.zk.ui.Executions#getCurrent} never null).
+ * It is allowed to manipulate the components belonging
  * to the current execution.
  * <p>On the other hand, an asynchronous listener is executed asynchronously
- * (in a working thread).
+ * in another thread.
  * It can <i>not</i> access the components belonging to any desktop.
  * There is no current execution ({@link org.zkoss.zk.ui.Executions#getCurrent} is null}.
  * However, it is useful to make the application more responsive when
@@ -43,38 +44,49 @@ import org.zkoss.zk.ui.event.EventListener;
  * @since 5.0.0
  */
 public interface EventQueue {
-	/** Publishes an event the queue.
+	/** Publishes an event to the queue.
 	 *
-	 * <p>If this is a desktop-level event queue, this method must be called
-	 * within an activated exection,
-	 * i.e., {@link org.zkoss.zk.ui.Executions#getCurrent} not null.
+	 * <p>If the scope of a event queue is desktop or group,
+	 * this method must be called within an activated exection
+	 * (i.e., {@link org.zkoss.zk.ui.Executions#getCurrent} not null),
+	 * or in an asynchronous listener (see {@link EventQueue}).
 	 *
-	 * <p>On the other hand, if this is an application-level event queue,
+	 * <p>On the other hand, if the scope is session or application,
 	 * it is OK to be called without the current execution.
 	 *
+	 * @param event the event to publish.<br/>
+	 * Notice that all subscribers will receive the event no matter
+	 * what the event's name and target are.<br/>
+	 * You could publish an anonymous event by
+	 * <code>publish(new Event("", null, data))</code>.
 	 * @exception IllegalStateException if this method is called
 	 * not within an activated execution (such as a working thread),
-	 * and this is a desktop-level event queue.
+	 * and this is a ({@link EventQueues#DESKTOP}) or {@link EventQueues#GROUP}
+	 * event queue.
 	 */
 	public void publish(Event event);
+
 	/** Subscribes a listener to this queue.
 	 * It is the same as <code>subscribe(listener, false)</code>
 	 * ({@link #subscribe(EventListener,boolean)}. In other words,
 	 * it subscribes a synchronous listener.
 	 *
-	 * <p>Note: this method must be called within an activated exection,
-	 * i.e., {@link org.zkoss.zk.ui.Executions#getCurrent} not null.
+	 * <p>Note: this method must be called within an activated exection
+	 * (i.e., {@link org.zkoss.zk.ui.Executions#getCurrent} not null),
+	 * no matter what scope the event queue is.
 	 *
-	 * <p>Note: if this is an application-level event queue, the listener
-	 * shall not access the component associated with the event
-	 * {@link Event#getTarget}.
+	 * <p>Note: the listener could access the component associated with the event
+	 * ({@link Event#getTarget}), only if this is an {@link EventQueues#DESKTOP}
+	 *event queue.
 	 *
 	 * <p>An event listener can be subscribed multiple times, and
 	 * it will be invoked multiple times if an event is published.
 	 *
-	 * <p>Even if this is an application-level or session-level event queue,
-	 * the listener is subscribed for the current desktop only.
-	 * If you want to use the same listener for multiple desktops,
+	 * <p>Even if this is a {@link EventQueues#GROUP}, {@link EventQueues#SESSION},
+	 * or {@link  EventQueues#APPLICATION} event queue,
+	 * the listener is subscribed for the current desktop only, i.e.,
+	 * it can only access the components belong to the subscribed desktop.
+	 * If you want to use the same listener to manipulate multiple desktops,
 	 * you have to subscribe them separately when the corresponding
 	 * execution is available.
 	 * @see #subscribe(EventListener,EventListener)
@@ -84,11 +96,11 @@ public interface EventQueue {
 	
 	/** Subscribes a synchronous or asynchronous listener to this event queue.
 	 * A synchronous listener works the same as a normal event listener,
-	 * while an asynchronous listener is executed asynchrously (in an working thread).
+	 * while an asynchronous listener is executed asynchrously in an working thread.
 	 * Refer <a href="#async_sync">here</a> for details.
 	 * <p>Here is an example,
 <pre><code>
-&lt;window title="long operation" border="true">
+&lt;window title="long operation" border="normal">
 	&lt;zscript>
 	void print(String msg) {
 		new Label(msg).setParent(inf);
@@ -108,7 +120,7 @@ public interface EventQueue {
    eq.subscribe(new EventListener() {
      public void onEvent(Event evt) { //asynchronous
        org.zkoss.lang.Threads.sleep(3000); //simulate a long operation
-       result = "done"; //store the result
+       result = "success"; //store the result
      }
    }, new EventListener() { //callback
      public void onEvent(Event evt) {
@@ -145,7 +157,7 @@ public interface EventQueue {
 
 	/** Subscribes a synchronous or asynchronous listener to this event queue.
 	 * A synchronous listener works the same as a normal event listener,
-	 * while an asynchronous listener is executed asynchrously (in an working thread).
+	 * while an asynchronous listener is executed asynchrously in an working thread.
 	 * Refer <a href="#async_sync">here</a> for details.
 	 * <p>The use of synchronous listeners is straightforward -- they
 	 * are just the same a normal event listener.
@@ -156,7 +168,7 @@ public interface EventQueue {
 	 * <p>There is another way to do the same job, callback, refer
 	 * to {@link #subscribe(EventListener,EventListener)} for example.
  	 * <pre><code>
-&lt;window title="long operation" border="true"&gt;
+&lt;window title="long operation" border="normal"&gt;
   &lt;zscript&gt;
   void print(String msg) {
     new Label(msg).setParent(inf);
@@ -177,7 +189,7 @@ public interface EventQueue {
      public void onEvent(Event evt) {
        if ("doLongOp".equals(evt.getName())) {
          org.zkoss.lang.Threads.sleep(3000); //simulate a long operation
-         result = "done"; //store the result
+         result = "success"; //store the result
          eq.publish(new Event("endLongOp")); //notify it is done
        }
      }
@@ -200,9 +212,8 @@ public interface EventQueue {
   &lt;vbox id="inf"/&gt;
 &lt;/window&gt;
 </code></pre>
-	 * <p>The asynchornous event listener requires Server Push which
-	 * is available in ZK PE or EE, or you have to configure your own
-	 * implementation.
+	 * <p>The asynchornous event listener requires Server Push
+	 * ({@link org.zkoss.zk.ui.sys.ServerPush}).
 	 * <p>If you want to show a busy message to cover a portion of the desktop,
 	 * use {@link org.zkoss.zk.ui.util.Clients#showBusy(org.zkoss.zk.ui.Component,String)}
 	 * <p>Note: this method must be called within an activated exection,
@@ -248,4 +259,8 @@ public interface EventQueue {
 	 * Rather, use {@link EventQueues#remove} instead.
 	 */
 	public void close();
+	/** Returns whether it is closed.
+	 * @since 5.0.6
+	 */
+	public boolean isClose();
 }

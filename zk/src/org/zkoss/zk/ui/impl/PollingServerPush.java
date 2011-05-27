@@ -22,10 +22,14 @@ import org.zkoss.lang.D;
 import org.zkoss.util.logging.Log;
 
 import org.zkoss.zk.ui.Executions;
+import org.zkoss.zk.ui.Execution;
 import org.zkoss.zk.ui.Desktop;
 import org.zkoss.zk.ui.UiException;
 import org.zkoss.zk.ui.DesktopUnavailableException;
+import org.zkoss.zk.ui.event.Event;
+import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.sys.ServerPush;
+import org.zkoss.zk.ui.sys.Scheduler;
 import org.zkoss.zk.ui.util.Configuration;
 import org.zkoss.zk.ui.util.Clients;
 import org.zkoss.zk.au.out.AuScript;
@@ -36,15 +40,21 @@ import org.zkoss.zk.au.out.AuScript;
  * <p>Developer can control the frequency of the polling by setting the preferences as follows:
  * <dl>
  * <dt><code>PollingServerPush.delay.min</code></dt>
- * <dd>The minimal delay to send a polling request (unit: milliseconds). Default: 1000.</dd>
+ * <dd>The minimal delay to send the second polling request (unit: milliseconds). Default: 1000.</dd>
  * <dt><code>PollingServerPush.delay.max</code></dt>
- * <dd>The maximal delay to send a polling request (unit: milliseconds). Default: 15000.</dd>
+ * <dd>The maximal delay to send the second polling request (unit: milliseconds). Default: 15000.</dd>
  * <dt><code>PollingServerPush.delay.factor</code></dt>
  * <dd>the delay factor. The real delay is the processing time multiplies the delay
  * factor. For example, if the last request
  * took 1 second to process, then the client polling will be delayed
  * for <code>1 x factor</code> seconds. Default: 5.
  * The larger the factor is, the longer delay it tends to be.</dd>
+ *
+ * <p>Another way to control the frequency is to instatiate an instance
+ * with {@link #PollingServerPush(int, int, int)}, and then assign it
+ * with {@link org.zkoss.zk.ui.sys.DesktopCtrl#enableServerPush(ServerPush)}.
+ *
+ * <pre><code>desktop.enableServerPush(new PollingServerPush(1000, 5000, -1));</code></pre>
  *
  * @author tomyeh
  * @since 5.0.0
@@ -61,10 +71,31 @@ public class PollingServerPush implements ServerPush {
 	private ThreadInfo _active;
 	/** The info to carray over from onPiggyback to the server-push thread. */
 	private ExecutionCarryOver _carryOver;
+	private final int _min, _max, _factor;
 	/** A mutex that is used by this object to wait for the server-push thread
 	 * to complete.
 	 */
 	private final Object _mutex = new Object();
+
+	public PollingServerPush() {
+		this(-1, -1, -1);
+	}
+	/**
+	 * @param min the minimal delay before sending the second polling request
+	 * (unit: miniseconds).
+	 * If negative, the default is used (see {@link PollingServerPush}).
+	 * @param max the maximal delay before sending the second polling request
+	 * (unit: miniseconds).
+	 * If negative, the default is used (see {@link PollingServerPush}).
+	 * @param factor the delay factor.
+	 * If negative, the default is used (see {@link PollingServerPush}).
+	 * @since 5.0.4
+	 */
+	public PollingServerPush(int min, int max, int factor) {
+		_min = min;
+		_max = max;
+		_factor = factor;
+	}
 
 	/** Sends an AU response to the client to start the server push.
 	 * It is called by {@link #start}.
@@ -99,19 +130,18 @@ public class PollingServerPush implements ServerPush {
 		if (start != null)
 			return start;
 
-		final String dtid = _desktop.getId();
 		final StringBuffer sb = new StringBuffer(128)
 			.append("zk.load('zk.cpsp');zk.afterLoad(function(){zk.cpsp.start('")
-			.append(dtid).append('\'');
+			.append(_desktop.getId()).append('\'');
 
-		final int min = getIntPref("PollingServerPush.delay.min"),
-			max = getIntPref("PollingServerPush.delay.max"),
-			factor = getIntPref("PollingServerPush.delay.factor");
+		final int min = _min > 0 ? _min: getIntPref("PollingServerPush.delay.min"),
+			max = _max > 0 ? _max: getIntPref("PollingServerPush.delay.max"),
+			factor = _factor > 0 ? _factor: getIntPref("PollingServerPush.delay.factor");
 		if (min > 0  || max > 0 || factor > 0)
 			sb.append(',').append(min).append(',').append(max)
 				.append(',').append(factor);
 
-		return sb.append(");},'").append(dtid).append("');").toString();
+		return sb.append(");});").toString();
 	}
 	private int getIntPref(String key) {
 		final String s = _desktop.getWebApp().getConfiguration()
@@ -156,19 +186,23 @@ public class PollingServerPush implements ServerPush {
 			return;
 		}
 
-		final boolean inexec = Executions.getCurrent() != null;
-		if (inexec) //Bug 1815480: don't send if timeout
-			stopClientPush();
+		final Execution exec = Executions.getCurrent();
+		final boolean inexec = exec != null && exec.getDesktop() == _desktop;
+			//it might be caused by DesktopCache expunge (when creating another desktop)
+		try {
+			if (inexec && _desktop.isAlive()) //Bug 1815480: don't send if timeout
+				stopClientPush();
+		} finally {
+			_desktop = null; //to cause DesktopUnavailableException being thrown
+			wakePending();
 
-		_desktop = null; //to cause DesktopUnavailableException being thrown
-		wakePending();
-
-		//if inexec, either in working thread, or other event listener
-		//if in working thread, we cannot notify here (too early to wake).
-		//if other listener, no need notify (since onPiggyback not running)
-		if (!inexec) {
-			synchronized (_mutex) {
-				_mutex.notify(); //wake up onPiggyback
+			//if inexec, either in working thread, or other event listener
+			//if in working thread, we cannot notify here (too early to wake).
+			//if other listener, no need notify (since onPiggyback not running)
+			if (!inexec) {
+				synchronized (_mutex) {
+					_mutex.notify(); //wake up onPiggyback
+				}
 			}
 		}
 	}
@@ -182,6 +216,10 @@ public class PollingServerPush implements ServerPush {
 			}
 			_pending.clear();
 		}
+	}
+
+	/** @deprecated */
+	public void setDelay(int min, int max, int factor) {
 	}
 
 	public void onPiggyback() {
@@ -228,6 +266,10 @@ public class PollingServerPush implements ServerPush {
 				}
 			}
 		}
+	}
+
+	public void schedule(EventListener listener, Event event, Scheduler scheduler) {
+		scheduler.schedule(listener, event); //delegate back
 	}
 
 	public boolean activate(long timeout)

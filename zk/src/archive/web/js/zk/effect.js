@@ -200,24 +200,19 @@ if (!zk.css3) {
 }
 
 	//Position a mask to cover the whole browser window.
-	//it must be called as _syncPos.call(this)
-	function _syncPos() {
+	//it must be called as _syncMaskPos.call(this)
+	function _syncMaskPos() {
 		var n = this.mask,
-			ofs = zk(n).toStyleOffset(jq.innerX(), jq.innerY()),
 			st = n.style;
-		st.left = jq.px(ofs[0]);
-		st.top = jq.px(ofs[1]);
-		st.width = jq.px0(jq.innerWidth());
-		st.height = jq.px0(jq.innerHeight());
-		st.display = "block";
+		if (st.display != "none") {
+			var ofs = zk(n).toStyleOffset(jq.innerX(), jq.innerY());
+			st.left = jq.px(ofs[0]);
+			st.top = jq.px(ofs[1]);
+			st.width = jq.px0(jq.innerWidth());
+			st.height = jq.px0(jq.innerHeight());
 
-		n = this.stackup;
-		if (n) {
-			n = n.style;
-			n.left = st.left;
-			n.top = st.top;
-			n.width = st.width;
-			n.height = st.height;
+			if (n = this.stackup)
+				zk.set(n.style, st, ["left", "top", "width", "height"]);
 		}
 	}
 
@@ -265,22 +260,20 @@ zk.eff.FullMask = zk.$extends(zk.Object, {
 		if (opts.stackup)
 			this.stackup = jq.newStackup(mask, mask.id + '-mkstk');
 
-		_syncPos.call(this);
+		_syncMaskPos.call(this);
 
 		var f;
-		jq(mask).mousemove(f = jq.Event.stop)
-			.click(f);
-		jq(window).resize(f = this.proxy(_syncPos))
+		jq(mask).click(jq.Event.stop); //don't eat mousemove (drag depends on it)
+		jq(window).resize(f = this.proxy(_syncMaskPos))
 			.scroll(f);
 	},
 	/** Removes the full mask. You can not access this object any more.
 	 */
 	destroy: function () {
 		var mask = this.mask, f;
-		jq(mask).unbind("mousemove", f = jq.Event.stop)
-			.unbind("click", f)
+		jq(mask).unbind("click", jq.Event.stop)
 			.remove()
-		jq(window).unbind("resize", f = this.proxy(_syncPos))
+		jq(window).unbind("resize", f = this.proxy(_syncMaskPos))
 			.unbind("scroll", f);
 		jq(this.stackup).remove();
 		this.mask = this.stackup = null;
@@ -311,6 +304,9 @@ zk.eff.FullMask = zk.$extends(zk.Object, {
 		var st = this.mask.style;
 		st.display = 'block';
 		st.zIndex = el.style.zIndex;
+
+		_syncMaskPos.call(this, true);
+
 		if (this.stackup) {
 			st = this.stackup.style;
 			st.display = 'block';
@@ -410,7 +406,8 @@ zk.eff.Mask = zk.$extends(zk.Object, {
 		st.width = jq.px(w);
 		st.height = jq.px(h);
 		
-		var zi = $anchor.jq.offsetParent().css('z-index');
+		var zi = $anchor.jq.css('position') == 'absolute' ?
+				$anchor.jq.css('z-index') : $anchor.jq.offsetParent().css('z-index');
 		// IE bug
 		if (zk.ie && !zk.ie8)
 			zi = zi == 0 ? 1 : zi;
@@ -450,6 +447,57 @@ zk.eff.Mask = zk.$extends(zk.Object, {
 	}
 });
 
+/** @class zk.eff.Actions
+ * A collection of actions that can be used with {@link zk.Widget#setAction}.
+ * <p>The signature of an action must be as follows:<br>
+ * <code>function ({@link DOMElement} n, {@link Map} opts) {}</code>
+ * <p>Furthermore, the method will be called as a widget's method, i.e.,
+ * <code>this</code> references to the widget.
+ * @since 5.0.6
+ */
+zk.eff.Actions = {
+	/** Slides down to display this widget.
+	 * @param DOMElement n the node to display
+	 * @param Map opts the options. Allowed options:
+	 * <ul>
+	 * <li><code>duration</code>: how many milliseconds to slide down</li>
+	 * </ul>
+	 */
+	slideDown: function (n, opts) {
+		zk(n).slideDown(this, opts);
+	},
+	/** Slides up to hide this widget.
+	 * @param DOMElement n the node to hide
+	 * @param Map opts the options. Allowed options:
+	 * <ul>
+	 * <li><code>duration</code>: how many milliseconds to slide up</li>
+	 * </ul>
+	 */
+	slideUp: function (n, opts) {
+		zk(n).slideUp(this, opts);
+	},
+	/** Slides in to display this widget.
+	 * @param DOMElement n the node to display
+	 * @param Map opts the options. Allowed options:
+	 * <ul>
+	 * <li><code>duration</code>: how many milliseconds to slide in</li>
+	 * </ul>
+	 */
+	slideIn: function (n, opts) {
+		zk(n).slideIn(this, opts);
+	},
+	/** Slides out to hide this widget.
+	 * @param DOMElement n the node to hide
+	 * @param Map opts the options. Allowed options:
+	 * <ul>
+	 * <li><code>duration</code>: how many milliseconds to slide out</li>
+	 * </ul>
+	 */
+	slideOut: function (n, opts) {
+		zk(n).slideOut(this, opts);
+	}
+};
+
 jq(function() {
 	//Handle zk.useStackup
 	var _lastFloat, _autohideCnt = 0, _callback;
@@ -459,10 +507,11 @@ jq(function() {
 		++_autohideCnt;
 		setTimeout(function () {
 			if (!--_autohideCnt) {
-				if (wgt) wgt = wgt.getTopWidget();
+				if (wgt)
+					wgt = wgt.getTopWidget();
 				if (wgt != _lastFloat) {
 					_lastFloat = wgt
-					zk.Widget._autohide();
+					zk._wgtutl.autohide(); //see widget.js
 				}
 			}
 		}, 120); //filter
@@ -472,7 +521,7 @@ jq(function() {
 		++_autohideCnt;
 		setTimeout(function () {
 			if (!--_autohideCnt)
-				zk.Widget._autohide();
+				zk._wgtutl.autohide();
 		}, 100); //filter
 	}
 
@@ -504,7 +553,7 @@ jq(function() {
 				w2hide(name);
 			}
 		});
-		zWatch.listen({onFloatUp: _onFloatUp});
+		zWatch.listen({onFloatUp: ['', _onFloatUp]});
 	}
 }); //jq
 

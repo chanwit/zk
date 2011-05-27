@@ -27,7 +27,7 @@ import org.zkoss.lang.Objects;
 import org.zkoss.lang.Classes;
 import org.zkoss.lang.Strings;
 import org.zkoss.mesg.Messages;
-import org.zkoss.html.HTMLs;
+import org.zkoss.xml.HTMLs;
 
 import org.zkoss.zk.ui.Page;
 import org.zkoss.zk.ui.Component;
@@ -61,6 +61,9 @@ public class Column extends HeaderElement implements org.zkoss.zul.api.Column{
 	private String _sortAscNm = "none";
 	private String _sortDscNm = "none";
 	private Object _value;
+	private boolean _ignoreSort = false;
+	private boolean _isCustomAscComparator = false;
+	private boolean _isCustomDscComparator = false;
 
 	static {
 		addClientEvent(Column.class, Events.ON_SORT, CE_DUPLICATE_IGNORE);
@@ -111,12 +114,12 @@ public class Column extends HeaderElement implements org.zkoss.zul.api.Column{
 		return _sortDir;
 	}
 	/** Sets the sort direction. This does not sort the data, it only serves
-	 * as an indicator as to how the grid is sorted.
+	 * as an indicator as to how the grid is sorted. (unless the grid has "autosort" attribute)
 	 *
 	 * <p>If you use {@link #sort(boolean)} to sort rows ({@link Row}),
 	 * the sort direction is maintained automatically.
 	 * If you want to sort it in customized way, you have to set the
-	 * sort direction manaully.
+	 * sort direction manually.
 	 *
 	 * @param sortDir one of "ascending", "descending" and "natural"
 	 */
@@ -126,12 +129,19 @@ public class Column extends HeaderElement implements org.zkoss.zul.api.Column{
 			throw new WrongValueException("Unknown sort direction: "+sortDir);
 		if (!Objects.equals(_sortDir, sortDir)) {
 			_sortDir = sortDir;
+			if (!"natural".equals(sortDir) && !_ignoreSort) {
+				Grid grid = getGrid();
+				if (grid != null && grid.isAutosort()) {
+					doSort("ascending".equals(sortDir));
+				}
+			}
 			smartUpdate("sortDirection", _sortDir);
 		}
 	}
 
 	/** Sets the type of the sorter.
-	 * You might specify either "auto", "auto(FIELD_NAME1[,FIELD_NAME2] ...)"(since 3.5.3) or "none".
+	 * You might specify either "auto", "auto(FIELD_NAME1[,FIELD_NAME2] ...)"(since 3.5.3),
+	 * "auto(<i>number</i>)" (since 5.0.6) or "none".
 	 *
 	 * <p>If "client" or "client(number)" is specified,
 	 * the sort functionality will be done by Javascript at client without notifying
@@ -155,7 +165,12 @@ public class Column extends HeaderElement implements org.zkoss.zul.api.Column{
 	 * {@link #getSortDescending} and/or {@link #getSortAscending} are null.
 	 * If you assigned a comparator to them, it won't be affected.
 	 * The auto created comparator is case-insensitive.
-
+	 *
+	 * <p>If "auto(<i>number</i>)" is specified, 
+	 * {@link #setSortAscending} and/or {@link #setSortDescending} 
+	 * are called with {@link ArrayComparator}. Notice that the data must
+	 * be an array and the number-th element must be comparable ({@link Comparable}).
+	 *
 	 * <p>If "none" is specified, both {@link #setSortAscending} and
 	 * {@link #setSortDescending} are called with null.
 	 * Therefore, no more sorting is available to users for this column.
@@ -178,11 +193,26 @@ public class Column extends HeaderElement implements org.zkoss.zul.api.Column{
 			final int j = type.indexOf('(');
 			final int k = type.lastIndexOf(')');
 			if (j >= 0 && k >= 0) {
-				final String fieldnames = type.substring(j+1, k);
-				if (getSortAscending() == null)
-					setSortAscending(new FieldComparator(fieldnames, true));
-				if (getSortDescending() == null)
-					setSortDescending(new FieldComparator(fieldnames, false));
+				final String name = type.substring(j+1, k);
+				char cc;
+				int index = -1;
+				if (name.length() > 0 && (cc = name.charAt(0)) >= '0' && cc <= '9')
+					if ((index = Integer.parseInt(name)) < 0)
+						throw new IllegalArgumentException("Nonnegative number is required: "+name);
+				if (getSortAscending() == null || !_isCustomAscComparator) {
+					if (index < 0)
+						setSortAscending(new FieldComparator(name, true));
+					else
+						setSortAscending(new ArrayComparator(index, true));
+					_isCustomAscComparator = false;
+				}
+				if (getSortDescending() == null || !_isCustomDscComparator) {
+					if (index < 0)
+						setSortDescending(new FieldComparator(name, false));
+					else
+						setSortDescending(new ArrayComparator(index, false));
+					_isCustomDscComparator = false;
+				}
 			} else {
 				throw new UiException("Unknown sort type: "+type);
 			}
@@ -213,7 +243,8 @@ public class Column extends HeaderElement implements org.zkoss.zul.api.Column{
 	public void setSortAscending(Comparator sorter) {
 		if (!Objects.equals(_sortAsc, sorter)) {
 			_sortAsc = sorter;
-			String nm = _sortAsc == null ? "none" : "fromServer";
+			_isCustomAscComparator = _sortAsc != null;
+			String nm = _isCustomAscComparator ? "fromServer": "none";
 			if (!_sortAscNm.equals(nm)) {
 				_sortAscNm = nm;
 				smartUpdate("sortAscending", _sortAscNm);
@@ -254,7 +285,8 @@ public class Column extends HeaderElement implements org.zkoss.zul.api.Column{
 	public void setSortDescending(Comparator sorter) {
 		if (!Objects.equals(_sortDsc, sorter)) {
 			_sortDsc = sorter;
-			String nm = _sortDsc == null ? "none" : "fromServer";
+			_isCustomDscComparator = _sortDsc != null;
+			String nm = _isCustomDscComparator ? "fromServer": "none";
 			if (!_sortDscNm.equals(nm)) {
 				_sortDscNm = nm;
 				smartUpdate("sortDescending", _sortDscNm);
@@ -317,13 +349,16 @@ public class Column extends HeaderElement implements org.zkoss.zul.api.Column{
 	 * null but {@link ListModelExt} is not implemented.
 	 */
 	public boolean sort(boolean ascending) {
-		final String dir = getSortDirection();		
+		final String dir = getSortDirection();
 		if (ascending) {
 			if ("ascending".equals(dir)) return false;
 		} else {
 			if ("descending".equals(dir)) return false;
 		}
 
+		return doSort(ascending);
+	}
+	/*package*/ boolean doSort(boolean ascending) {
 		final Comparator cmpr = ascending ? _sortAsc: _sortDsc;
 		if (cmpr == null) return false;
 
@@ -378,6 +413,7 @@ public class Column extends HeaderElement implements org.zkoss.zul.api.Column{
 	}
 	
 	private void fixDirection(Grid grid, boolean ascending) {
+		_ignoreSort = true;
 		//maintain
 		for (Iterator it = grid.getColumns().getChildren().iterator();
 		it.hasNext();) {
@@ -385,6 +421,7 @@ public class Column extends HeaderElement implements org.zkoss.zul.api.Column{
 			hd.setSortDirection(
 				hd != this ? "natural": ascending ? "ascending": "descending");
 		}
+		_ignoreSort = false;
 	}
 	/** Sorts the rows ({@link Row}) based on {@link #getSortAscending}
 	 * and {@link #getSortDescending}.

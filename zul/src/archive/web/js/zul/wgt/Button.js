@@ -21,10 +21,10 @@ it will be useful, but WITHOUT ANY WARRANTY.
 			box.rows[1].style.height = "";
 			box.style.height = !n.style.height || n.style.height == "auto" ? "": "100%";			
 			if (n.style.height && box.offsetHeight) {
-				var cellHgh = zk.parseInt(jq(box.rows[0].cells[0]).css('height'));
+				var cellHgh = zk.parseInt(jq.css(box.rows[0].cells[0], 'height', 'styleonly'));
 				if (cellHgh != box.rows[0].cells[0].offsetHeight) {
 					box.rows[1].style.height = jq.px0(box.offsetHeight -
-						cellHgh - zk.parseInt(jq(box.rows[2].cells[0]).css('height')));
+						cellHgh - zk.parseInt(jq.css(box.rows[2].cells[0], 'height', 'styleonly')));
 				}
 			}
 		}
@@ -36,6 +36,57 @@ it will be useful, but WITHOUT ANY WARRANTY.
 		}
 	}: zk.$void;
 
+	function _initUpld(wgt) {
+		if (!zk.ie && wgt._mold == 'trendy')
+			zWatch.listen({onShow: wgt, onSize: wgt});
+		var v;
+		if (v = wgt._upload)
+			wgt._uplder = new zul.Upload(wgt, null, v);
+	}
+	
+	function _cleanUpld(wgt) {
+		var v;
+		if (v = wgt._uplder) {
+			if (!zk.ie && wgt._mold == 'trendy')
+				zWatch.unlisten({onShow: wgt, onSize: wgt});
+			wgt._uplder = null;
+			v.destroy();
+		}
+	}
+	
+	var _fixMouseupForClick = zk.safari || zk.gecko ? function (wgt, evt){
+		//3276814:fix click then padding change issue for FF3 and Chrome/Safari
+		/*
+		 * Here we have these states :
+		 * 1.down for mouse down in the widget  (down)
+		 * 2.mouse up in the widget but click not fired (up in timeout)
+		 * 3.mouse up in the wiget and click event fired (null in timeout)
+		 * 4.mouse up not in the widget (null)
+		 */
+		if ( wgt._fxcfg == 1 ) {
+			if (jq.contains(wgt.$n(), evt.domTarget)) {
+				wgt._fxcfg = 2;
+				if(wgt._fxctm) clearTimeout(wgt._fxctm);
+				wgt._fxctm = setTimeout(function() {
+					if (wgt._fxcfg == 2) {
+						wgt.doClick_(new zk.Event(wgt, 'onClick', {}));
+						wgt._fxctm = wgt._fxcfg = null;
+					}
+				}, 50);
+			} else
+				wgt._fxcfg = null;
+		}
+	}: zk.$void,
+
+	_fixMousedownForClick = zk.safari || zk.gecko ?  function (wgt) {
+		wgt._fxcfg = 1;
+	}: zk.$void,
+
+	_fixClick = zk.safari || zk.gecko  ? function (wgt) {
+		if(wgt._fxctm) clearTimeout(wgt._fxctm);
+		wgt._fxctm = wgt._fxcfg = null;
+	}: zk.$void; 
+	
 var Button = 
 /**
  * A button.
@@ -44,7 +95,8 @@ var Button =
 zul.wgt.Button = zk.$extends(zul.LabelImageWidget, {
 	_orient: "horizontal",
 	_dir: "normal",
-	_tabindex: -1,
+	_type: "button",
+	//_tabindex: 0,
 
 	$define: {
 		/** Returns the href that the browser shall jump to, if an user clicks
@@ -88,6 +140,14 @@ zul.wgt.Button = zk.$extends(zul.LabelImageWidget, {
 		 * @param String orient either "horizontal" or "vertical".
 		 */
 		orient: _zkf,
+		/** Returns the button type.
+		 * <p>Default: "button".
+		 * @return String
+		 */
+		/** Sets the button type.
+		 * @param String type either "button", "submit" or "reset".
+		 */
+		type: _zkf,
 		/** Returns whether it is disabled.
 		 * <p>Default: false.
 		 * @return boolean
@@ -97,10 +157,13 @@ zul.wgt.Button = zk.$extends(zul.LabelImageWidget, {
 		 */
 		disabled: function (v) {
 			if (this.desktop) {
-				if (this._upload)
-					this._cleanUpld();
-				if (this._mold != 'trendy') this.$n().disabled = v;
-				else this.rerender(); //bind and unbind required
+				if (this._mold == "os") {
+					var n = this.$n(),
+						zclass = this.getZclass();
+					if (zclass)
+						jq(n)[(n.disabled = v) ? "addClass": "removeClass"](zclass + "-disd");
+				} else
+					this.rerender(); //bind and unbind required
 			}
 		},
 		image: function (v) {
@@ -121,7 +184,7 @@ zul.wgt.Button = zk.$extends(zul.LabelImageWidget, {
 		 */
 		tabindex: function (v) {
 			var n = this.$n();
-			if (n) (this.$n('btn') || n).tabIndex = v >= 0 ? v: '';
+			if (n) (this.$n('btn') || n).tabIndex = v||'';
 		},
 		/** Returns a list of component IDs that shall be disabled when the user
 		 * clicks this button.
@@ -201,8 +264,8 @@ zul.wgt.Button = zk.$extends(zul.LabelImageWidget, {
 		upload: function (v) {
 			var n = this.$n();
 			if (n && !this._disabled) {
-				this._cleanUpld();
-				if (v && v != 'false') this._initUpld();
+				_cleanUpld(this);
+				if (v && v != 'false') _initUpld(this);
 			}
 		}
 	},
@@ -216,12 +279,9 @@ zul.wgt.Button = zk.$extends(zul.LabelImageWidget, {
 		}
 		return this;
 	},
-	focus: function (timeout) {
-		if (this.desktop && this.isVisible() && this.canActivate({checkOnly:true})) {
-			zk(this.$n('btn')||this.$n()).focus(timeout);
-			return true;
-		}
-		return false;
+	focus_: function (timeout) {
+		zk(this.$n('btn')||this.$n()).focus(timeout);
+		return true;
 	},
 
 	domContent_: function () {
@@ -259,16 +319,16 @@ zul.wgt.Button = zk.$extends(zul.LabelImageWidget, {
 			zk(this.$n('box')).disableSelection();
 
 			n = this.$n('btn');
-			if (this._upload || zk.ie) zWatch.listen({onSize: this, onShow: this});
+			if (zk.ie) zWatch.listen({onSize: this, onShow: this});
 		}
 
 		this.domListen_(n, "onFocus", "doFocus_")
 			.domListen_(n, "onBlur", "doBlur_");
 
-		if (!this._disabled && this._upload) this._initUpld();
+		if (!this._disabled && this._upload) _initUpld(this);
 	},
 	unbind_: function () {
-		if (!this._disabled && this._upload) this._cleanUpld();
+		_cleanUpld(this);
 
 		var trendy = this._mold == 'trendy',
 			n = !trendy ? this.$n(): this.$n('btn');
@@ -276,22 +336,10 @@ zul.wgt.Button = zk.$extends(zul.LabelImageWidget, {
 			this.domUnlisten_(n, "onFocus", "doFocus_")
 				.domUnlisten_(n, "onBlur", "doBlur_");
 		}
-		if (this._upload || (zk.ie && trendy))
+		if (zk.ie && trendy)
 			zWatch.unlisten({onSize: this, onShow: this});
 
 		this.$supers(Button, 'unbind_', arguments);
-	},
-	_initUpld: function () {
-		var v;
-		if (v = this._upload)
-			this._uplder = new zul.Upload(this, null, v);
-	},
-	_cleanUpld: function () {
-		var v;
-		if (v = this._uplder) {
-			this._uplder = null;
-			v.destroy();
-		}
 	},
 
 	//@Override
@@ -330,34 +378,18 @@ zul.wgt.Button = zk.$extends(zul.LabelImageWidget, {
 		this.$supers('doBlur_', arguments);
 	},
 	doClick_: function (evt) {
+		_fixClick(this);
+		
 		if (!this._disabled) {
-			var ads = this._autodisable, aded;
-			if (ads) {
-				ads = ads.split(',');
-				for (var j = ads.length; j--;) {
-					var ad = ads[j].trim();
-					if (ad) {
-						var perm;
-						if (perm = ad.charAt(0) == '+')
-							ad = ad.substring(1);
-						ad = "self" == ad ? this: this.$f(ad);
-						if (ad) {
-							ad.setDisabled(true);
-							if (this.inServer)
-								if (perm)
-									ad.smartUpdate('disabled', true);
-								else if (!aded) aded = [ad];
-								else aded.push(ad);
-						}
-					}
+			if (!this._upload)
+				zul.wgt.ADBS.autodisable(this);
+			if (this._type != "button") {
+				var n;
+				if ((n = this.$n('btn')) && (n = n.form)) {
+					if (this._type != "reset") zk(n).submit();
+					else n.reset();
+					return;
 				}
-			}
-			if (aded) {
-				aded = new zul.wgt.ADBS(aded);
-				if (this.isListen('onClick', {asapOnly:true}))
-					zWatch.listen({onResponse: aded});
-				else
-					setTimeout(function () {aded.onResponse();}, 800);
 			}
 			
 			this.fireX(evt);
@@ -384,6 +416,12 @@ zul.wgt.Button = zk.$extends(zul.LabelImageWidget, {
 		this.$supers('doMouseOut_', arguments);
 	},
 	doMouseDown_: function () {
+		//3276814:fix click then padding change issue for FF3 and Chrome/Safari
+		//set it down to prevent the case for down in other place but up on this widget,
+		//and down in this widget and up for other place
+		
+		_fixMousedownForClick(this);
+		
 		if (!this._disabled) {
 			var zcls = this.getZclass();
 			jq(this.$n('box')).addClass(zcls + "-clk")
@@ -391,12 +429,13 @@ zul.wgt.Button = zk.$extends(zul.LabelImageWidget, {
 			if (!zk.ie || !this._uplder) zk(this.$n('btn')).focus(30);
 				//change focus will disable upload in IE
 		}
-
 		zk.mouseCapture = this; //capture mouse up
 		this.$supers('doMouseDown_', arguments);
 	},
-	doMouseUp_: function () {
+	doMouseUp_: function (evt) {
 		if (!this._disabled) {
+			_fixMouseupForClick(this, evt);
+			
 			var zcls = this.getZclass();
 			jq(this.$n('box')).removeClass(zcls + "-clk")
 				.removeClass(zcls + "-over");
@@ -436,6 +475,49 @@ zul.wgt.ADBS = zk.$extends(zk.Object, {
 		for (var ads = this._ads, ad; ad = ads.shift();)
 			ad.setDisabled(false);
 		zWatch.unlisten({onResponse: this});
+	}
+},{ //static
+	/* Disable Targets and re-enable after response
+	 * @param zk.Widget wgt
+	 */
+	autodisable: function(wgt) {
+		var ads = wgt._autodisable, aded, uplder;
+		if (ads) {
+			ads = ads.split(',');
+			for (var j = ads.length; j--;) {
+				var ad = ads[j].trim();
+				if (ad) {
+					var perm;
+					if (perm = ad.charAt(0) == '+')
+						ad = ad.substring(1);
+					ad = "self" == ad ? wgt: wgt.$f(ad);
+					//B50-3304877: autodisable and Upload
+					if (ad == wgt) { //backup uploader before disable
+						uplder = wgt._uplder;
+						wgt._uplder = null;
+						wgt._autodisable_self = true;
+					}
+					if (ad && !ad._disabled) {
+						ad.setDisabled(true);
+						if (wgt.inServer)
+							if (perm)
+								ad.smartUpdate('disabled', true);
+							else if (!aded) aded = [ad];
+							else aded.push(ad);
+					}
+				}
+			}
+		}
+		if (aded) {
+			aded = new zul.wgt.ADBS(aded);
+			if (uplder) {
+				uplder._aded = aded;
+				wgt._uplder = uplder;//zul.Upload.sendResult came on it.
+			} else if (wgt.isListen('onClick', {asapOnly:true}))
+				zWatch.listen({onResponse: aded});
+			else
+				setTimeout(function () {aded.onResponse();}, 800);
+		}
 	}
 });
 

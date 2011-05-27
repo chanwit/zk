@@ -14,9 +14,12 @@ it will be useful, but WITHOUT ANY WARRANTY.
 */
 (function () {
 
-	var _inInsertBefore;
-	function _isPE() {
-		return zk.feature.pe && zk.isLoaded('zkex.sel');
+	function _isListgroup(wgt) {
+		return zk.isLoaded('zkex.sel') && wgt.$instanceof(zkex.sel.Listgroup);
+	}
+	function _syncFrozen(wgt) {
+		if (wgt && (wgt = wgt.frozen))
+			wgt._syncFrozen();
 	}
 
 var Listbox =
@@ -39,6 +42,18 @@ var Listbox =
  */
 zul.sel.Listbox = zk.$extends(zul.sel.SelectWidget, {
 	_nrows: 0,
+	/** 
+	 * Whether to allow Listgroup to be selected
+	 * <p>Default: false
+	 * @since 5.0.7
+	 * @type boolean
+	 */
+	groupSelect: false,
+	$define:{
+		emptyMessage:function(msg){
+			if(this.desktop) jq("td",this.$n("empty")).html(msg);
+		}
+	},	
 	$init: function () {
 		this.$supers('$init', arguments);
 		this._groupsInfo = [];
@@ -125,17 +140,24 @@ zul.sel.Listbox = zk.$extends(zul.sel.SelectWidget, {
 		this.$supers(Listbox, 'bind_', arguments); //it might invoke replaceHTML and then call bind_ again
 		zWatch.listen({onResponse: this});
 		this._shallStripe = true;
-		after.push(this.proxy(zk.booted ? this.onResponse: this.stripe));
+		var w = this;
+		after.push(zk.booted ? function(){setTimeout(function(){w.onResponse();},0)}: this.proxy(this.stripe));
+		after.push(function () {
+			_syncFrozen(w);
+		});
 	},
 	unbind_: function () {
 		zWatch.unlisten({onResponse: this});
 		this.$supers(Listbox, 'unbind_', arguments);
 	},
 	onResponse: function () {
-		if (this.desktop && this._shallStripe) {
-			this.stripe();
-			if (this._shallSize)
-				this.$supers('onResponse', arguments);
+		if (this.desktop) {
+			if (this._shallStripe) {
+				this.stripe();
+				if (this._shallSize) this.$supers('onResponse', arguments);
+			}
+			if (this._shallFixEmpty) 
+				this._fixForEmpty();
 		}
 	},
 	_syncStripe: function () {
@@ -165,12 +187,20 @@ zul.sel.Listbox = zk.$extends(zul.sel.SelectWidget, {
 		this._syncStripe();		
 		return this;
 	},
-	setItemsInvalid_: function(wgts) {
-		var wgt = this;
-		zAu.createWidgets(wgts,
-			function (ws) {wgt.replaceCavedChildren_('rows', ws);});
-	},	
+
 	//-- super --//
+	getFocusCell: function (el) {
+		var tbody = this.getCaveNode();
+		if (jq.isAncestor(tbody, el)) {
+			var tds = jq(el).parents('td'), td;
+			for (var i = 0, j = tds.length; i < j; i++) {
+				td = tds[i];
+				if (td.parentNode.parentNode == tbody) {
+					return td;
+				}
+			}
+		}
+	},
 	getCaveNode: function () {
 		return this.$n('rows') || this.$n('cave');
 	},	
@@ -185,22 +215,24 @@ zul.sel.Listbox = zk.$extends(zul.sel.SelectWidget, {
 		return this._zclass == null ? "z-listbox" : this._zclass;
 	},
 	insertBefore: function (child, sibling, ignoreDom) {
-		if (this.$super('insertBefore', child, sibling, ignoreDom || !child.$instanceof(zul.sel.Listitem))) {
+		if (this.$super('insertBefore', child, sibling,
+		ignoreDom || (!this.z_rod && !child.$instanceof(zul.sel.Listitem)))) {
 			this._fixOnAdd(child, ignoreDom);
 			return true;
 		}
 	},
 	appendChild: function (child, ignoreDom) {
-		if (this.$super('appendChild', child, ignoreDom || !child.$instanceof(zul.sel.Listitem))) {
+		if (this.$super('appendChild', child,
+		ignoreDom || (!this.z_rod && !child.$instanceof(zul.sel.Listitem)))) {
 			if (!this.insertingBefore_)
 				this._fixOnAdd(child, ignoreDom);
 			return true;
 		}
 	},
-	_fixOnAdd: function (child, ignoreDom, stripe) {
+	_fixOnAdd: function (child, ignoreDom, stripe, ignoreAll) {
 		var noRerender;
 		if (child.$instanceof(zul.sel.Listitem)) {
-			if (_isPE() && child.$instanceof(zkex.sel.Listgroup))
+			if (_isListgroup(child))
 				this._groupsInfo.push(child);
 			if (!this.firstItem || !this.previousItem(child))
 				this.firstItem = child;
@@ -220,13 +252,19 @@ zul.sel.Listbox = zk.$extends(zul.sel.SelectWidget, {
 		} else if (child.$instanceof(zul.mesh.Frozen)) {
 			this.frozen = child;
 		}
-
-		if (!ignoreDom && !noRerender)
+		
+		this._syncEmpty();
+		
+		if (!ignoreAll) {
+			if (!ignoreDom && !noRerender)
 				return this.rerender();
-		if (stripe)
-			this._syncStripe();
-		if (!ignoreDom)
-			this._syncSize();
+			if (stripe)
+				this._syncStripe();
+			if (!ignoreDom)
+				this._syncSize();
+			if (this.desktop)
+				_syncFrozen(this);
+		}
 	},
 	removeChild: function (child, ignoreDom) {
 		if (this.$super('removeChild', child, ignoreDom)) {
@@ -257,7 +295,7 @@ zul.sel.Listbox = zk.$extends(zul.sel.SelectWidget, {
 					;
 				this.lastItem = p;
 			}
-			if (_isPE() && child.$instanceof(zkex.sel.Listgroup))
+			if (_isListgroup(child))
 				this._groupsInfo.$remove(child);
 			--this._nrows;
 			
@@ -265,18 +303,50 @@ zul.sel.Listbox = zk.$extends(zul.sel.SelectWidget, {
 				this._selItems.$remove(child);
 			stripe = true;
 		}
-
-		if (!ignoreDom) {
+		this._syncEmpty();
+		if (!ignoreDom) { //unlike _fixOnAdd, it ignores strip too (historical reason; might be able to be better)
 			if (stripe) this._syncStripe();
 			this._syncSize();
 		}
 	},
+	/**
+	 * A redraw method for the empty message , if you want to customize the message ,
+	 * you could overwrite this.
+	 * @param Array out A array that contains html structure ,
+	 * 			it usually come from mold(redraw_). 
+	 */
+	redrawEmpty_: function (out) {
+		var cols = (this.listhead && this.listhead.nChildren) || 1 , 
+			uuid = this.uuid, zcls = this.getZclass();
+		out.push('<tbody id="',uuid,'-empty" class="',zcls,'-empty-body" ', 
+		((!this._emptyMessage || this._nrows) ? ' style="display:none"' : '' ),
+			'><tr><td colspan="', cols ,'">' , this._emptyMessage ,'</td></tr></tbody>');
+	},
+	_syncEmpty: function () {
+		this._shallFixEmpty = true;
+		if (!this.inServer && this.desktop)
+			this.onResponse();
+	},
+	_fixForEmpty: function () {
+		if (this.desktop) {
+			if(this._nrows)
+				jq(this.$n("empty")).hide();
+			else
+				jq(this.$n("empty")).show();
+		}
+	},
 	onChildReplaced_: function (oldc, newc) {
 		this.$supers('onChildReplaced_', arguments);
-		if ((oldc != null && oldc.$instanceof(zul.sel.Listitem))
-		|| (newc != null && newc.$instanceof(zul.sel.Listitem)))
+
+		if (oldc) this._fixOnRemove(oldc, true);
+		if (newc) this._fixOnAdd(newc, true, false, true); //ignoreAll: no sync stripe...
+
+		if ((oldc && oldc.$instanceof(zul.sel.Listitem))
+		|| (newc && newc.$instanceof(zul.sel.Listitem)))
 			this._syncStripe();
 		this._syncSize();
+		if (this.desktop)
+			_syncFrozen(this);
 	},
 	/**
 	 * Returns the head widget class
@@ -290,8 +360,8 @@ zul.sel.Listbox = zk.$extends(zul.sel.SelectWidget, {
 	 * @return zul.sel.ItemIter
 	 * @disable(zkgwt)
 	 */
-	itemIterator: _zkf = function () {
-		return new zul.sel.ItemIter(this);
+	itemIterator: _zkf = function (opts) {
+		return new zul.sel.ItemIter(this, opts);
 	},
 	/**Returns the tree item iterator.
 	 * @return zul.sel.ItemIter
@@ -308,13 +378,17 @@ zul.sel.ItemIter = zk.$extends(zk.Object, {
 	/** Constructor
 	 * @param Listbox listbox the widget that the iterator belongs to
 	 */
-	$init: function (box) {
+	$init: function (box, opts) {
 		this.box = box;
+		this.opts = opts;
 	},
 	_init: function () {
 		if (!this._isInit) {
 			this._isInit = true;
-			this.p = this.box.firstItem;
+			var p = this.box.firstItem;
+			if(this.opts && this.opts.skipHidden)
+				for (; p && !p.isVisible(); p = p.nextSibling) {}
+			this.p = p;
 		}
 	},
 	 /**
@@ -332,8 +406,12 @@ zul.sel.ItemIter = zk.$extends(zk.Object, {
      */
 	next: function () {
 		this._init();
-		var p = this.p;
-		if (p) this.p = p.parent.nextItem(p);
+		var p = this.p,
+			q = p ? p.parent.nextItem(p) : null;
+		if (this.opts && this.opts.skipHidden)
+			for (; q && !q.isVisible(); q = q.parent.nextItem(q)) {}
+		if (p) 
+			this.p = q;
 		return p;
 	}
 });

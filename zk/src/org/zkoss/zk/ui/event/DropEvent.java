@@ -18,7 +18,6 @@ package org.zkoss.zk.ui.event;
 
 import java.util.Map;
 
-import org.zkoss.zk.mesg.MZk;
 import org.zkoss.zk.ui.Component;
 import org.zkoss.zk.ui.UiException;
 import org.zkoss.zk.au.AuRequest;
@@ -39,17 +38,9 @@ public class DropEvent extends MouseEvent {
 	 * @since 5.0.0
 	 */
 	public static DropEvent getDropEvent(AuRequest request) {
-		final Component comp = request.getComponent();
-		if (comp == null)
-			throw new UiException(MZk.ILLEGAL_REQUEST_COMPONENT_REQUIRED, request);
 		final Map data = request.getData();
-		if (data == null)
-			throw new UiException(MZk.ILLEGAL_REQUEST_WRONG_DATA,
-				new Object[] {data, request});
-
-		final String name = request.getCommand();
 		final int keys = AuRequests.parseKeys(data);
-		return new DropEvent(name, comp,
+		return new DropEvent(request.getCommand(), request.getComponent(),
 			request.getDesktop().getComponentByUuid((String)data.get("dragged")),
 			AuRequests.getInt(data, "x", 0), AuRequests.getInt(data, "y", 0),
 			AuRequests.getInt(data, "pageX", 0), AuRequests.getInt(data, "pageY", 0),
@@ -65,15 +56,20 @@ public class DropEvent extends MouseEvent {
 		super(name, target, x, y, pageX, pageY, keys);
 		_dragged = dragged;
 	}
+	/** @deprecated As of release 5.0.0, replaced with
+	 * {@link #DropEvent(String,Component,Component,int,int,int)}.
+	 */
+	public DropEvent(String name, Component target, Component dragged,
+	int x, int y, int keys) {
+		this(name, target, dragged, x, y, x, y, keys);
+	}
 	/** Returns the component being dragged and drop to {@link #getTarget}.
 	 */
 	public final Component getDragged() {
 		return _dragged;
 	}
-	/** Not appliable to {@link DropEvent}.
-	 * It always returns null if you drag and drop a component to
-	 * components that partition itself into several areas, such
-	 * as <code>imagemap</code>
+	/** Inheirted from {@link MouseEvent}, but not appliable to {@link DropEvent}.
+	 * It always returns null.
 	 */
 	public String getArea() {
 		return null;

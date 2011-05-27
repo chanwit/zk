@@ -12,6 +12,36 @@ Copyright (C) 2009 Potix Corporation. All Rights Reserved.
 This program is distributed under LGPL Version 3.0 in the hope that
 it will be useful, but WITHOUT ANY WARRANTY.
 */
+(function () {
+	function _getBtnNewPos(wgt) {
+		var btn = wgt.$n("btn");
+		
+		btn.title = wgt._curpos;
+		wgt.updateFormData(wgt._curpos);
+		
+		var isVertical = wgt.isVertical(),
+			ofs = zk(wgt.getRealNode()).cmOffset(),
+			totalLen = isVertical ? wgt._getHeight(): wgt._getWidth(),
+			x = totalLen > 0 ? Math.round((wgt._curpos * totalLen) / wgt._maxpos) : 0;
+			
+		ofs = zk(btn).toStyleOffset(ofs[0], ofs[1]);
+		ofs = isVertical ? [0, (ofs[1] + x)]: [(ofs[0] + x), 0];
+		ofs = wgt._snap(ofs[0], ofs[1]);
+		
+		return ofs[(isVertical ? 1: 0)];
+	}
+	function _getNextPos(wgt, offset) {
+		var $btn = jq(wgt.$n("btn")),
+			fum = wgt.isVertical()? ['top', 'height']: ['left', 'width'],
+			newPosition = {};
+			
+		newPosition[fum[0]] = jq.px0(offset ? 
+			(offset + zk.parseInt($btn.css(fum[0])) - $btn[fum[1]]() / 2):
+			_getBtnNewPos(wgt));
+				
+		return newPosition;
+	}
+	
 /**
  * A slider.
  *  <p>Default {@link #getZclass} as follows:
@@ -22,10 +52,13 @@ it will be useful, but WITHOUT ANY WARRANTY.
  */
 zul.inp.Slider = zk.$extends(zul.Widget, {
 	_orient: "horizontal",
+	_height: "207px",
+	_width: "207px",
 	_curpos: 0,
 	_maxpos: 100,
 	_pageIncrement: 10,
 	_slidingtext: "{0}",
+	_pageIncrement: -1,
 	
 	$define: {
 		/** Returns the orient.
@@ -37,13 +70,6 @@ zul.inp.Slider = zk.$extends(zul.Widget, {
 		 * @param String orient either "horizontal" or "vertical".
 		 */
 		orient: function() {
-			if (this.isVertical()) {
-				this.setWidth("");
-				this.setHeight("207px");
-			} else {
-				this.setWidth("207px");
-				this.setHeight("");
-			}
 			this.rerender();
 		},
 		/** Returns the current position of the slider.
@@ -84,12 +110,14 @@ zul.inp.Slider = zk.$extends(zul.Widget, {
 		slidingtext: null,
 		/** Returns the amount that the value of {@link #getCurpos}
 		 * changes by when the tray of the scroll bar is clicked. 
-		 * <p>Default: 10.
-		 * @return int
+		 *
+		 * <p>Default: -1 (means it will scroll to the position the user clicks).
 		 */
 		/** Sets the amount that the value of {@link #getCurpos}
 		 * changes by when the tray of the scroll bar is clicked.
-		 * @param int pginc
+		 * <p>Default: -1 (means it will scroll to the position the user clicks).
+		 * @param int pginc the page increment. If negative, slider will scroll
+		 * to the position that user clicks.
 		 */
 		pageIncrement: null,
 		/** Returns the name of this component.
@@ -138,22 +166,49 @@ zul.inp.Slider = zk.$extends(zul.Widget, {
 		this.$supers('doMouseOut_', arguments);
 	},
 	onup_: function(evt) {
-		var btn = zul.inp.Slider.down_btn;
+		var btn = zul.inp.Slider.down_btn, widget;
 		if (btn) {
-			var widget = zk.Widget.$(btn),
-				zcls = widget.getZclass();
+			widget = zk.Widget.$(btn);
+			var	zcls = widget.getZclass();
 			jq(btn).removeClass(zcls + "-btn-drag").removeClass(zcls + "-btn-over");
 		}
 		
 		zul.inp.Slider.down_btn = null;
-		jq(document.body).unbind("mouseup", widget.onup_);
+		if (widget)
+			jq(document).unbind("zmouseup", widget.onup_);
 	},
 	doMouseDown_: function(evt) {
 		var btn = this.$n("btn");
 		jq(btn).addClass(this.getZclass() + "-btn-drag");
-		jq(document.body).mouseup(this.onup_);
+		jq(document).bind('zmouseup', this.onup_);
 		zul.inp.Slider.down_btn = btn;
 		this.$supers('doMouseDown_', arguments);
+	},
+	doClick_: function(evt) {
+		var $btn = jq(this.$n("btn")),
+			pos = $btn.zk.revisedOffset(),
+			wgt = this,
+			pageIncrement = this._pageIncrement,
+			moveToCursor = pageIncrement < 0,
+			isVertical = this.isVertical(),
+			offset = isVertical ? evt.pageY - pos[1]: evt.pageX - pos[0];
+		
+		if (!$btn[0] || $btn.is(':animated')) return;
+		
+		if (!moveToCursor) {
+			this._curpos += offset > 0? pageIncrement: - pageIncrement;
+			offset = null; // update by _curpos
+		}
+		
+		$btn.animate(_getNextPos(this, offset), "slow", function() {
+			pos = moveToCursor ? wgt._realpos(): wgt._curpos;
+			if (pos > wgt._maxpos) 
+				pos = wgt._maxpos;
+			wgt.fire("onScroll", pos);
+			if (moveToCursor)
+				wgt._fixPos();
+		});
+		this.$supers('doClick_', arguments);
 	},
 	_makeDraggable: function() {
 		this._drag = new zk.Draggable(this, this.$n("btn"), {
@@ -238,23 +293,24 @@ zul.inp.Slider = zk.$extends(zul.Widget, {
 	_getHeight: function() {
 		return this.getRealNode().clientHeight - this.$n("btn").offsetHeight + 7;
 	},
-	_fixPos: _zkf = function() {
-		var btn = this.$n("btn");
+	_fixHgh: function() {
 		if (this.isVertical()) {
-			var ht = this._getHeight(), x = ht > 0 ? Math.round((this._curpos * ht) / this._maxpos) : 0, ofs = zk(this.getRealNode()).cmOffset();
-			ofs = zk(btn).toStyleOffset(ofs[0], ofs[1]);
-			ofs = this._snap(0, ofs[1] + x);
-			btn.style.top = ofs[1] + "px";
-		} else {
-			var wd = this._getWidth(), x = wd > 0 ? Math.round((this._curpos * wd) / this._maxpos) : 0, ofs = zk(this.getRealNode()).cmOffset();
-			ofs = zk(btn).toStyleOffset(ofs[0], ofs[1]);
-			ofs = this._snap(ofs[0] + x, 0);
-			btn.style.left = ofs[0] + "px";
+			this.$n("btn").style.top = "0px";
+			var inner = this.$n("inner"), 
+				het = this.getRealNode().clientHeight;
+			if (het > 0) 
+				inner.style.height = (het + 7) + "px";
+			else 
+				inner.style.height = "214px";
 		}
-		btn.title = this._curpos;
-		this.updateFormData(this._curpos);
 	},
-	onSize: _zkf,
+	_fixPos: function() {
+		this.$n("btn").style[this.isVertical()? 'top': 'left'] = jq.px0(_getBtnNewPos(this));
+	},
+	onSize: _zkf = function() {
+		this._fixHgh();
+		this._fixPos();
+	},
 	onShow: _zkf,
 	/** Return whether this widget in scale mold
 	 * @return boolean
@@ -284,24 +340,16 @@ zul.inp.Slider = zk.$extends(zul.Widget, {
 		}
 	},
 	getRealNode: function () {
-		return this.inScaleMold() ? this.$n("real") : this.$n();
+		return this.inScaleMold() && this.isVertical() ? this.$n("real") : this.$n();
 	},
 	bind_: function() {
 		this.$supers(zul.inp.Slider, 'bind_', arguments);
-		var inner = this.$n("inner");
-		
-		if (this.isVertical()) {
-			this.$n("btn").style.top = "0px";
-			var het = this.getRealNode().clientHeight;
-			if (het > 0) 
-				inner.style.height = (het + 7) + "px";
-			else 
-				inner.style.height = "214px";
-		}
+		this._fixHgh();
 		this._makeDraggable();
 		
 		zWatch.listen({onSize: this, onShow: this});
 		this.updateFormData(this._curpos);
+		this._fixPos();
 	},
 	unbind_: function() {
 		this.efield = null;
@@ -311,5 +359,6 @@ zul.inp.Slider = zk.$extends(zul.Widget, {
 		}
 		zWatch.unlisten({onSize: this, onShow: this});
 		this.$supers(zul.inp.Slider, 'unbind_', arguments);
-	}	
+	}
 });
+})();

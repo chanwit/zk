@@ -18,7 +18,7 @@ import java.util.Iterator;
 import java.io.IOException;
 
 import org.zkoss.lang.Objects;
-import org.zkoss.html.HTMLs;
+import org.zkoss.xml.HTMLs;
 
 import org.zkoss.zk.ui.Component;
 import org.zkoss.zk.ui.WrongValueException;
@@ -37,6 +37,7 @@ public class Box extends XulElement implements org.zkoss.zul.api.Box {
 	private String _align = "start", _pack = "start";
 	/** Array of width/height for each cell. */
 	private String[] _sizes;
+	private boolean _sizedByContent = true;
 
 	/** Default: vertical ({@link Vbox}).
 	 */
@@ -166,6 +167,8 @@ public class Box extends XulElement implements org.zkoss.zul.api.Box {
 	/** Sets the alignment of cells of this box in the 'opposite' direction
 	 * (<i>start</i>, center, end, stretch).
 	 *
+	 * <p>Refer to {@link #getAlign} for more information
+	 * 
 	 * @param align the alignment in the 'opposite' direction.
 	 * Allowed values: start, center, end, stretch.
 	 * If empty or null, the browser's default is used
@@ -307,6 +310,31 @@ public class Box extends XulElement implements org.zkoss.zul.api.Box {
 		setWidths(heights);
 	}
 
+	/**
+	 * Sets whether sizing the cell's size by its content.
+	 * <p>Default: true. It means the cell's size is depended on its content.
+	 * 
+	 * <p> With {@link Splitter}, you can specify the sizedByContent to be false
+	 * for resizing smoothly, if it contains a grid or other sophisticated
+	 * components.
+	 * @param byContent 
+	 * @since 5.0.4
+	 */
+	public void setSizedByContent(boolean byContent) {
+		if(_sizedByContent != byContent) {
+			_sizedByContent = byContent;
+			smartUpdate("sizedByContent", byContent);
+		}
+	}
+	/**
+	 * Returns whether sizing the cell's size by its content.
+	 * <p>Default: true.
+	 * @since 5.0.4
+	 * @see #setSizedByContent
+	 */
+	public boolean isSizedByContent() {
+		return _sizedByContent;
+	}
 	//-- super --//
 	protected void renderProperties(org.zkoss.zk.ui.sys.ContentRenderer renderer)
 	throws java.io.IOException {
@@ -317,6 +345,7 @@ public class Box extends XulElement implements org.zkoss.zul.api.Box {
 
 		if (!"start".equals(_align)) render(renderer, "align", _align);
 		if (!"start".equals(_pack)) render(renderer, "pack", _pack);
+		if (!isSizedByContent()) renderer.render("sizedByContent", false);
 	}
 	public String getZclass() {
 		return _zclass == null ? isVertical() ? "z-vbox" : "z-hbox" : _zclass;

@@ -17,7 +17,7 @@ Copyright (C) 2005 Potix Corporation. All Rights Reserved.
 package org.zkoss.zul;
 
 import org.zkoss.lang.Objects;
-import org.zkoss.html.HTMLs;
+import org.zkoss.xml.HTMLs;
 
 import org.zkoss.zk.ui.Desktop;
 import org.zkoss.zk.ui.Execution;
@@ -32,13 +32,9 @@ import org.zkoss.zul.impl.LabelImageElement;
  * <p>Default {@link #getZclass}: z-button.(since 3.5.0)
  * @author tomyeh
  */
-public class Button extends LabelImageElement implements org.zkoss.zul.api.Button {
-	private String _orient = "horizontal", _dir = "normal";
-	private String _href, _target;
-	private String _autodisable;
-	protected String _upload;
-	private int _tabindex = -1;
-	private boolean _disabled;
+public class Button extends LabelImageElement
+implements org.zkoss.zul.api.Button, org.zkoss.zk.ui.ext.Disable {
+	private AuxInfo _auxinf;
 
 	static {
 		addClientEvent(Button.class, Events.ON_FOCUS, CE_DUPLICATE_IGNORE);
@@ -58,18 +54,26 @@ public class Button extends LabelImageElement implements org.zkoss.zul.api.Butto
 	 * <p>Default: false.
 	 */
 	public boolean isDisabled() {
-		return _disabled;
+		return _auxinf != null && _auxinf.disabled;
 	}
 	/** Sets whether it is disabled.
+	 * @see #setAutodisable
 	 */
 	public void setDisabled(boolean disabled) {
-		if (_disabled != disabled) {
-			_disabled = disabled;
-			smartUpdate("disabled", _disabled);
+		if ((_auxinf != null && _auxinf.disabled) != disabled) {
+			initAuxInfo().disabled = disabled;
+			smartUpdate("disabled", isDisabled());
 		}
 	}
 
 	/** Returns a list of component IDs that shall be disabled when the user
+	 * clicks this button.
+	 * @since 5.0.0
+	 */
+	public String getAutodisable() {
+		return _auxinf != null ? _auxinf.autodisable: null;
+	}
+	/** Sets a list of component IDs that shall be disabled when the user
 	 * clicks this button.
 	 *
 	 * <p>To represent the button itself, the developer can specify <code>self</code>.
@@ -96,16 +100,10 @@ public class Button extends LabelImageElement implements org.zkoss.zul.api.Butto
 	 * <p>Default: null.
 	 * @since 5.0.0
 	 */
-	public String getAutodisable() {
-		return _autodisable;
-	}
-	/** Sets whether to disable the button after the user clicks it.
-	 * @since 5.0.0
-	 */
 	public void setAutodisable(String autodisable) {
-		if (_autodisable != autodisable) {
-			_autodisable = autodisable;
-			smartUpdate("autodisable", autodisable);
+		if (!Objects.equals(_auxinf != null ? _auxinf.autodisable: null, autodisable)) {
+			initAuxInfo().autodisable = autodisable;
+			smartUpdate("autodisable", getAutodisable());
 		}
 	}
 
@@ -113,36 +111,60 @@ public class Button extends LabelImageElement implements org.zkoss.zul.api.Butto
 	 * <p>Default: "normal".
 	 */
 	public String getDir() {
-		return _dir;
+		return _auxinf != null ? _auxinf.dir: NORMAL;
 	}
-	/** Sets the direction.
+	/** Sets the direction to layout image.
 	 * @param dir either "normal" or "reverse".
 	 */
 	public void setDir(String dir) throws WrongValueException {
-		if (!"normal".equals(dir) && !"reverse".equals(dir))
+		if (!NORMAL.equals(dir) && !"reverse".equals(dir))
 			throw new WrongValueException(dir);
 
-		if (!Objects.equals(_dir, dir)) {
-			_dir = dir;
-			smartUpdate("dir", _dir);
+		if (!Objects.equals(_auxinf != null ? _auxinf.dir: NORMAL, dir)) {
+			initAuxInfo().dir = dir;
+			smartUpdate("dir", getDir());
 		}
 	}
 	/** Returns the orient.
 	 * <p>Default: "horizontal".
 	 */
 	public String getOrient() {
-		return _orient;
+		return _auxinf != null ? _auxinf.orient: HORIZONTAL;
 	}
-	/** Sets the orient.
+	/** Sets the orient to layout image.
 	 * @param orient either "horizontal" or "vertical".
 	 */
 	public void setOrient(String orient) throws WrongValueException {
-		if (!"horizontal".equals(orient) && !"vertical".equals(orient))
+		if (!HORIZONTAL.equals(orient) && !"vertical".equals(orient))
 			throw new WrongValueException(orient);
 
-		if (!Objects.equals(_orient, orient)) {
-			_orient = orient;
-			smartUpdate("orient", _orient);
+		if (!Objects.equals(_auxinf != null ? _auxinf.orient: HORIZONTAL, orient)) {
+			initAuxInfo().orient = orient;
+			smartUpdate("orient", getOrient());
+		}
+	}
+	/** Returns the button type.
+	 * <p>Default: "button".
+	 * @since 5.0.4
+	 */
+	public String getType() {
+		return _auxinf != null ? _auxinf.type: BUTTON;
+	}
+	/** Sets the button type.
+	 * <p>Default: "button".
+	 * It is meaningful only if it is used with a HTML form.
+	 * Refer to <a href="http://www.htmlcodetutorial.com/forms/_BUTTON_TYPE.html">HTML Button Type</a>
+	 * for details.
+	 * @param type either "button", "submit" or "reset".
+	 * @since 5.0.4
+	 */
+	public void setType(String type) throws WrongValueException {
+		if (!BUTTON.equals(type) && !"submit".equals(type) && !"reset".equals(type))
+			throw new WrongValueException(type);
+
+		if (!Objects.equals(_auxinf != null ? _auxinf.type: BUTTON, type)) {
+			initAuxInfo().type = type;
+			smartUpdate("type", getType());
 		}
 	}
 
@@ -153,15 +175,15 @@ public class Button extends LabelImageElement implements org.zkoss.zul.api.Butto
 	 * <p>If it is not null, the onClick event won't be sent.
 	 */
 	public String getHref() {
-		return _href;
+		return _auxinf != null ? _auxinf.href: null;
 	}
 	/** Sets the href.
 	 */
 	public void setHref(String href) {
 		if (href != null && href.length() == 0)
 			href = null;
-		if (!Objects.equals(_href, href)) {
-			_href = href;
+		if (!Objects.equals(_auxinf != null ? _auxinf.href: null, href)) {
+			initAuxInfo().href = href;
 			smartUpdate("href", new EncodedHref()); //Bug 1850895
 		}
 	}
@@ -174,7 +196,7 @@ public class Button extends LabelImageElement implements org.zkoss.zul.api.Butto
 	 * <p>Default: null.
 	 */
 	public String getTarget() {
-		return _target;
+		return _auxinf != null ? _auxinf.target: null;
 	}
 	/** Sets the target frame or window.
 	 * @param target the name of the frame or window to hyperlink.
@@ -183,24 +205,24 @@ public class Button extends LabelImageElement implements org.zkoss.zul.api.Butto
 		if (target != null && target.length() == 0)
 			target = null;
 
-		if (!Objects.equals(_target, target)) {
-			_target = target;
-			smartUpdate("target", _target);
+		if (!Objects.equals(_auxinf != null ? _auxinf.target: null, target)) {
+			initAuxInfo().target = target;
+			smartUpdate("target", getTarget());
 		}
 	}
 
 	/** Returns the tab order of this component.
-	 * <p>Default: -1 (means the same as browser's default).
+	 * <p>Default: 0 (means the same as browser's default).
 	 */
 	public int getTabindex() {
-		return _tabindex;
+		return _auxinf != null ? _auxinf.tabindex: 0;
 	}
 	/** Sets the tab order of this component.
 	 */
 	public void setTabindex(int tabindex) throws WrongValueException {
-		if (_tabindex != tabindex) {
-			_tabindex = tabindex;
-			smartUpdate("tabindex", _tabindex);
+		if ((_auxinf != null ? _auxinf.tabindex: 0) != tabindex) {
+			initAuxInfo().tabindex = tabindex;
+			smartUpdate("tabindex", getTabindex());
 		}
 	}
 
@@ -209,7 +231,7 @@ public class Button extends LabelImageElement implements org.zkoss.zul.api.Butto
 	 * @since 5.0.0
 	 */
 	public String getUpload() {
-		return _upload;
+		return _auxinf != null ? _auxinf.upload: null;
 	}
 	/** Sets the JavaScript class at the client to handle the upload if this
 	 * button is used for file upload.
@@ -235,7 +257,11 @@ public class Button extends LabelImageElement implements org.zkoss.zul.api.Butto
 	 *  <li>native: treating the uploaded file(s) as binary, i.e., not to convert it to
 	 * image, audio or text files.</li>
 	 *  </ul>
-	 *  
+	 * 
+	 * <p> Note: if the options of the <code>false</code> or the customized handler
+	 * (like <code>foo.Upload</code>) are not specified, the option of <code>true</code>
+	 * is implicit by default.
+	 * 
 	 * @param upload a JavaScript class to handle the file upload
 	 * at the client, or "true" if the default class is used,
 	 * or null or "false" to disable the file download (and then
@@ -246,18 +272,23 @@ public class Button extends LabelImageElement implements org.zkoss.zul.api.Butto
 		if (upload != null
 		&& (upload.length() == 0 || "false".equals(upload)))
 			upload = null;
+		if (!Objects.equals(upload, _auxinf != null ? _auxinf.upload: null)) {
+			onUploadChanged(upload);
+			initAuxInfo().upload = upload;
+			smartUpdate("upload", getUpload());
+		}
+	}
+	/** Called when the upload attribute is modified. */
+	private void onUploadChanged(String upload) {
 		if (upload != null && !"trendy".equals(getMold())
 		&& getDefinition().getMoldNames().contains("trendy")) //Toolbarbutton doesn't support trendy
 			setMold("trendy");
-		if (!Objects.equals(upload, _upload)) {
-			_upload = upload;
-			smartUpdate("upload", _upload);
-		}
 	}
 
 	private String getEncodedHref() {
 		final Desktop dt = getDesktop();
-		return _href != null && dt != null ? dt.getExecution().encodeURL(_href): null;
+		return _auxinf != null && _auxinf.href != null && dt != null ?
+			dt.getExecution().encodeURL(_auxinf.href): null;
 			//if desktop is null, it doesn't belong to any execution
 	}
 
@@ -266,23 +297,38 @@ public class Button extends LabelImageElement implements org.zkoss.zul.api.Butto
 	throws java.io.IOException {
 		super.renderProperties(renderer);
 
-		if (_tabindex >= 0)
-			renderer.render("tabindex", _tabindex);
-		if (!"normal".equals(_dir)) render(renderer, "dir", _dir);
-		if (!"horizontal".equals(_orient)) render(renderer, "orient", _orient);
+		int v;
+		if ((v = getTabindex()) != 0)
+			renderer.render("tabindex", v);
+		String s;
+		if (!NORMAL.equals(s = getDir())) render(renderer, "dir", s);
+		if (!HORIZONTAL.equals(s = getOrient())) render(renderer, "orient", s);
+		if (!BUTTON.equals(s = getType())) render(renderer, "type", s);
 
-		render(renderer, "disabled", _disabled);
-		render(renderer, "autodisable", _autodisable);
+		render(renderer, "disabled", isDisabled());
+		render(renderer, "autodisable", getAutodisable());
 		final String href;
 		render(renderer, "href", href = getEncodedHref());
-		render(renderer, "target", _target);
-		render(renderer, "upload", _upload);
+		render(renderer, "target", getTarget());
+		render(renderer, "upload", getUpload());
 
 		org.zkoss.zul.impl.Utils.renderCrawlableA(href, getLabel());
+	}
+	//@Override
+	protected void renderCrawlable(String label) throws java.io.IOException {
+		//does nothing since generated in renderProperties
 	}
 	public String getZclass() {
 		return _zclass != null ? _zclass:
 			!"trendy".equals(getMold()) ? "z-button-os": "z-button";
+	}
+
+	//Cloneable//
+	public Object clone() {
+		final Button clone = (Button)super.clone();
+		if (_auxinf != null)
+			clone._auxinf = (AuxInfo)_auxinf.clone();
+		return clone;
 	}
 
 	//Component//
@@ -295,6 +341,41 @@ public class Button extends LabelImageElement implements org.zkoss.zul.api.Butto
 	private class EncodedHref implements org.zkoss.zk.ui.util.DeferredValue {
 		public Object getValue() {
 			return getEncodedHref();
+		}
+	}
+
+	//@Override
+	protected void updateByClient(String name, Object value) {
+		if ("disabled".equals(name))
+			setDisabled(value instanceof Boolean ? ((Boolean)value).booleanValue():
+				"true".equals(Objects.toString(value)));
+		else
+			super.updateByClient(name, value);
+	}
+
+	private AuxInfo initAuxInfo() {
+		if (_auxinf == null)
+			_auxinf = new AuxInfo();
+		return _auxinf;
+	}
+	private static final String HORIZONTAL = "horizontal", NORMAL = "normal",
+		BUTTON = "button";
+	private static class AuxInfo implements java.io.Serializable, Cloneable {
+		private String orient = HORIZONTAL;
+		private String dir = NORMAL;
+		private String type = BUTTON;
+		private String href, target;
+		private String autodisable;
+		protected String upload;
+		private int tabindex;
+		private boolean disabled;
+
+		public Object clone() {
+			try {
+				return super.clone();
+			} catch (CloneNotSupportedException e) {
+				throw new InternalError();
+			}
 		}
 	}
 }

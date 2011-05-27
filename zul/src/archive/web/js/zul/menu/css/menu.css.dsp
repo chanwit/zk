@@ -51,7 +51,8 @@
 	height: 21px;
 	text-align: center;
 }
-.z-menu-body .z-menu-inner-m div {
+.z-menu-body .z-menu-inner-m div,
+.z-menubar-hor .z-menu-body-clk .z-menu-inner-m  div {
 	display: block;
 	min-height: 16px;
 	padding-right: 3px;
@@ -59,6 +60,11 @@
 	background: transparent no-repeat right -14px;
 	background-image:url(${c:encodeURL('~./zul/img/menu/btn-arrow.gif')});
 }
+.z-menubar-hor .z-menu-body-clk .z-menu-inner-m  div,
+.z-menubar-ver .z-menu-body-clk .z-menu-inner-m  div {
+	padding-right: 8px;
+}
+
 .z-menubar-ver .z-menu-body .z-menu-inner-m div {
 	background-position: right 0;
 }
@@ -96,6 +102,12 @@
 	padding-left:12px;
 	padding-right:0;
 }
+<c:if test="${c:browser('gecko')}">
+.z-menu-inner-m button.z-menu-btn::-moz-focus-inner,
+.z-menu-item-inner-m button.z-menu-item-btn::-moz-focus-inner {
+	border: 0;
+}
+</c:if>
 <c:if test="${c:isExplorer()}">
 .z-menu-inner-m .z-menu-btn{
 	padding-right:4px;
@@ -134,11 +146,22 @@
 .z-menu-item-body-over .z-menu-item-inner-m .z-menu-btn{
 	color:#233D6D;
 }
+<%-- remove the line beside the menu arrow (add tail for return it)
 .z-menubar-hor .z-menu-body-over .z-menu-inner-m  div {
 	background: transparent no-repeat right 0;
 	background-image:url(${c:encodeURL('~./zul/img/menu/btn-menu-hor-over.gif')});
 }
 .z-menubar-ver .z-menu-body-over .z-menu-inner-m  div {
+	background: transparent no-repeat right 0;
+	background-image:url(${c:encodeURL('~./zul/img/menu/btn-menu-ver-over.gif')});
+}
+--%>
+
+.z-menubar-hor .z-menu-body-clk-over .z-menu-inner-m  div {
+	background: transparent no-repeat right 0;
+	background-image:url(${c:encodeURL('~./zul/img/menu/btn-menu-hor-over.gif')});
+}
+.z-menubar-ver .z-menu-body-clk-over .z-menu-inner-m  div {
 	background: transparent no-repeat right 0;
 	background-image:url(${c:encodeURL('~./zul/img/menu/btn-menu-ver-over.gif')});
 }
@@ -282,6 +305,9 @@
 	margin:2px 3px;
 	overflow:hidden;
 	width:auto;
+	<c:if test="${c:browser('safari')}">
+	height: 1px;
+	</c:if>
 }
 <%--define menubar hor scroll--%>
 .z-menubar-hor-scroll {
@@ -333,5 +359,11 @@
 a.z-menu-item-cnt:visited,
 a.z-menu-item-cnt {
 	color: black;
+}
+<%-- Fixed the text in menu doesn't align with IE6 and IE7 --%>
+.z-menu-inner-m .z-menu-btn,
+.z-menu-item-inner-m .z-menu-item-btn{
+	padding-top:0px;
+	padding-right:0px;
 }
 </c:if>

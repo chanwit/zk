@@ -239,7 +239,7 @@ w:use="foo.MyWindow"&gt;
 	public String getUuid();
 
 	/** Returns a component of the specified ID in the same ID space.
-	 * Components in the same ID space are called fellows.
+	 * Components in the same ID space assinged with ID are called fellows.
 	 *
 	 * <p>Unlike {@link #getFellowIfAny}, it throws an exception if not found.
 	 *
@@ -252,6 +252,8 @@ w:use="foo.MyWindow"&gt;
 	 */
 	public Component getFellowIfAny(String id);
 	/** Returns all fellows in the same ID space of this component.
+	 * Notice that only components that are assigned with ID are considered
+	 * as fellows.
 	 * The returned collection is read-only.
 	 * @since 3.0.6
 	 */
@@ -411,9 +413,6 @@ w:use="foo.MyWindow"&gt;
 	public boolean hasAttribute(String name, int scope);
 	/** Sets the value of the specified custom attribute in the specified scope.
 	 *
-	 * <p>Note: The attribute is removed (by {@link #removeAttribute}
-	 * if value is null.
-	 *
 	 * <p>If scope is {@link #COMPONENT_SCOPE}, it means custom attributes private
 	 * to this component.
 	 * <p>If scope is {@link #SPACE_SCOPE}, it means custom attributes shared
@@ -504,6 +503,89 @@ w:use="foo.MyWindow"&gt;
 	 */
 	public boolean hasAttributeOrFellow(String name, boolean recurse);
 
+	/** @deprecated As of release 5.0.0, replaced with {@link #setAttribute}.
+	 * <p>Sets a variable to the namespace.
+	 *
+	 * <p>Once a variable is set thru this method, it is visible to
+	 * both the interpreter and EL.
+	 *
+	 * <p>Note: Exactly one namespace is allocated for each ID space.
+	 * For example, if the space owner of this component is the page, then
+	 * the returned namespace is the same as {@link Page#getNamespace}.
+	 * Otherwise, it is the same as the namspace returned by the component
+	 * owning this ID space.
+	 *
+	 * @param local whether not to search any of the ancestor namespace defines
+	 * the variable. If local is false and an ancestor has defined a variable
+	 * with the same name, the variable in the ancestor is changed directly.
+	 * Otherwise, a new variable is created in the namespace containing
+	 * this component.
+	 */
+	public void setVariable(String name, Object val, boolean local);
+	/** @deprecated As of release 5.0.0, replaced with {@link #hasAttributeOrFellow}.
+	 * <p>Returns whether the specified variable is defined.
+	 *
+	 * @param local whether not to search its ancestor.
+	 * If false and the current namespace doen't define the variable,
+	 * it searches up its ancestor (via {@link #getParent}) to see
+	 * any of them has defined the specified variable.
+	 */
+	public boolean containsVariable(String name, boolean local);
+	/** @deprecated As of release 5.0.0, replaced with {@link #getAttributeOrFellow}.
+	 * <p>Returns the value of a variable defined in the namespace,
+	 * or null if not defined or the value is null.
+	 *
+	 * @param local whether not to search its ancestor.
+	 * If false and the current namespace doen't define the variable,
+	 * it searches up its ancestor (via {@link #getParent}) to see
+	 * any of them has defined the specified variable.
+	 */
+	public Object getVariable(String name, boolean local);
+	/** @deprecated As of release 5.0.0, replaced with {@link #removeAttribute}.
+	 * <p>Unsets a variable defined in the namespace.
+	 *
+	 * @param local whether not to search its ancestor.
+	 * If false and the current namespace doen't define the variable,
+	 * it searches up its ancestor (via {@link #getParent}) to see
+	 * any of them has defined the specified variable.
+	 */
+	public void unsetVariable(String name, boolean local);
+
+	/** Returns whether this component is stub-only.
+	 * By stub-only, we mean we don't need to maintain the states of
+	 * the component at the server side.
+	 * <p>There are three possible values: "true", "false", and "inherit",
+	 * and "ignore-native".
+	 * <p>Notice that the native components will be stub-ized, no matter
+	 * this property is set. Though rarely required, you could control
+	 * whether to stub-ize the native components with
+	 * a component attribute called {@link org.zkoss.zk.ui.sys.Attributes#STUB_NATIVE}.
+	 * @since 5.0.4
+	 */
+	public String getStubonly();
+	/** Sets whether this component is stub-only.
+	 * By stub-only, we mean we don't need to maintain the states of
+	 * the component at the server side.
+	 * <p>Default: "inherit" (i.e., the same as the parent's stub-only,
+	 * and "false" is assumed if none of parents is specified with stub-only).
+	 * <p>If a component is set to stub-only, the application running at
+	 * the server shall not access it anymore after renderred to the client.
+	 * The ZK loader will try to minimize the memory footprint by merging
+	 * stub-only components and replacing with light-weight components.
+	 * <p>However, the event listeners and handlers are preserved, so
+	 * they will be invoked if the corresponding event is received.
+	 * Since the original component is gone, the event is the more generic
+	 * format: an instance of {@link org.zkoss.zk.ui.event.Event}
+	 * (rather than MouseEvent or others).
+	 * <p>If a component is stub-only, the application usually access it only
+	 * at the client since all widgets are preserved at the client (so are events).
+	 * <p>This method is available only for ZK EE.
+	 * @param stubonly whether it is stub-only. The allowed values include
+	 * "true", "false" and "inherit".
+	 * @since 5.0.4
+	 */
+	public void setStubonly(String stubonly);
+
 	/** Returns the parent component, or null if this is the root component.
 	 */
 	public Component getParent();
@@ -519,7 +601,7 @@ w:use="foo.MyWindow"&gt;
 	 */
 	public void setParent(Component parent);
 	/** Returns a live list of children.
-	 * You could add or remove a child by manipulating the returned list directly.
+	 * By live we mean the developer could add or remove a child by manipulating the returned list directly.
 	 */
 	public List getChildren();
 	/** Returns the root of this component.
@@ -651,6 +733,9 @@ w:use="foo.MyWindow"&gt;
 	 *
 	 * <p>Since 3.6.3, the listener can be removed directly by invoking
 	 * Iterator.remove().
+	 * <p>Since 5.0.6, the iterator is an instance returned by
+	 * {@link org.zkoss.util.CollectionsX#comodifiableIterator}, so it
+	 * is OK to add or remove listeners among the invocation of next().
 	 */
 	public Iterator getListenerIterator(String evtnm);
 
@@ -794,7 +879,20 @@ w:use="foo.MyWindow"&gt;
 	 */
 	public void invalidate();
 
-	/** Initializes the properties (aka. members) and custom-attributes
+	/** @deprecated As of release 5.0.0, the concept of namespace
+	 * is replaced with attributes.
+	 * <p>Returns the namespace to store variables and functions belonging
+	 * to the ID space of this component.
+	 *
+	 * <p>Exactly one namespace is allocated for each ID space.
+	 * For example, if the space owner of this component is the page, then
+	 * the returned namespace is the same as {@link Page#getNamespace}.
+	 * Otherwise, it is the same as the namspace returned by the component
+	 * owning this ID space.
+	 */
+	public org.zkoss.zk.scripting.Namespace getNamespace();
+
+	/** Initializes the properties (aka. members) 
 	 * based on what are defined in the component definition.
 	 *
 	 * <p>This method is invoked automatically if a component is created
@@ -804,9 +902,13 @@ w:use="foo.MyWindow"&gt;
 	 * <p>On the other hand, if it is created manually (by program),
 	 * developer might choose to invoke this method or not,
 	 * depending whether he wants to
-	 * initializes the component with the properties and custom-attributes
+	 * initializes the component with the properties
 	 * defined in the ZUML page ({@link org.zkoss.zk.ui.metainfo.PageDefinition})
 	 * and the language definition ({@link org.zkoss.zk.ui.metainfo.LanguageDefinition}).
+	 *
+	 * <p>Notice that, since 5.0.7, custom-attributes are applied automatically
+	 * in the constructor of {@link AbstractComponent}, so they are always
+	 * available no mather this method is called or not.
 	 */
 	public void applyProperties();
 
@@ -832,13 +934,16 @@ w:use="foo.MyWindow"&gt;
 	 */
 	public Set getWidgetListenerNames();
 
-	/*** Sets or removes a method or a field of a widget (at the client).
-	 * If there is a method or a field associated with the same name,
+	/*** Sets or removes a method or a property of the peer widget (at the client).
+	 * If there is a method or a property associated with the same name,
 	 * the previous one will be replaced and returned.
 	 * <p>For example,
 	 * <pre><code>comp.setWidgetOverride("setValue", "function (value) {}"); //override a method
-	 *comp.setWidgetOverride("myfield", "new Date()"); //override a field
+	 *comp.setWidgetOverride("myfield", "new Date()"); //override a property
 	 *</code></pre>
+	 *
+	 * <p>If there is no previous method or property, the method/property will
+	 * be assigned directly.
 	 *
 	 * <p>Notice that, unlike {@link #setWidgetListener}, if the method has been sent
 	 * to the client for update, it cannot be removed by calling this method
@@ -846,7 +951,7 @@ w:use="foo.MyWindow"&gt;
 	 * In other words, invoking this method with a null value only removes
 	 * the method overrides if it has not YET been to sent to the client.
 	 *
-	 * <p>The previous method/field can be accessed by this.$xxx. For example
+	 * <p>The previous method/property can be accessed by this.$xxx. For example
 	 *<pre><code>function (value, fromServer) {
 	 *  this.$setValue(value, fromServer);
 	 *  if (this.desktop) {
@@ -868,7 +973,7 @@ w:use="foo.MyWindow"&gt;
 	 * <pre><code>&lt;label w:setValue="function (value) {
 	 *  this.$setValue(value); //old method
 	 *}"/&gt;</code></pre>
-	 * If null, the previous method, if any, will be stored.
+	 * If null, the previous method, if any, will be restored.
 	 * @return the previous script if any
 	 * @since 5.0.0
 	 */
@@ -884,6 +989,39 @@ w:use="foo.MyWindow"&gt;
 	 */
 	public Set getWidgetOverrideNames();
 
+	/*** Sets or removes a DOM attribute of the peer widget (at the client).
+	 * ZK pass the attributes directly to the DOM attribute generated
+	 * at the client.
+	 * <p>Notice that {@link #setWidgetOverride} or {@link #setWidgetListener}
+	 * are used to customize the peer widget, while {@link #setWidgetAttribute}
+	 * customizes the DOM element of the peer widget directly.
+	 *
+	 * <p>Unlike {@link #setWidgetOverride} or {@link #setWidgetListener},
+	 * {@link #setWidgetAttribute} has no effect if the widget has been
+	 * generated at the client, unless {@link #invalidate} is called.
+	 *
+	 * @param name the attribute name to generate to the DOM element,
+	 * such as <code>onload</code>.
+	 * Unlike {@link #setWidgetOverride}, the name might contain
+	 * no alphanumeric characters, such as colon and dash.
+	 * @param value the value of the attribute. It could be anything
+	 * depending on the attribute.
+	 * If null, the attribute will be removed. Make sure to specify an empty
+	 * string if you want an attribute with an empty value.
+	 * @return the previous value if any
+	 * @since 5.0.3
+	 */
+	public String setWidgetAttribute(String name, String value);
+	/** Returns the value of a DOM attribute
+	 * @since 5.0.3
+	 */
+	public String getWidgetAttribute(String name);
+	/** Returns a read-only collection of additions DOM attributes that shall be
+	 * generated. That is, they are the attributes added by {@link #setWidgetAttribute}.
+	 * @since 5.0.3
+	 */
+	public Set getWidgetAttributeNames();
+
 	/** Sets an AU service to process the AU request before the component's
 	 * default handling.
 	 * This method is used if you want to send some custom request
@@ -891,7 +1029,7 @@ w:use="foo.MyWindow"&gt;
 	 * <p>Default: null.
 	 * <p>If you want to provide an AU service for the AU requests
 	 * targeting the desktop. Use {@link Desktop#addListener}.
-	 * <p>See also <a href="http://docs.zkoss.org/wiki/Zk.Event#How_to_process_data_with_JSON">how to process data with JSON</a>.
+	 * <p>See also <a href="http://books.zkoss.org/wiki/ZK_Client-side_Reference/Communication/AU_Requests/Server-side_Processing">How to process AU requests with JSON</a>.
 	 * @since 5.0.0
 	 */
 	public void setAuService(AuService service);
@@ -902,29 +1040,11 @@ w:use="foo.MyWindow"&gt;
 	 */
 	public AuService getAuService();
 
-	/** Returns the AU tag for this widget.
-	 * The AU tag tag is used to tag the AU requests sent by the peer widget.
-	 * For instance, if the AU tag is <code>xxx,yyy</code> and the desktop's
-	 * request path ({@link Desktop#getRequestPath}) is <code>/foo.zul</code>, then
-	 * the URL of the AU request will contain <code>/_/foo.zul/xxx,yyy</code>,.
-	 * <p>Default: null (no AU tag for this widget).
-	 * @since 5.1.0
-	 * @see #setAutag
-	 */
-	public String getAutag();
-	/** Sets the AU tag for this widget.
-	 * The AU tag tag is used to tag the AU requests sent by the peer widget.
-	 * @param tag the AU tag. Both an empty string and null are consisered as null,
-	 * i.e., no AU tag for this widget.
-	 * @since 5.1.0
-	 * @see #getAutag
-	 */
-	public void setAutag(String tag);
-
 	/** Clones the component.
-	 * All of its children is cloned.
-	 * Notice that the cloned component doesn't belong to any page, nor
-	 * desktop. It doesn't have parent, either.
+	 * All of its children and descendants are cloned.
+	 * Also, ID are preserved.
+	 * @return the new component. Notice that it doesn't belong to any page, nor
+	 * desktop. It doesn't have a parent, either.
 	 */
 	public Object clone();
 }

@@ -152,6 +152,13 @@ public interface Page extends IdSpace, Scope {
 	 */
 	public String getRequestPath();
 
+	/** Returns whether the desktop is still alive.
+	 * It returns false once it is destroyed.
+	 * @see org.zkoss.zk.ui.sys.PageCtrl#destroy
+	 * @since 5.0.3
+	 */
+	public boolean isAlive();
+
 	/** Returns the desktop that this page belongs to.
 	 *
 	 * <p>Note: it returns null when
@@ -299,6 +306,24 @@ public interface Page extends IdSpace, Scope {
 	 */
 	public boolean hasAttributeOrFellow(String name, boolean recurse);
 
+	/** @deprecated As of release 5.0.0, replaced with {@link #setAttribute}.
+	 *
+	 * <p>Sets a variable to the namespace ({@link #getNamespace}).
+	 */
+	public void setVariable(String name, Object val);
+	/** @deprecated As of release 5.0.0, replaced with {@link #hasAttributeOrFellow}.
+	 * <p>Returns whether the specified variable is defined.
+	 */
+	public boolean containsVariable(String name);
+	/** @deprecated As of release 5.0.0, replaced with {@link #getAttributeOrFellow}.
+	 * <p>Returns the value of a variable defined in the namespace ({@link #getNamespace}).
+	 */
+	public Object getVariable(String name);
+	/** @deprecated As of release 5.0.0, replaced with {@link #removeAttribute}.
+	 * <p>Unsets a variable from the namespace ({@link #getNamespace}).
+	 */
+	public void unsetVariable(String name);
+
 	/** Returns the class of the specified name by searching
 	 * the thread class loader and the classes defined in the
 	 * loaded interpreters.
@@ -335,6 +360,21 @@ public interface Page extends IdSpace, Scope {
 	 * @since 3.0.0
 	 */
 	public Function getZScriptFunction(String name, Class[] argTypes);
+	/** @deprecated As of release 5.0.0, replaced with {@link #getZScriptFunction(Component,String,Class[])}
+	 *
+	 * <p>Returns the function of the specified name by searching
+	 * the logical scope of the specified namespace in all
+	 * the loaded interpreters.
+	 *
+	 * @param ns the namespace used as a reference to identify the
+	 * correct scope for searching the variable.
+	 * It is ignored if the interpreter doesn't support hierachical scopes.
+	 * Note: this method doesn't look for any variable stored in ns.
+	 * @return the method, or null if not found
+	 * @see #getLoadedInterpreters
+	 * @since 2.4.1
+	 */
+	public Function getZScriptFunction(org.zkoss.zk.scripting.Namespace ns, String name, Class[] argTypes);
 	/** Returns the function of the specified name by searching
 	 * the logical scope of the specified component
 	 * in all the loaded interpreters.
@@ -354,6 +394,19 @@ public interface Page extends IdSpace, Scope {
 	 * @see #getLoadedInterpreters
 	 */
 	public Object getZScriptVariable(String name);
+	/** @deprecated As of release 5.0.0, replaced with
+	 * {@link #getZScriptVariable(Component, String)}.
+	 *
+	 * <p>Returns the value of the variable of the specified name by searching
+	 * the logical scope of the specified namespace in all
+	 * the loaded interpreters, if any.
+	 *
+	 * @param ns the namespace used as a reference to identify the
+	 * correct scope for searching the variable.
+	 * It is ignored if the interpreter doesn't support hierachical scopes.
+	 * Note: this method doesn't look for any variable stored in ns.
+	 */
+	public Object getZScriptVariable(org.zkoss.zk.scripting.Namespace ns, String name);
 	/** Returns the value of the variable of the specified name by searching
 	 * the logical scope of the specified component
 	 * in all the loaded interpreters, if any.
@@ -436,6 +489,9 @@ public interface Page extends IdSpace, Scope {
 	 */
 	public boolean isListenerAvailable(String evtnm);
 	/** Returns an iterator for iterating listener for the specified event.
+	 * <p>Since 5.0.6, the iterator is an instance returned by
+	 * {@link org.zkoss.util.CollectionsX#comodifiableIterator}, so it
+	 * is OK to add or remove listeners among the invocation of next().
 	 */
 	public Iterator getListenerIterator(String evtnm);
 
@@ -450,6 +506,31 @@ public interface Page extends IdSpace, Scope {
 	 */
 	public void invalidate();
 
+	/** @deprecated As of release 5.0.0, the concept of namespace is
+	 * deprecated, and please use the attributes of an ID space (such as page)
+	 * instead.
+	 *
+	 * <p>Returns the namespace used to store variables belonging to
+	 * the ID space of this page.
+	 *
+	 * @see #interpret
+	 */
+	public org.zkoss.zk.scripting.Namespace getNamespace();
+	/** @deprecated As of release 5.0.0, replaced with
+	 * {@link #interpret(String,String,Scope)}.
+	 *
+	 * <p>Interpret a script of the specified scripting language against
+	 * the specified namespace.
+	 *
+	 * @param zslang the scripting language. If null, {@link #getZScriptLanguage}
+	 * is assumed.
+	 * @param ns the namspace. If null, the current namespace is assumed.
+	 * The current namespace is the event target's namespace
+	 * ({@link org.zkoss.zk.ui.event.Event#getTarget}),
+	 * if the thread is processing an event.
+	 * Otherwise, the current namespace is this page's namespace
+	 */
+	public void interpret(String zslang, String script, org.zkoss.zk.scripting.Namespace ns);
 	/** Interprets a script in the sepcified scripting language in
 	 * the context of the specified scope.
 	 *

@@ -30,22 +30,83 @@ zul.med.Applet = zk.$extends(zul.Widget, {
 	},
 
 	$define: {
-		/** Return the code of the applet, i.e., the URI of the Java class.
+		/** Return the applet class to run.
 		 * @return String
 		 */
-		/** Sets the code of the applet, i.e., the URI of the Java class.
+		/** Sets the applet class to run.
 		 * @param String code
 		 */
 		code: _zkf = function () {
 			this.rerender();
 		},
-		/** Return the codebase of the applet, i.e., the URI of the Java class.
+		/** Return a relative base URL for applets specified in {@link #setCode} (URL).
 		 * @return String
 		 */
-		/** Sets the codebase of the applet, i.e., the URI of the Java class.
+		/** Sets a relative base URL for applets specified in {@link #setCode} (URL).
 		 * @param String codebase
 		 */
-		codebase: _zkf
+		codebase: _zkf,
+		/** Returns the location of an archive file (URL).
+		 * @return String
+		 * @since 5.0.3
+		 */
+		/** Sets the location of an archive file (URL).
+		 * @param String archive
+		 * @since 5.0.3
+		 */
+		archive: _zkf,
+		/** Returns whether the applet is allowed to access the scripting object.
+		 * @return boolean
+		 * @since 5.0.3
+		 */
+		/** Sets whether the applet is allowed to access the scripting object.
+		 * @param boolean myscript
+		 * @since 5.0.3
+		 */
+		mayscript: function (v) {
+			var n;
+			if (n = this.$n())
+				n.mayscript = v;
+		},
+		/** Returns the alignment of an applet according to surrounding elements.
+		 * @return String
+		 * @since 5.0.3
+		 */
+		/** Sets the alignment of an applet according to surrounding elements.
+		 * @param String align
+		 * @since 5.0.3
+		 */
+		align: function (v) {
+			var n;
+			if (n = this.$n())
+				n.align = v;
+		},
+		/** Returns the horizontal spacing around an applet.
+		 * @return String
+		 * @since 5.0.3
+		 */
+		/** Sets the horizontal spacing around an applet.
+		 * @param String hspace
+		 * @since 5.0.3
+		 */
+		hspace: function (v) {
+			var n;
+			if (n = this.$n())
+				n.hspace = v;
+		},
+		/** Returns the vertical spacing around an applet.
+		 * @return String
+		 * @since 5.0.3
+		 */
+		/** Sets the vertical spacing around an applet.
+		 * @param String vspace
+		 * @since 5.0.3
+		 */
+		vspace: function (v) {
+			var n;
+			if (n = this.$n())
+				n.vspace = v;
+		}
 	},
 	/** Invokes the function of the applet running at the client.
 	 */
@@ -63,7 +124,7 @@ zul.med.Applet = zk.$extends(zul.Widget, {
 				expr += '"' + (s ? s.replace('"', '\\"'): '') + '"';
 			}
 			try {
-				eval(expr + end);
+				eval(expr + end); //don't use $eval since this function shall not be compressed
 			} catch (e) {
 				zk.error("Failed to invoke applet's method: "+expr+'\n'+e.message);
 			}
@@ -115,9 +176,10 @@ zul.med.Applet = zk.$extends(zul.Widget, {
 				zk.error("Failed to set applet's field: "+ name+'\n'+e.message);
 			}
 	},
-
 	/** Sets the param. Notice that it is meaningful only if it is called
-	 * before redraw.
+	 * before redraw. For example, <code>setParam('attr1', 'value1')</code> 
+	 * gives a <code>param</code> tag under <code>applet</code> tag with name 
+	 * <code>attr1</code>, value <code>value1</code>.
 	 * There are two format:
 	 * setParam(nm, val)
 	 * and
@@ -133,12 +195,27 @@ zul.med.Applet = zk.$extends(zul.Widget, {
 		if (val != null) this._params[nm] = val;
 		else delete this._params[nm];
 	},
-
+	/** Sets the params map. It should only be called before redraw.
+	 * @param Map m A map of param pairs, as applet parameters. For example, 
+	 * <code>{attr1:'value1', attr2:'value2'}</code> gives two <code>param</code> 
+	 * tags under <code>applet</code> tag with names <code>attr1, attr2</code>, 
+	 * values <code>value1, value2</code> respectively.
+	 * @since 5.0.4
+	 */
+	setParams: function (m) {
+		this._params = m;
+	},
+	
 	//super
 	domAttrs_: function(no){
 		return this.$supers('domAttrs_', arguments)
 				+ ' code="' + (this._code || '') + '"'
-				+ ' codebase="' + (this._codebase || '') + '"';
+				+ zUtl.appendAttr("codebase", this._codebase)
+				+ zUtl.appendAttr("archive", this._archive)
+				+ zUtl.appendAttr("align", this._align)
+				+ zUtl.appendAttr("hspace", this._hspace)
+				+ zUtl.appendAttr("vspace", this._vspace)
+				+ zUtl.appendAttr("mayscript", this._mayscript);
 	},
 	domStyle_: function (no) {
 		return this.$supers('domStyle_', arguments)

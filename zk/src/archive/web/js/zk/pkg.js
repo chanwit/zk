@@ -33,38 +33,7 @@ zk.copy(zk, (function() {
 		_xloadings.push(nm);
 		if (updCnt() == 1) {
 			zk.disableESC();
-			setTimeout(prgbox, 380);
 		}
-	}
-	function doLoad(pkg, dt) {
-		if (!pkg || _loading[pkg])
-			return !zk.loading && !_loadedsemis.length;
-			//since pkg might be loading (-> return false)
-
-		markLoading(pkg);
-
-		var modver = pkg.indexOf('.');
-		if (modver) modver = zk.getVersion(pkg.substring(0, modver));
-		if (!modver) modver = zk.build;
-
-		var e = document.createElement("script"),
-			uri = pkg + ".wpd",
-			host = zk.getHost(pkg, true);
-		e.type = "text/javascript";
-		e.charset = "UTF-8";
-
-		if (uri.charAt(0) != '/') uri = '/' + uri;
-
-		if (host) uri = host + "/web/js" + uri;
-		else {
-			if (modver) uri = "/web/_zv" + modver + "/js" + uri;
-			else uri = "/web/js" + uri;
-			uri = zk.ajaxURI(uri, {desktop:dt,au:true});
-		}
-
-		e.src = uri;
-		jq.head().appendChild(e);
-		return false;
 	}
 	function doEnd(afs, wait) {
 		for (var fn; fn = afs.shift();) {
@@ -75,44 +44,9 @@ zk.copy(zk, (function() {
 			fn();
 		}
 	}
-
-	function loadmsg() {
-		var msg = '';
-		for (var j = _xloadings.length, k = 0; --j >=0;) {
-			if (msg) msg += ', ';
-			if (++k == 5) {
-				k = 0;
-				msg += '<br/>';
-			}
-			msg += _xloadings[j];
-		}
-		return msg;
-	}
 	function updCnt() {
-		zk.loading = _xloadings.length;
-		try {
-			var n = jq("#zk_loadcnt")[0];
-			if (n) n.innerHTML = loadmsg();
-		} catch (ex) {
-		}
-		return zk.loading;
+		return (zk.loading = _xloadings.length);
 	}
-	function prgbox() {
-		if (zk.loading) {
-			var n = jq("#zk_loadprog")[0];
-			if (!n) {
-				if (!jq.isReady)
-					return setTimeout(prgbox, 10);
-						//don't use jq() since it will be queued after others
-
-				zUtl.progressbox("zk_loadprog",
-					(window.msgzk?msgzk.LOADING:"Loading")
-					+' <span id="zk_loadcnt">'+loadmsg()+'</span>',
-					true);
-			}
-		}
-	}
-
 /** @partial zk
  */
   return { //internal utility
@@ -129,7 +63,7 @@ zk.copy(zk, (function() {
 			var afpk = _afterPkgLoad[pkg];
 			if (afpk) {
 				delete _afterPkgLoad[pkg];
-				_afterLoadFronts.push.apply(_afterLoadFronts, afpk); //add all
+				_afterLoadFronts.$addAll(afpk);
 			}
 
 			var deps = _pkgdepend[pkg];
@@ -143,7 +77,6 @@ zk.copy(zk, (function() {
 		if (!updCnt()) {
 			try {
 				zk.enableESC();
-				zUtl.destroyProgressbox("zk_loadprog");
 			} catch (ex) {
 			}
 			doEnd(_afterLoadFronts);
@@ -200,10 +133,37 @@ zk.load('zul.utl', function () {
 		var loading;
 		for (var pkgs = pkg.split(','), j = pkgs.length; j--;) {
 			pkg = pkgs[j].trim();
-			if (!doLoad(pkg, dt))
+			if (!zk._load(pkg, dt))
 				loading = true;
 		}
 		return !loading;
+	},
+	_load: function (pkg, dt) { //called by mount.js (better performance)
+		if (!pkg || _loading[pkg])
+			return !zk.loading && !_loadedsemis.length;
+			//since pkg might be loading (-> return false)
+
+		markLoading(pkg);
+
+		var modver = zk.getVersion(pkg) || zk.build,
+			e = document.createElement("script"),
+			uri = pkg + ".wpd",
+			host = zk.getHost(pkg, true);
+		e.type = "text/javascript";
+		e.charset = "UTF-8";
+
+		if (uri.charAt(0) != '/') uri = '/' + uri;
+
+		if (host) uri = host + "/web/js" + uri;
+		else {
+			if (modver) uri = "/web/_zv" + modver + "/js" + uri;
+			else uri = "/web/js" + uri;
+			uri = zk.ajaxURI(uri, {desktop:dt,au:true});
+		}
+
+		e.src = uri;
+		jq.head().appendChild(e);
+		return false;
 	},
 
 	/** Loads a JavaScript file.
@@ -228,13 +188,32 @@ zk.load('zul.utl', function () {
 		jq.head().appendChild(e);
 		return this;
 	},
+	/* Loads a CSS file.
+	 * @param String href the URL of the CSS file.
+	 * @param String id the identifier. Ignored if not specified.
+	 * @param String media the media attribute. Ignored if not specified.
+	 * @since 5.0.4
+	 * @return zk
+	 */
+	loadCSS: function (href, id, media) {
+		var ln = document.createElement("link");
+		if (id) ln.id = id;
+		ln.rel = "stylesheet";
+		ln.type = "text/css";
+		ln.href = href;
+		if (media) ln.media = media;
+		jq.head().appendChild(ln);
+		return this;
+	},
 
-	/** Returns the version of the specified package.
+	/** Returns the version of the specified package, or null if not available.
 	 * @param String pkg the package name
 	 * @return String the version
 	 */
 	getVersion: function (pkg) {
-		return _pkgver[pkg];
+		for (var ver; pkg; pkg = pkg.substring(0, pkg.lastIndexOf('.')))
+			if (ver = _pkgver[pkg])
+				return ver;
 	},
 	/** Sets the version of the specified package.
 	 * @param String pkg the package name
@@ -270,7 +249,7 @@ zk.load('zul.utl', function () {
 	 */
 	/** Declares a function that shall be executed only if the specified
 	 * package(s) are loaded (and {@link #loading} is 0). Notice that it won't cause the package(s) to execute. Rather, it defers the execution of the specified function until someone else loads the package (by use of {@link #load}).
-	 * <p>See also <a href="http://docs.zkoss.org/wiki/Customize_JavaScript_Codes">Customize JavaScript Codes</a>
+	 * <p>See also <a href="http://books.zkoss.org/wiki/ZK_Client-side_Reference/General_Control/JavaScript_Packaging">JavaScript Packaging</a>
 	 * <p>To know whether all requested packages are loaded (i.e., ZK is not loading any package), you can check {@link #loading} if it is 0.
 	 * <p>Notice that functions specified in the second format execute before those specified in the first format.
 	 * <p>Example

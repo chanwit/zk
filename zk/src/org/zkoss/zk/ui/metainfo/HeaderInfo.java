@@ -22,7 +22,7 @@ import java.util.List;
 import java.util.LinkedList;
 import java.util.Collections;
 
-import org.zkoss.html.HTMLs;
+import org.zkoss.xml.HTMLs;
 import org.zkoss.zk.ui.Component;
 import org.zkoss.zk.ui.Page;
 import org.zkoss.zk.ui.Executions;
@@ -140,6 +140,11 @@ implements Condition {
 			return sb.append("</script>").toString();
 		}
 		return sb.append("/>").toString();
+	}
+	/** @deprecated As of release 5.0.0, replaced with {@link #toHTML(Page)}.
+	 */
+	public String toHTML(PageDefinition pgdef, Page page) {
+		return toHTML(page);
 	}
 
 	public boolean isEffective(Component comp) {

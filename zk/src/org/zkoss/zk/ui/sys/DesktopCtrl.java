@@ -29,6 +29,7 @@ import org.zkoss.zk.ui.Execution;
 import org.zkoss.zk.ui.UiException;
 import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.Events;
+import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.util.EventInterceptor;
 import org.zkoss.zk.au.AuRequest;
 
@@ -70,6 +71,10 @@ public interface DesktopCtrl {
 	 * @since 5.0.3
 	 */
 	public String getNextUuid(Component comp);
+	/** As of release 5.0.3, replaced with {@link #getNextUuid(Page)}
+	 * or {@link #getNextUuid(Component)}.
+	 */
+	public String getNextUuid();
 
 	/** Adds a component to this page.
 	 * <p>It is used internally and developers shall not invoke it
@@ -78,7 +83,15 @@ public interface DesktopCtrl {
 	public void addComponent(Component comp);
 	/** Removes a component to this page.
 	 * <p>It is used internally and developers shall not invoke it
-	 * explicityly.
+	 * explicitly.
+	 * @param recycleUuidAllowed whether it is OK to recycle UUID.
+	 * @return whether UUID is recycled. If true, the caller shall
+	 * reset UUID of the give component.
+	 * @since 5.0.4
+	 */
+	public boolean removeComponent(Component comp, boolean recycleUuidAllowed);
+	/** @deprecated As of release 5.0.4, replaced with
+	* {@link #removeComponent(Component, boolean)}.
 	 */
 	public void removeComponent(Component comp);
 
@@ -121,6 +134,12 @@ public interface DesktopCtrl {
 	/** Called when the desktop is about to be destroyed.
 	 */
 	public void destroy();
+	/** Called when the desktop has been recycled.
+	 * More precisely, it is called when the desktop is no longer used
+	 * and ready to be re-used later.
+	 * @since 5.0.7
+	 */
+	public void recycle();
 
 	/** Returns a collection of suspended event processing threads, or empty
 	 * if no suspended thread at all.
@@ -182,9 +201,11 @@ if (c.isEmpty()) {
 	 * @since 3.0.0
 	 */
 	public void onPiggybackListened(Component comp, boolean listen);
-	/** Called each time ZK Update Engine processes all events.
-	 * It is used to implement the piggyback feature
-	 * (see {@link Events#ON_PIGGYBACK}).
+	/** Called each time when ZK Update Engine retrieves events.
+	 * It is used to implement the piggyback feature by posting
+	 * the events (see {@link Events#ON_PIGGYBACK}).
+	 * The implementation could post events here. It should not process
+	 * event here (since event thread might be used).
 	 *
 	 * <p>Used only internally. Application develepers shall not call it.
 	 *
@@ -197,6 +218,14 @@ if (c.isEmpty()) {
 	public ServerPush getServerPush();
 	/** Enables the server-push feature with the specified server-push
 	 * controller.
+	 * If you want to use the default serverpush, use {@link Desktop#enableServerPush}
+	 * instead. This method allows the caller to provide a server push
+	 * for more control.
+	 * <p>Example:
+	 * <pre><code>desktop.enableServerPush(new PollingServerPush(1000,6000,5));</code></pre>
+	 *
+	 * <p>Notice: a server push controller can be used in one desktop.
+	 * It cannot be shared.
 	 *
 	 * @param serverpush the server-push controller. If null,
 	 * the server-push feature is disabled (for this desktop).
@@ -233,7 +262,7 @@ if (c.isEmpty()) {
 	 * automatically.
 	 * @since 3.0.0
 	 */
-	public Event beforeProcessEvent(Event event);
+	public Event beforeProcessEvent(Event event) throws Exception;
 	/** Invokes {@link EventInterceptor#afterProcessEvent}
 	 * registered by {@link Desktop#addListener}.
 	 *
@@ -242,7 +271,7 @@ if (c.isEmpty()) {
 	 * automatically.
 	 * @since 3.0.0
 	 */
-	public void afterProcessEvent(Event event);
+	public void afterProcessEvent(Event event) throws Exception;
 	/** Invokes {@link org.zkoss.zk.ui.util.DesktopCleanup#cleanup} for each relevant
 	 * listener registered by {@link Desktop#addListener}.
 	 *
@@ -356,20 +385,45 @@ if (c.isEmpty()) {
 	 */
 	public List piggyResponse(List response, boolean reset);
 
-	/** Activates the server push.
+	/** Schedules a task to run under the server push of the given desktop asynchronously.
+	 * It is called by {@link org.zkoss.zk.ui.Executions#schedule}.
+	 * Don't call it directly.
+	 * <p>Like {@link #activateServerPush} and {@link #deactivateServerPush}, this method could
+	 * be called in any thread, so it has to be safe for concurrent access.
+	 * @param task the task to execute
+	 * @param event the event to be passed to the task (i.e., the event listener).
+	 * It could null or any instance as long as the task recognizes it.
+	 * @exception IllegalStateException if the server push is not enabled.
+	 * @exception DesktopUnavailableException if the desktop is removed
+	 * (when activating).
+	 * @since 5.0.6
+	 */
+	public void scheduleServerPush(EventListener task, Event event);
+	/** Returns if there is any scheduled task for server push.
+	 * @since 5.0.6
+	 */
+	public boolean scheduledServerPush();
+
+	/** Activates the current thread for accessing this desktop by the server push.
 	 * It is called by {@link org.zkoss.zk.ui.Executions#activate}.
+	 * Don't call it directly.
 	 *
+	 * <p>Like {@link #scheduleServerPush}, this method could
+	 * be called in any thread, so it has to be safe for concurrent access.
 	 * <p>Note: the server push must be enabled first (by use of
 	 * {@link Desktop#enableServerPush}).
 	 *
 	 * @param timeout the maximum time to wait in milliseconds.
 	 * Ingored (i.e., never timeout) if non-positive.
+	 * @exception IllegalStateException if the server push is not enabled.
 	 * @since 3.5.2
 	 */
 	public boolean activateServerPush(long timeout)
 	throws InterruptedException;
-	/** Deactivates the server push.
+	/** Deactivates the thread that has invoked {@link #activateServerPush}
+	 * successfully.
 	 * It is called by {@link org.zkoss.zk.ui.Executions#deactivate}.
+	 * Don't call it directly.
 	 * @since 3.5.2
 	 */
 	public void deactivateServerPush();

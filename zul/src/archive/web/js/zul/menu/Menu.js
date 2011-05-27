@@ -12,6 +12,16 @@ Copyright (C) 2008 Potix Corporation. All Rights Reserved.
 This program is distributed under LGPL Version 3.0 in the hope that
 it will be useful, but WITHOUT ANY WARRANTY.
 */
+(function () {
+	function _toggleClickableCSS(wgt, remove) {
+		if (wgt.isListen('onClick')) {
+			if (remove) 
+				jq(wgt.$n()).removeClass(wgt.getZclass() + '-body-clk-over');
+			else 
+				jq(wgt.$n()).addClass(wgt.getZclass() + '-body-clk-over');
+		}
+	}
+	
 /**
  * An element, much like a button, that is placed on a menu bar.
  * When the user clicks the menu element, the child {@link Menupopup}
@@ -73,6 +83,7 @@ zul.menu.Menu = zk.$extends(zul.LabelImageWidget, {
 	},
 	beforeParentChanged_: function (newParent) {
 		this._topmost = newParent && !(newParent.$instanceof(zul.menu.Menupopup));
+		this.$supers("beforeParentChanged_", arguments);
 	},
 	getZclass: function () {
 		return this._zclass == null ? "z-menu" : this._zclass;
@@ -135,6 +146,9 @@ zul.menu.Menu = zk.$extends(zul.LabelImageWidget, {
 		} else {
 			this.domListen_(anc, "onMouseOver")
 				.domListen_(anc, "onMouseOut");
+			if (this.isListen('onClick')) {
+				jq(this.$n()).addClass(this.getZclass() + '-body-clk');
+			}
 		}
 
 		if (this._contentHandler)
@@ -159,7 +173,11 @@ zul.menu.Menu = zk.$extends(zul.LabelImageWidget, {
 
 		this.$supers(zul.menu.Menu, 'unbind_', arguments);
 	},
-	doClick_: function (evt) {		
+	// used for overriding from different theme
+	_getArrowWidth: function () {
+		return 15;
+	},
+	doClick_: function (evt) {
 		var node = this.$n();
 		if (this.menupopup) {
 			jq(this.$n('a')).addClass(this.getZclass() + '-body-seld');
@@ -167,61 +185,71 @@ zul.menu.Menu = zk.$extends(zul.LabelImageWidget, {
 			if (this.isTopmost())
 				this.getMenubar()._lastTarget = this;
 			if (this.isListen('onClick')) {
-				var arrorWidth = 12, //note : /img/menu/btn-arrow.gif : width = 12
-					clk = jq(node).find('TABLE'),
+				var arrowWidth = this._getArrowWidth(), //note : /img/menu/btn-arrow.gif : width = 12
+					clk = this.isTopmost()? jq(node).find('TABLE'): jq(node),
 					offsetWidth = zk(clk).offsetWidth(),
-					clickArea = offsetWidth - arrorWidth,
+					clickArea = offsetWidth - arrowWidth,
 					ofs = zk(clk).revisedOffset(),
 					clickOffsetX = evt.domEvent.clientX - ofs[0];
 
 				if (clickOffsetX > clickArea) {
-					this._openPopup();
-					Event.stop(evt);
+					this._togglePopup();
+					evt.stop();
 				} else {
 					jq(this.$n('a')).removeClass(this.getZclass() + '-body-seld');
 					this.fireX(evt);
 				}		
 			} else {
-				this._openPopup();	
+				this._togglePopup();
 			}
 		} else {
 			var content = this._contentHandler;
 			if (content && !content.isOpen())
 				content.onShow();
 		}
+
 	},
 	doMouseOver_: function () {
+		if (!this.isTopmost()) {
+			var content = this._contentHandler;
+			if (content && !content.isOpen())
+				content.onShow();
+		}
 		this.$supers('doMouseOver_', arguments);
-		if (this.isTopmost()) return;
-
-		var content = this._contentHandler;
-		if (content && !content.isOpen())
-			content.onShow();
 	},
-	_openPopup: function () {
-		if (!this.menupopup.isOpen())
-			this.menupopup.open();	
-		else {
-			var anc = this.menupopup.$n('a');
-			if (anc) anc.focus(); // force to get a focus 
-		}			
+	_togglePopup: function () {
+		if (!this.menupopup.isOpen()){
+			if(this.isTopmost())
+				_toggleClickableCSS(this);
+			this.menupopup.open();
+		}
+		else if (this.isTopmost()) 
+			this.menupopup.close({sendOnOpen: true});
+		else
+			zk(this.menupopup.$n('a')).focus(); // force to get a focus 
 	},
 	_doMouseOver: function (evt) { //not zk.Widget.doMouseOver_
+		var menubar = this.getMenubar();
+		if (menubar) {
+			menubar._bOver = true;
+			menubar._noFloatUp = false;
+		}
 		if (this.$class._isActive(this)) return;
 
 		var	topmost = this.isTopmost();
+		if(topmost)
+			_toggleClickableCSS(this);
 		if (topmost && zk.ie && !jq.isAncestor(this.$n('a'), evt.domTarget))
 				return; // don't activate
 
+		if (this.menupopup)
+			this.menupopup._shallClose = false;
 		if (!topmost) {
-			if (this.menupopup) this.menupopup._shallClose = false;
 			zWatch.fire('onFloatUp', this); //notify all
 			if (this.menupopup && !this.menupopup.isOpen()) this.menupopup.open();
 		} else {
-			var menubar = this.getMenubar();
-			if (this.menupopup && menubar.isAutodrop()) {
+			if (this.menupopup && menubar._autodrop) {
 				menubar._lastTarget = this;
-				this.menupopup._shallClose = false;
 				zWatch.fire('onFloatUp', this); //notify all
 				if (!this.menupopup.isOpen()) this.menupopup.open();
 			} else {
@@ -238,30 +266,40 @@ zul.menu.Menu = zk.$extends(zul.LabelImageWidget, {
 		this.$class._addActive(this);
 	},
 	_doMouseOut: function (evt) { //not zk.Widget.doMouseOut_
-		if (zk.ie && jq.isAncestor(this.$n('a'), evt.domEvent.relatedTarget || evt.domEvent.toElement))
+		var menubar = this.getMenubar();
+		if (menubar) menubar._bOver = false;
+		if (!zk.ie && jq.isAncestor(this.$n('a'), evt.domEvent.relatedTarget || evt.domEvent.toElement))
 			return; // don't deactivate
 	
-		var	topmost = this.isTopmost();
-		if (topmost) {
-			this.$class._rmActive(this);
-			if (this.menupopup && this.getMenubar().isAutodrop()) {
-				if (this.menupopup.isOpen()) this.menupopup._shallClose = true;
-				zWatch.fire('onFloatUp', this, {timeout: 10}); //notify all
+		var	topmost = this.isTopmost(),
+			menupopup = this.menupopup;
+		if (topmost) { //implies menubar
+			this.$class._rmOver(this);
+			if (menupopup && menubar._autodrop) {
+				if (menupopup.isOpen())
+					menupopup._shallClose = true; //autodrop -> autoclose if mouseout
+				menubar._closeOnOut();
 			}
-		} else if (!this.menupopup || !this.menupopup.isOpen())
+		} else if (!menupopup || !menupopup.isOpen())
 			this.$class._rmActive(this);
+		else if (menupopup && menubar && menubar._autodrop)
+			menubar._closeOnOut();
 	}
 }, {
 	_isActive: function (wgt) {
 		var top = wgt.isTopmost(),
 			n = top ? wgt.$n('a') : wgt.$n(),
-			cls = wgt.getZclass() + (top ? '-body-over' : '-over');
+			menupopup = wgt.menupopup,
+			cls = wgt.getZclass();
+		cls += top ? menupopup && menupopup.isOpen() ? '-body-seld' : '-body-over' : '-over';
 		return jq(n).hasClass(cls);
 	},
 	_addActive: function (wgt) {
 		var top = wgt.isTopmost(),
 			n = top ? wgt.$n('a') : wgt.$n(),
-			cls = wgt.getZclass() + (top ? '-body-over' : '-over');
+			menupopup = wgt.menupopup,
+			cls = wgt.getZclass();
+		cls += top ? menupopup && menupopup.isOpen() ? '-body-seld' : '-body-over' : '-over';
 		jq(n).addClass(cls);
 		if (!top && wgt.parent.parent.$instanceof(zul.menu.Menu))
 			this._addActive(wgt.parent.parent);
@@ -269,14 +307,28 @@ zul.menu.Menu = zk.$extends(zul.LabelImageWidget, {
 	_rmActive: function (wgt) {
 		var top = wgt.isTopmost(),
 			n = top ? wgt.$n('a') : wgt.$n(),
-			cls = wgt.getZclass() + (top ? '-body-over' : '-over');
-		jq(n).removeClass(cls);
+			zcls = wgt.getZclass(),
+			cls = zcls;
+		cls += top ? wgt.menupopup.isOpen() ? '-body-seld' : '-body-over' : '-over';
+		var anode = jq(n);
+		anode.removeClass(cls);
+		if(!(anode.hasClass(zcls + '-body-seld') || anode.hasClass(zcls + '-body-over')))
+			_toggleClickableCSS(wgt, true);
+	},
+	_rmOver: function (wgt) {
+		var top = wgt.isTopmost(),
+			n = top ? wgt.$n('a') : wgt.$n(),
+			zcls = wgt.getZclass(),
+			cls = zcls + (top ? '-body-over' : '-over');
+		var anode = jq(n);
+		anode.removeClass(cls);
+		if(!anode.hasClass(zcls + '-body-seld'))
+			_toggleClickableCSS(wgt, true);
 	}
 });
 
 zul.menu.ContentHandler = zk.$extends(zk.Object, {
 	 $init: function(wgt, content) {
-	 	this.$supers('$init', arguments);
 		this._wgt = wgt;
 		this._content = content;
 	 },
@@ -365,5 +417,9 @@ zul.menu.ContentHandler = zk.$extends(zk.Object, {
 				return 'vertical' == bar.getOrient() ? 'end_before' : 'after_start';
 		}
 		return 'end_before';
+	},
+	deferRedrawHTML_: function (out) {
+		var tag = this.isTopmost() ? 'td' : 'li';
+		out.push('<', tag, this.domAttrs_({domClass:1}), ' class="z-renderdefer"></', tag,'>');
 	}
-});
+});})();

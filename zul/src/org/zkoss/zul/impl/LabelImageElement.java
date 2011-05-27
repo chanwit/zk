@@ -22,7 +22,7 @@ import org.zkoss.lang.Objects;
 import org.zkoss.image.Images;
 import org.zkoss.util.media.Media;
 import org.zkoss.image.Image;
-import org.zkoss.html.HTMLs;
+import org.zkoss.xml.HTMLs;
 
 import org.zkoss.zk.ui.Desktop;
 import org.zkoss.zk.ui.UiException;
@@ -35,17 +35,7 @@ import org.zkoss.zk.ui.ext.render.DynamicMedia;
  * @author tomyeh
  */
 abstract public class LabelImageElement extends LabelElement implements org.zkoss.zul.impl.api.LabelImageElement{
-	private String _src;
-	/** The image. _src and _image cannot be both non-null. */
-	private Image _image;
-	/** The hover image's src. */
-	private String _hoversrc;
-	/** The hover image. */
-	private Image _hoverimg;
-	/** Count the version of {@link #_image}. */
-	private byte _imgver;
-	/** Count the version of {@link #_hoverimg}. */
-	private byte _hoverimgver;
+	private AuxInfo _auxinf;
 
 	protected LabelImageElement() {
 	}
@@ -65,7 +55,7 @@ abstract public class LabelImageElement extends LabelElement implements org.zkos
 	 * <p>Default: null.
 	 */
 	public String getImage() {
-		return _src;
+		return _auxinf != null && _auxinf.image instanceof String ? (String)_auxinf.image: null;
 	}
 	/** Sets the image URI.
 	 * <p>Calling this method implies setImageContent(null).
@@ -76,9 +66,8 @@ abstract public class LabelImageElement extends LabelElement implements org.zkos
 	 */
 	public void setImage(String src) {
 		if (src != null && src.length() == 0) src = null;
-		if (_image != null || !Objects.equals(_src, src)) {
-			_src = src;
-			_image = null;
+		if (!Objects.equals(_auxinf != null ? _auxinf.image: null, src)) {
+			initAuxInfo().image = src;
 			smartUpdate("image", new EncodedImageURL());
 		}
 	}
@@ -105,10 +94,9 @@ abstract public class LabelImageElement extends LabelElement implements org.zkos
 	 * @see #setImage
 	 */
 	public void setImageContent(Image image) {
-		if (_src != null || image != _image) {
-			_image = image;
-			_src = null;
-			if (_image != null) _imgver++; //enforce browser to reload image
+		if ((_auxinf != null ? _auxinf.image: null) != image) {
+			initAuxInfo().image = image;
+			if (image != null) _auxinf.imgver++; //enforce browser to reload image
 			smartUpdate("image", new EncodedImageURL());
 		}
 	}
@@ -137,7 +125,8 @@ abstract public class LabelImageElement extends LabelElement implements org.zkos
 	 * Actually, it returns null if {@link #setImage} was called.
 	 */
 	public Image getImageContent() {
-		return _image;
+		return _auxinf != null && _auxinf.image instanceof Image ?
+			(Image)_auxinf.image: null;
 	}
 
 	/** Returns the URI of the hover image.
@@ -146,7 +135,8 @@ abstract public class LabelImageElement extends LabelElement implements org.zkos
 	 * @since 3.5.0
 	 */
 	public String getHoverImage() {
-		return _hoversrc;
+		return _auxinf != null && _auxinf.hoverimg instanceof String ?
+			(String)_auxinf.hoverimg: null;
 	}
 	/** Sets the image URI.
 	 * The hover image is used when the mouse is moving over this component.
@@ -157,11 +147,22 @@ abstract public class LabelImageElement extends LabelElement implements org.zkos
 	 */
 	public void setHoverImage(String src) {
 		if (src != null && src.length() == 0) src = null;
-		if (_hoverimg != null || !Objects.equals(_hoversrc, src)) {
-			_hoversrc = src;
-			_hoverimg = null;
+		if (!Objects.equals(_auxinf != null ? _auxinf.hoverimg: null, src)) {
+			initAuxInfo().hoverimg = src;
 			smartUpdate("hoverImage", new EncodedHoverURL());
 		}
+	}
+	/** Returns the content of the hover image
+	 * set by {@link #setHoverImageContent(Image)}
+	 * or {@link #setHoverImageContent(RenderedImage)}.
+	 *
+	 * <p>Note: it won't load the content specified by {@link #setImage}.
+	 * Actually, it returns null if {@link #setImage} was called.
+	 * @since 5.0.8
+	 */
+	public Image getHoverImageContent() {
+		return _auxinf != null && _auxinf.hoverimg instanceof Image ?
+			(Image)_auxinf.hoverimg: null;
 	}
 	/** Sets the content of the hover image directly.
 	 * The hover image is used when the mouse is moving over this component.
@@ -174,10 +175,9 @@ abstract public class LabelImageElement extends LabelElement implements org.zkos
 	 * @since 3.5.0
 	 */
 	public void setHoverImageContent(Image image) {
-		if (_hoversrc != null || image != _hoverimg) {
-			_hoverimg = image;
-			_hoversrc = null;
-			if (_hoverimg != null) _hoverimgver++; //enforce browser to reload image
+		if ((_auxinf != null ? _auxinf.hoverimg: null) != image) {
+			initAuxInfo().hoverimg = image;
+			if (image != null) _auxinf.hoverimgver++; //enforce browser to reload image
 			smartUpdate("hoverImage", new EncodedHoverURL());
 		}
 	}
@@ -205,7 +205,7 @@ abstract public class LabelImageElement extends LabelElement implements org.zkos
 	 * {@link #setImageContent(org.zkoss.image.Image)} is called with non-null.
 	 */
 	public boolean isImageAssigned() {
-		return _src != null || _image != null;
+		return _auxinf != null && _auxinf.image != null;
 	}
 	/** Returns the encoded URL for the image ({@link #getImage}
 	 * or {@link #getImageContent}), or null if no image.
@@ -213,26 +213,29 @@ abstract public class LabelImageElement extends LabelElement implements org.zkos
 	 * <p>Note: this method can be invoked only if execution is not null.
 	 */
 	private String getEncodedImageURL() {
-		if (_image != null)
-			return Utils.getDynamicMediaURI( //already encoded
-				this, _imgver, "c/" + _image.getName(), _image.getFormat());
+		if (_auxinf != null && _auxinf.image instanceof Image) {
+			final Image image = (Image)_auxinf.image;
+			return Utils.getDynamicMediaURI(this, //already encoded
+				_auxinf.imgver, "c/" + image.getName(), image.getFormat());
+		}
 
 		final Desktop dt = getDesktop(); //it might not belong to any desktop
-		return dt != null && _src != null ?
-			dt.getExecution().encodeURL(_src): null;
+		return dt != null && _auxinf != null && _auxinf.image != null ?
+			dt.getExecution().encodeURL((String)_auxinf.image): null;
 	}
 	/** Returns the encoded URL for the hover image or null if not
 	 * available.
 	 */
 	private String getEncodedHoverURL() {
-		if (_hoverimg != null)
-			return Utils.getDynamicMediaURI(
-				this, _hoverimgver,
-				"h/" + _hoverimg.getName(), _hoverimg.getFormat());
+		if (_auxinf != null && _auxinf.hoverimg instanceof Image) {
+			final Image image = (Image)_auxinf.hoverimg;
+			return Utils.getDynamicMediaURI(this,
+				_auxinf.hoverimgver, "h/" + image.getName(), image.getFormat());
+		}
 
 		final Desktop dt = getDesktop(); //it might not belong to any desktop
-		return dt != null && _hoversrc != null ?
-			dt.getExecution().encodeURL(_hoversrc): null;
+		return dt != null && _auxinf != null && _auxinf.hoverimg != null ?
+			dt.getExecution().encodeURL((String)_auxinf.hoverimg): null;
 	}
 
 	//super//
@@ -245,7 +248,7 @@ abstract public class LabelImageElement extends LabelElement implements org.zkos
 	}
 
 	//-- ComponentCtrl --//
-	protected Object newExtraCtrl() {
+	public Object getExtraCtrl() {
 		return new ExtraCtrl();
 	}
 	/** A utility class to implement {@link #getExtraCtrl}.
@@ -260,10 +263,10 @@ abstract public class LabelImageElement extends LabelElement implements org.zkos
 				if (j >= 0) {
 					int k = pathInfo.indexOf('/', ++j);
 					if (k == j + 1 && pathInfo.charAt(j) == 'h')
-						return _hoverimg;
+						return getHoverImageContent();
 				}
 			}
-			return _image;
+			return getImageContent();
 		}
 	}
 	private class EncodedImageURL implements org.zkoss.zk.ui.util.DeferredValue {
@@ -274,6 +277,41 @@ abstract public class LabelImageElement extends LabelElement implements org.zkos
 	private class EncodedHoverURL implements org.zkoss.zk.ui.util.DeferredValue {
 		public Object getValue() {
 			return getEncodedHoverURL();
+		}
+	}
+
+	//Cloneable//
+	public Object clone() {
+		final LabelImageElement clone = (LabelImageElement)super.clone();
+		if (_auxinf != null)
+			clone._auxinf = (AuxInfo)_auxinf.clone();
+		return clone;
+	}
+
+	private AuxInfo initAuxInfo() {
+		if (_auxinf == null)
+			_auxinf = new AuxInfo();
+		return _auxinf;
+	}
+	/** Merge multiple members to minimize the memory use.
+	 * @since 5.0.8
+	 */
+	private static class AuxInfo implements java.io.Serializable, Cloneable {
+		/** The image; either String or Image. */
+		private Object image;
+		/** The hover image; either String or Image. */
+		private Object hoverimg;
+		/** Count the version of {@link #image}. */
+		private byte imgver;
+		/** Count the version of {@link #hoverimg}. */
+		private byte hoverimgver;
+
+		public Object clone() {
+			try {
+				return super.clone();
+			} catch (CloneNotSupportedException e) {
+				throw new InternalError();
+			}
 		}
 	}
 }

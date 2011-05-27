@@ -31,7 +31,7 @@ import org.zkoss.lang.Library;
 import org.zkoss.lang.Classes;
 import org.zkoss.util.logging.Log;
 import org.zkoss.util.resource.Locator;
-import org.zkoss.util.resource.XMLResourcesLocator;
+import org.zkoss.util.resource.ClassLocator;
 import org.zkoss.idom.Document;
 import org.zkoss.idom.Element;
 import org.zkoss.idom.Attribute;
@@ -39,14 +39,15 @@ import org.zkoss.idom.ProcessingInstruction;
 import org.zkoss.idom.input.SAXBuilder;
 import org.zkoss.idom.util.IDOMs;
 import org.zkoss.xel.taglib.Taglib;
-import org.zkoss.html.JavaScript;
-import org.zkoss.html.StyleSheet;
+import org.zkoss.web.servlet.JavaScript;
+import org.zkoss.web.servlet.StyleSheet;
 
 import org.zkoss.zk.ui.UiException;
 import org.zkoss.zk.ui.metainfo.impl.*;
 import org.zkoss.zk.ui.sys.ConfigParser;
 import org.zkoss.zk.ui.sys.PageRenderer;
-import org.zkoss.zk.ui.impl.Utils;
+import org.zkoss.zk.device.Devices;
+import org.zkoss.zk.device.Device;
 
 /**
  * Utilities to load language definitions.
@@ -57,6 +58,7 @@ public class DefinitionLoaders {
 	private static final Log log = Log.lookup(DefinitionLoaders.class);
 
 	private static List _addons;
+	private static List _langs;
 	/** A map of (String ext, String lang). */
 	private static Map _exts;
 	private static boolean _loaded, _loading;
@@ -77,19 +79,40 @@ public class DefinitionLoaders {
 	//2) deserialize LanguageDefinition (and maybe ComponentDefinition)
 
 	/** Adds a language addon.
+	 * It is usually used when an application want to load additional addons.
+	 * For example, if you want to load an addon only if
+	 * the professional edition is ready, you can register a
+	 * {@link org.zkoss.zk.ui.util.WebAppInit} listener.
 	 */
 	public static void addAddon(Locator locator, URL url) {
 		if (locator == null || url == null)
 			throw new IllegalArgumentException("null");
 
 		if (_loaded) {
-			loadAddon(locator, url);
+			loadLang(locator, url, true); //addon
 		} else {
 			if (_addons == null)
 				_addons = new LinkedList();
 			_addons.add(new Object[] {locator, url});
 		}
 	}
+	/** Adds a language.
+	 * It is usually used when application want to load additional language.
+	 * @since 5.0.7
+	 */
+	public static void addLanguage(Locator locator, URL url) {
+		if (locator == null || url == null)
+			throw new IllegalArgumentException("null");
+
+		if (_loaded) {
+			loadLang(locator, url, false);
+		} else {
+			if (_langs == null)
+				_langs = new LinkedList();
+			_langs.add(new Object[] {locator, url});
+		}
+	}
+
 	/** Associates an extension to a language.
 	 *
 	 * @param lang the language name. It cannot be null.
@@ -130,7 +153,7 @@ public class DefinitionLoaders {
 		}
 	}
 	private static void load0() throws java.io.IOException {
-		final XMLResourcesLocator locator = Utils.getXMLResourcesLocator();
+		final ClassLocator locator = new ClassLocator();
 
 		//1. parse config.xml
 		final ConfigParser parser = new ConfigParser();
@@ -152,12 +175,20 @@ public class DefinitionLoaders {
 			}
 		}
 
-		//3. process lang-addon.xml (with dependency)
+		//5. process other language (from addLanguage)
+		if (_langs != null) {
+			for (Iterator it = _langs.iterator(); it.hasNext();) {
+				final Object[] p = (Object[])it.next();
+				loadLang((Locator)p[0], (URL)p[1], false);
+			}
+			_langs = null; //free memory
+		}
+
+		//4. process lang-addon.xml (with dependency)
 		final List xmls = locator.getDependentXMLResources(
 			"metainfo/zk/lang-addon.xml", "addon-name", "depends");
 		for (Iterator it = xmls.iterator(); it.hasNext();) {
-			final XMLResourcesLocator.Resource res =
-				(XMLResourcesLocator.Resource)it.next();
+			final ClassLocator.Resource res = (ClassLocator.Resource)it.next();
 			try {
 				if (ConfigParser.checkVersion(res.url, res.document, true))
 					parseLang(res.document, locator, res.url, true);
@@ -167,16 +198,16 @@ public class DefinitionLoaders {
 			}
 		}
 
-		//4. process other addon (from addAddon)
+		//5. process other addon (from addAddon)
 		if (_addons != null) {
 			for (Iterator it = _addons.iterator(); it.hasNext();) {
 				final Object[] p = (Object[])it.next();
-				loadAddon((Locator)p[0], (URL)p[1]);
+				loadLang((Locator)p[0], (URL)p[1], true); //addon
 			}
 			_addons = null; //free memory
 		}
 
-		//5. process the extension
+		//6. process the extension
 		if (_exts != null) {
 			for (Iterator it = _exts.entrySet().iterator(); it.hasNext();) {
 				final Map.Entry me = (Map.Entry)it.next();
@@ -191,14 +222,14 @@ public class DefinitionLoaders {
 			_exts = null;
 		}
 	}
-	/** Loads a language addon.
+	/** Loads a language.
 	 */
-	private static void loadAddon(Locator locator, URL url) {
+	private static void loadLang(Locator locator, URL url, boolean addon) {
 		try {
 			parseLang(
-				new SAXBuilder(true, false, true).build(url), locator, url, true);
+				new SAXBuilder(true, false, true).build(url), locator, url, addon);
 		} catch (Exception ex) {
-			log.error("Failed to load addon: "+url, ex);
+			log.error("Failed to load "+(addon?"addon":"language")+": "+url, ex);
 			//keep running
 		}
 	}
@@ -209,9 +240,11 @@ public class DefinitionLoaders {
 		final Element root = doc.getRootElement();
 		final String lang = IDOMs.getRequiredElementValue(root, "language-name");
 		final LanguageDefinition langdef;
+		final Device device;
 		if (addon) {
 			if (log.debugable()) log.debug("Addon language to "+lang+" from "+root.getElementValue("addon-name", true));
 			langdef = LanguageDefinition.lookup(lang);
+			device = Devices.getDevice(langdef.getDeviceType());
 
 			if (root.getElement("case-insensitive") != null)
 				throw new UiException("case-insensitive not allowed in addon");
@@ -237,6 +270,7 @@ public class DefinitionLoaders {
 			langdef = new LanguageDefinition(
 				deviceType, lang, ns, exts, pageRenderer,
 				"true".equals(ignoreCase), "true".equals(bNative), locator);
+			device = Devices.getDevice(deviceType);
 		}
 
 		parsePI(langdef, doc);
@@ -264,22 +298,27 @@ public class DefinitionLoaders {
 		it.hasNext();) {
 			final Element el = (Element)it.next();
 			String src = el.getAttributeValue("src"),
-				pkg = el.getAttributeValue("package"),
-				defer = el.getAttributeValue("defer");
+				pkg = el.getAttributeValue("package");
+			final boolean merge = "true".equals(el.getAttributeValue("merge"));
+			final boolean ondemand = "true".equals(el.getAttributeValue("ondemand"));
 			if (pkg != null) {
 				if (src != null)
 					log.warning("The src attribute ignored because package is specified, "+el.getLocator());
-				if (!"true".equals(defer)) {
-					src = "~./js/" + pkg + ".wpd";
+				if (!ondemand && !merge) {
+					src = "~." + device.packageToPath(pkg);
 					pkg = null;
 				}
-			} else if ("true".equals(defer))
-				log.warning("The defer attribute omgpred since it can be used with package only, "+el.getLocator());
+			}
 
 			final String ctn = el.getText(true);
 			final JavaScript js;
 			if (pkg != null && pkg.length() > 0) {
-				langdef.addDeferJavaScriptPackage(pkg);
+				if (ondemand) {
+					langdef.removeJavaScript("~." + device.packageToPath(pkg));
+					langdef.removeMergeJavaScriptPackage(pkg);
+				} else {
+					langdef.addMergeJavaScriptPackage(pkg);
+				}
 				continue; //TODO
 			} else if (src != null && src.length() > 0) {
 				if (ctn != null && ctn.length() > 0)
@@ -367,6 +406,7 @@ public class DefinitionLoaders {
 
 			final String macroURI = el.getElementValue("macro-uri", true);
 			final ComponentDefinitionImpl compdef;
+			boolean extend = false;
 			if (macroURI != null && macroURI.length() != 0) {
 				if (log.finerable()) log.finer("macro component definition: "+name);
 
@@ -383,9 +423,10 @@ public class DefinitionLoaders {
 				compdef.setDeclarationURL(url);
 				langdef.addComponentDefinition(compdef);
 			} else if (el.getElement("extends") != null) { //extends
-				if (log.finerable()) log.finer("Extends component definition: "+name);
+				extend = true;
 
 				final String extnm = el.getElementValue("extends", true);
+				if (log.finerable()) log.finer("Extends component definition, "+name+", from "+extnm);
 				final ComponentDefinition ref = langdef.getComponentDefinitionIfAny(extnm);
 				if (ref == null) {
 					log.warning("Component "+name+" ignored. Reason: extends a non-existent component "+extnm+".\n"+el.getLocator());
@@ -435,10 +476,12 @@ public class DefinitionLoaders {
 				compdef.setBlankPreserved(true);
 
 			String wgtnm = el.getElementValue("widget-class", true);
-			noEL("widget-class", wgtnm, el);
 			WidgetDefinition wgtdef = null;
+			if (wgtnm == null && extend)
+				wgtnm = compdef.getDefaultWidgetClass(null);
 			if (wgtnm != null) {
-				wgtdef = getWidgetDefinition(langdef, compdef, wgtnm);
+				if (!withEL(wgtnm))
+					wgtdef = getWidgetDefinition(langdef, compdef, wgtnm);
 				compdef.setDefaultWidgetClass(wgtnm);
 			}
 
@@ -451,28 +494,35 @@ public class DefinitionLoaders {
 				final String nm = IDOMs.getRequiredElementValue(e, "mold-name");
 				final String moldURI = e.getElementValue("mold-uri", true);
 				String cssURI = e.getElementValue("css-uri", true);
-				final String z2cURI = e.getElementValue("z2c-uri", true);
 				final String wn = e.getElementValue("widget-class", true);
 				noEL("mold-uri", moldURI, e); //5.0 limitation
 				noEL("css-uri", cssURI, e);
 
 				compdef.addMold(nm, wn != null ? wn: wgtnm);
 
-				WidgetDefinition wd =
-					wn !=  null ? getWidgetDefinition(langdef, compdef, wn): wgtdef;
-				if (moldURI != null || cssURI != null || z2cURI != null) {
+				WidgetDefinition wd = wn == null ? wgtdef:
+					withEL(wn) ? null: getWidgetDefinition(langdef, compdef, wn);
+				if (moldURI != null) {
 					if (wd != null)
-						wd.addMold(nm, moldURI, cssURI, z2cURI);
+						wd.addMold(nm, moldURI);
 					else
-						log.warning("Mold for "+name+" ignored because widget-class is required, "+e.getLocator());
+						log.error("Mold "+nm+" for "+name+" ignored because "+
+							((wn != null && withEL(wn)) || (wgtnm != null && withEL(wgtnm)) ?
+								"widget-class contains EL expressions":"widget-class is required")
+							+", "+e.getLocator());
 				}
 
 				if (cssURI != null && cssURI.length() > 0) {
 					final char cc = cssURI.charAt(0);
 					if (cc != '/' && cc != '~') {
 						String n = wn != null ? wn: wgtnm;
-						int k = n.lastIndexOf('.');
-						cssURI = "~./js/" + n.substring(0, k).replace('.', '/') + '/' + cssURI;
+						if (!withEL(n)) {
+							int k = n.lastIndexOf('.');
+							cssURI = "~." + device.toAbsolutePath(
+								n.substring(0, k).replace('.', '/') + '/' + cssURI);
+						} else {
+							log.error("Absolute path required for cssURI, since the widget class contains EL expressions, "+e.getLocator());
+						}
 					}
 					langdef.addCSSURI(cssURI);
 				}
@@ -506,8 +556,11 @@ public class DefinitionLoaders {
 	}
 	private static void noEL(String nm, String val, Element el)
 	throws UiException {
-		if (val != null && val.indexOf("${") >= 0)
+		if (withEL(val))
 			throw new UiException(nm+" does not support EL expressions, "+el.getLocator());
+	}
+	private static boolean withEL(String val) {
+		return val != null && val.indexOf("${") >= 0;
 	}
 	/** Parse the processing instructions. */
 	private static void parsePI(LanguageDefinition langdef, Document doc)
@@ -637,28 +690,5 @@ public class DefinitionLoaders {
 			}
 		}
 		return null;
-	}
-
-	private static class Addon {
-		private final Document document;
-		private final int priority;
-		private Addon(Document document) {
-			this.document = document;
-
-			final String p = document.getRootElement().getElementValue("priority", true);
-			this.priority = p != null && p.length() > 0 ? Integer.parseInt(p): 0;
-		}
-		private static void add(List addons, Document document) {
-			final Addon addon = new Addon(document);
-			for (ListIterator it = addons.listIterator(); it.hasNext();) {
-				final Addon a = (Addon)it.next();
-				if (a.priority < addon.priority) {
-					it.previous();
-					it.add(addon);
-					return; //done
-				}
-			}
-			addons.add(addon);
-		}
 	}
 }

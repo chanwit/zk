@@ -18,7 +18,6 @@ package org.zkoss.zul;
 
 import org.zkoss.lang.Objects;
 
-import org.zkoss.html.HTMLs;
 import org.zkoss.zk.ui.Component;
 import org.zkoss.zk.ui.Desktop;
 import org.zkoss.zk.ui.UiException;
@@ -26,7 +25,6 @@ import org.zkoss.zk.ui.WrongValueException;
 import org.zkoss.zk.ui.event.*;
 
 import org.zkoss.zul.impl.LabelImageElement;
-import org.zkoss.zul.impl.Utils;
 
 /**
  * A single choice in a {@link Menupopup} element.
@@ -35,13 +33,9 @@ import org.zkoss.zul.impl.Utils;
  * <p>Default {@link #getZclass}: z-menu-item. (since 3.5.0)
  * @author tomyeh
  */
-public class Menuitem extends LabelImageElement implements org.zkoss.zul.api.Menuitem {
-	private String _value = "";
-	private String _href, _target;
-	private boolean _autocheck, _checked;
-	private boolean _disabled = false;
-	private boolean _checkmark;
-	private String _upload;
+public class Menuitem extends LabelImageElement
+implements org.zkoss.zul.api.Menuitem, org.zkoss.zk.ui.ext.Disable {
+	private AuxInfo _auxinf;
 
 	static {
 		addClientEvent(Menuitem.class, Events.ON_CHECK, CE_IMPORTANT);
@@ -61,16 +55,17 @@ public class Menuitem extends LabelImageElement implements org.zkoss.zul.api.Men
 	 * @since 3.5.0
 	 */
 	public boolean isCheckmark() {
-		return _checkmark;
+		return _auxinf != null && _auxinf.checkmark;
 	}
 	/** Sets whether the check mark shall be displayed in front
 	 * of each item.
+	 * <p>Note the checkbox can be checked only if {@link #isAutocheck()} is true
 	 * @since 3.5.0
 	 */
 	public void setCheckmark(boolean checkmark) {
-		if (_checkmark != checkmark) {
-			_checkmark = checkmark;
-			smartUpdate("checkmark", checkmark);
+		if ((_auxinf != null && _auxinf.checkmark) != checkmark) {
+			initAuxInfo().checkmark = checkmark;
+			smartUpdate("checkmark", isCheckmark());
 		}
 	}
 
@@ -83,9 +78,9 @@ public class Menuitem extends LabelImageElement implements org.zkoss.zul.api.Men
 	 * @since 3.0.1
 	 */
 	public void setDisabled(boolean disabled) {
-		if (_disabled != disabled) {
-			_disabled = disabled;
-			smartUpdate("disabled", disabled);
+		if ((_auxinf != null && _auxinf.disabled) != disabled) {
+			initAuxInfo().disabled = disabled;
+			smartUpdate("disabled", isDisabled());
 		}
 	}
 	
@@ -94,40 +89,79 @@ public class Menuitem extends LabelImageElement implements org.zkoss.zul.api.Men
 	 * @since 3.0.1
 	 */
 	public boolean isDisabled() {
-		return _disabled;
+		return _auxinf != null && _auxinf.disabled;
 	}
-
+	/** Returns a list of component IDs that shall be disabled when the user
+	 * clicks this menuitem.
+	 * @since 5.0.7
+	 */
+	public String getAutodisable() {
+		return _auxinf != null ? _auxinf.autodisable: null;
+	}
+	/** Sets a list of component IDs that shall be disabled when the user
+	 * clicks this menuitem.
+	 *
+	 * <p>To represent the menuitem itself, the developer can specify <code>self</code>.
+	 * For example, <code>&lt;menuitem id="ok" autodisable="self,cancel"/></code>
+	 * is the same as <code>&lt;menuitem id="ok" autodisable="ok,cancel"/></code>
+	 * that will disable
+	 * both the ok and cancel menuitem when an user clicks it.
+	 *
+	 * <p>The menuitem being disabled will be enabled automatically
+	 * once the client receives a response from the server.
+	 * In other words, the server doesn't notice if a menuitem is disabled
+	 * with this method.
+	 *
+	 * <p>However, if you prefer to enable them later manually, you can
+	 * prefix with '+'. For example,
+	 * <code>&lt;menuitem id="ok" autodisable="+self,+cancel"/></code>
+	 *
+	 * <p>Then, you have to enable them manually such as
+	 * <pre><code>if (something_happened){
+	 *  ok.setDisabled(false);
+	 *  cancel.setDisabled(false);
+	 *</code></pre>
+	 *
+	 * <p>Default: null.
+	 * @since 5.0.7
+	 */
+	public void setAutodisable(String autodisable) {
+		if (!Objects.equals(_auxinf != null ? _auxinf.autodisable: null, autodisable)) {
+			initAuxInfo().autodisable = autodisable;
+			smartUpdate("autodisable", getAutodisable());
+		}
+	}
 	/** Returns the value.
 	 * <p>Default: "".
 	 */
 	public String getValue() {
-		return _value;
+		return _auxinf != null ? _auxinf.value: "";
 	}
 	/** Sets the value.
 	 */
 	public void setValue(String value) {
 		if (value == null)
 			value = "";
-		if (!_value.equals(value)) {
-			_value = value;
-			smartUpdate("value", value);
+		if (!Objects.equals(_auxinf != null ? _auxinf.value: "", value)) {
+			initAuxInfo().value = value;
+			smartUpdate("value", getValue());
 		}
 	}
 	/** Returns whether it is checked.
 	 * <p>Default: false.
 	 */
 	public boolean isChecked() {
-		return _checked;
+		return _auxinf != null && _auxinf.checked;
 	}
 	/** Sets whether it is checked.
 	 * <p> This only applies when {@link #isCheckmark()} = true. (since 3.5.0)
 	 */
 	public void setChecked(boolean checked) {
-		if (_checked != checked) {
-			_checked = checked;
-			if (_checked)
-				_checkmark = true;
-			smartUpdate("checked", checked);
+		if ((_auxinf != null && _auxinf.checked) != checked) {
+			initAuxInfo().checked = checked;
+			if (_auxinf.checked)
+				_auxinf.checkmark = true;
+			smartUpdate("checked", isChecked());
 		}
 	}
 	/** Returns whether the menuitem check mark will update each time
@@ -135,16 +169,16 @@ public class Menuitem extends LabelImageElement implements org.zkoss.zul.api.Men
 	 * <p>Default: false.
 	 */
 	public boolean isAutocheck() {
-		return _autocheck;
+		return _auxinf != null && _auxinf.autocheck;
 	}
 	/** Sets whether the menuitem check mark will update each time
 	 * the menu item is selected.
 	 * <p> This only applies when {@link #isCheckmark()} = true. (since 3.5.0)
 	 */
 	public void setAutocheck(boolean autocheck) {
-		if (_autocheck != autocheck) {
-			_autocheck = autocheck;
-			smartUpdate("autocheck", autocheck);
+		if ((_auxinf != null && _auxinf.autocheck) != autocheck) {
+			initAuxInfo().autocheck = autocheck;
+			smartUpdate("autocheck", isAutocheck());
 		}
 	}
 
@@ -153,16 +187,16 @@ public class Menuitem extends LabelImageElement implements org.zkoss.zul.api.Men
 	 * specify the onClick handler.
 	 */
 	public String getHref() {
-		return _href;
+		return _auxinf != null ? _auxinf.href: null;
 	}
 	/** Sets the href.
 	 */
 	public void setHref(String href) throws WrongValueException {
 		if (href != null && href.length() == 0)
 			href = null;
-		if (!Objects.equals(_href, href)) {
-			_href = href;
-			smartUpdate("href", new EncodedHref()); //Bug #2871082
+		if (!Objects.equals(_auxinf != null ? _auxinf.href: null, href)) {
+			initAuxInfo().href = href;
+			smartUpdate("href", new EncodedHref()); //Bug 1850895
 		}
 	}
 
@@ -174,7 +208,7 @@ public class Menuitem extends LabelImageElement implements org.zkoss.zul.api.Men
 	 * <p>Default: null.
 	 */
 	public String getTarget() {
-		return _target;
+		return _auxinf != null ? _auxinf.target: null;
 	}
 	/** Sets the target frame or window.
 	 * @param target the name of the frame or window to hyperlink.
@@ -183,9 +217,9 @@ public class Menuitem extends LabelImageElement implements org.zkoss.zul.api.Men
 		if (target != null && target.length() == 0)
 			target = null;
 
-		if (!Objects.equals(_target, target)) {
-			_target = target;
-			smartUpdate("target", _target);
+		if (!Objects.equals(_auxinf != null ? _auxinf.target: null, target)) {
+			initAuxInfo().target = target;
+			smartUpdate("target", getTarget());
 		}
 	}
 
@@ -201,7 +235,7 @@ public class Menuitem extends LabelImageElement implements org.zkoss.zul.api.Men
 	 * @since 5.0.0
 	 */
 	public String getUpload() {
-		return _upload;
+		return _auxinf != null ? _auxinf.upload: null;
 	}
 	/** Sets the JavaScript class at the client to handle the upload if this
 	 * button is used for file upload.
@@ -239,16 +273,17 @@ public class Menuitem extends LabelImageElement implements org.zkoss.zul.api.Men
 		&& (upload.length() == 0 || "false".equals(upload)))
 			upload = null;
 
-		if (!Objects.equals(upload, _upload)) {
-			_upload = upload;
-			smartUpdate("upload", _upload);
+		if (!Objects.equals(upload, _auxinf != null ? _auxinf.upload: null)) {
+			initAuxInfo().upload = upload;
+			smartUpdate("upload", getUpload());
 		}
 	}
 
 	//Bug #2871082
 	private String getEncodedHref() {
 		final Desktop dt = getDesktop();
-		return _href != null && dt != null ? dt.getExecution().encodeURL(_href): null;
+		return _auxinf != null && _auxinf.href != null && dt != null ?
+			dt.getExecution().encodeURL(_auxinf.href): null;
 			//if desktop is null, it doesn't belong to any execution
 	}
 	
@@ -259,6 +294,13 @@ public class Menuitem extends LabelImageElement implements org.zkoss.zul.api.Men
 			throw new UiException("Unsupported parent for menuitem: "+parent);
 		super.beforeParentChanged(parent);
 	}
+	//Cloneable//
+	public Object clone() {
+		final Menuitem clone = (Menuitem)super.clone();
+		if (_auxinf != null)
+			clone._auxinf = (AuxInfo)_auxinf.clone();
+		return clone;
+	}
 	/** Not childable. */
 	protected boolean isChildable() {
 		return false;
@@ -268,17 +310,22 @@ public class Menuitem extends LabelImageElement implements org.zkoss.zul.api.Men
 	throws java.io.IOException {
 		super.renderProperties(renderer);
 		
-		render(renderer, "checkmark", _checkmark);
-		render(renderer, "disabled", _disabled);
-		render(renderer, "checked", _checked);
-		render(renderer, "autocheck", _autocheck);
-		String href = null;
-		if (_href != null) render(renderer, "href", href = getEncodedHref()); //Bug #2871082
-		if (_target != null) render(renderer, "target", _target);
-		render(renderer, "upload", _upload);
-		render(renderer, "value", _value);
+		render(renderer, "checkmark", isCheckmark());
+		render(renderer, "disabled", isDisabled());
+		render(renderer, "checked", isChecked());
+		render(renderer, "autocheck", isAutocheck());
+		render(renderer, "autodisable", getAutodisable());
+		final String href;
+		render(renderer, "href", href = getEncodedHref()); //Bug #2871082
+		render(renderer, "target", getTarget());
+		render(renderer, "upload", getUpload());
+		render(renderer, "value", getValue());
 
-		Utils.renderCrawlableA(href, getLabel());
+		org.zkoss.zul.impl.Utils.renderCrawlableA(href, getLabel());
+	}
+	//@Override
+	protected void renderCrawlable(String label) throws java.io.IOException {
+		//does nothing since generated in renderProperties
 	}
 
 	//-- ComponentCtrl --//
@@ -292,8 +339,9 @@ public class Menuitem extends LabelImageElement implements org.zkoss.zul.api.Men
 		final String cmd = request.getCommand();
 		if (cmd.equals(Events.ON_CHECK)) {
 			CheckEvent evt = CheckEvent.getCheckEvent(request);
-			_checked = evt.isChecked();
-			if (_checked) _checkmark = true;
+			initAuxInfo().checked = evt.isChecked();
+			if (_auxinf.checked)
+				_auxinf.checkmark = true;
 			Events.postEvent(evt);
 		} else
 			super.service(request, everError);
@@ -303,6 +351,36 @@ public class Menuitem extends LabelImageElement implements org.zkoss.zul.api.Men
 	private class EncodedHref implements org.zkoss.zk.ui.util.DeferredValue {
 		public Object getValue() {
 			return getEncodedHref();
+		}
+	}
+	//@Override
+	protected void updateByClient(String name, Object value) {
+		if ("disabled".equals(name))
+			setDisabled(value instanceof Boolean ? ((Boolean)value).booleanValue():
+				"true".equals(Objects.toString(value)));
+		else
+			super.updateByClient(name, value);
+	}
+	private AuxInfo initAuxInfo() {
+		if (_auxinf == null)
+			_auxinf = new AuxInfo();
+		return _auxinf;
+	}
+	private static class AuxInfo implements java.io.Serializable, Cloneable {
+		private String value = "";
+		private String href, target;
+		private String autodisable;
+		protected String upload;
+		private boolean disabled;
+		private boolean autocheck, checked;
+		private boolean checkmark;
+
+		public Object clone() {
+			try {
+				return super.clone();
+			} catch (CloneNotSupportedException e) {
+				throw new InternalError();
+			}
 		}
 	}
 }

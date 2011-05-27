@@ -7,7 +7,7 @@
 	History:
 		Sat Jan 16 10:28:21 TST 2010, Created by tomyeh
 
-Copyright (C) 2009 Potix Corporation. All Rights Reserved.
+Copyright (C) 2010 Potix Corporation. All Rights Reserved.
 
 */
 package org.zkoss.zk.ui.sys;
@@ -21,16 +21,6 @@ package org.zkoss.zk.ui.sys;
  */
 public class Attributes {
 	//Desktop//
-	/** A desktop attribute to indicate the completeness percentage of 
-	 * the current file upload.
-	 * It is an integer ranging from 0 to 99.
-	 */
-	public static final String UPLOAD_PERCENT = "org.zkoss.zk.upload.percent";
-	/** A desktop attribute to indicate the number of bytes of the current
-	 * file upload.
-	 * It is a non-negative long.
-	 */
-	public static final String UPLOAD_SIZE = "org.zkoss.zk.upload.size";
 
 	//Component/Page//
 	/** A component or page attribute to indicate if the client ROD
@@ -174,6 +164,18 @@ public class Attributes {
 	 */
 	public static final String PORTLET_RENDER_PATCH_CLASS = "org.zkoss.zk.portlet.PageRenderPatch.class";
 
+	/** A library property to specify the timeout (in milliseconds) to
+	 * wait for the activation.
+	 * <p>Notice that, after timeout, the activation will restart automatically.
+	 * That is, the value won't really affect the result (no aborting or other).
+	 * It is designed to avoid the annoying warning messages found in some JVM.
+	 * For example, IBM JVM shows a warning if wait() exceeds 10 minutes.
+	 * To prevent the warning, you can set the value to less than 10 minutes.
+	 * <p>Default: 120000 (unit: milliseconds)
+	 * @since 5.0.3
+	 */
+	public static final String ACTIVATE_RETRY_DELAY = "org.zkoss.zk.ui.activate.wait.retry.timeout";
+
 	//URI//
 	/** A special prefix that is used if you want to inject a special
 	 * fragment into the URI of a clss Web resource (CWR).
@@ -187,4 +189,28 @@ public class Attributes {
 	 * ({@link org.zkoss.zk.ui.http.WcsExtendlet}).
 	 */
 	public static final String INJECT_URI_PREFIX = "_zkiju-";
+
+	/** An execution attribute to indicate that a page is rendering.
+	 * @since 5.0.4
+	 */
+	public static final String PAGE_RENDERING = "org.zkoss.zk.ui.page.rendering";
+
+	/** A component attribute used to indicate whether to enable the stubing of
+	 * the native components.
+	 * <p>By default, the native component will be stub-ized, i.e., replaced
+	 * with a stateless component called {@link org.zkoss.zk.ui.StubComponent},
+	 * such that the memory footprint will be minimized.
+	 * To stub-ize non-native, please use {@link org.zkoss.zk.ui.Component#setStubonly}.
+	 * <p>Default: true. Though rarely, you could disable the stubing by
+	 * setting this attribute to false. For example, if you have a component that
+	 * has native childs, and you'd like to detach it and re-attach later.
+	 * Since the server does not maintain the states, it cannot be restored when
+	 * attached back.
+	 * <p>It shall be set to a component's attribute, and it affects
+	 * all descendant components unless it was set explicitly.
+	 * <p>Default: true
+	 * <p>Avaialbe in ZK EE only.
+	 * @since 5.0.6
+	 */
+	public static final String STUB_NATIVE = "org.zkoss.zk.ui.stub.native";
 }

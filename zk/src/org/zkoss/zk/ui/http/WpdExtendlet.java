@@ -14,43 +14,42 @@ Copyright (C) 2008 Potix Corporation. All Rights Reserved.
 */
 package org.zkoss.zk.ui.http;
 
-import java.util.Iterator;
-import java.util.List;
-import java.util.LinkedList;
-import java.util.Set;
-import java.util.Map;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.io.File;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
 
 import javax.servlet.ServletContext;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
-import org.zkoss.lang.Strings;
-import org.zkoss.lang.Exceptions;
-import org.zkoss.io.Files;
-import org.zkoss.json.JSONObject;
-import org.zkoss.json.JSONArray;
 import org.zkoss.idom.Element;
 import org.zkoss.idom.input.SAXBuilder;
 import org.zkoss.idom.util.IDOMs;
-
+import org.zkoss.io.Files;
+import org.zkoss.json.JSONArray;
+import org.zkoss.json.JSONObject;
+import org.zkoss.lang.Exceptions;
+import org.zkoss.lang.Library;
+import org.zkoss.lang.Strings;
 import org.zkoss.web.servlet.Servlets;
-import org.zkoss.web.servlet.http.Https;
 import org.zkoss.web.servlet.http.Encodes;
-import org.zkoss.web.util.resource.ExtendletContext;
+import org.zkoss.web.servlet.http.Https;
 import org.zkoss.web.util.resource.ExtendletConfig;
+import org.zkoss.web.util.resource.ExtendletContext;
 import org.zkoss.web.util.resource.ExtendletLoader;
-
-import org.zkoss.zk.ui.WebApps;
-import org.zkoss.zk.ui.WebApp;
+import org.zkoss.zk.device.Device;
+import org.zkoss.zk.device.Devices;
 import org.zkoss.zk.ui.UiException;
+import org.zkoss.zk.ui.WebApp;
+import org.zkoss.zk.ui.WebApps;
 import org.zkoss.zk.ui.metainfo.LanguageDefinition;
 import org.zkoss.zk.ui.metainfo.WidgetDefinition;
 import org.zkoss.zk.ui.util.Configuration;
@@ -85,19 +84,53 @@ public class WpdExtendlet extends AbstractExtendlet {
 		config.addCompressExtension("wpd");
 	}
 
+	//@Override
 	public void service(HttpServletRequest request,
 	HttpServletResponse response, String path)
 	throws ServletException, IOException {
+		byte[] data = retrieve(request, response, path);
+		if (data == null)
+			return;
+
+		response.setContentType("text/javascript;charset=UTF-8");
+		if (_webctx.shallCompress(request, "wpd") && data.length > 200) {
+			byte[] bs = Https.gzip(request, response, null, data);
+			if (bs != null) data = bs; //yes, browser support compress
+		}
+		response.setContentLength(data.length);
+		response.getOutputStream().write(data);
+		response.flushBuffer();
+	}
+	/** Retrieves the content of the given path.
+	 * @since 5.0.4
+	 */
+	protected byte[] retrieve(HttpServletRequest request,
+	HttpServletResponse response, String path)
+	throws ServletException, IOException {
 		byte[] data;
+		boolean zkpkg = false;
 		setProvider(new Provider(request, response));
 		try {
+			
+			/* 2011/4/27 Tony:
+			 * Here we don't use "org.zkoss.web.classWebResource.cache" directly,
+			 * since some of our users might want to clear the cache for their css.dsp ,
+			 * and still cache the wpd js resource.
+			 * 
+			 * So we add on a new config to clear the widget source .
+			 * @see bug 2898413
+			 */
+			String resourceCache = Library.getProperty("org.zkoss.zk.WPD.cache");
+			if (resourceCache != null && "false".equalsIgnoreCase(resourceCache))
+				_cache.clear();
+			
 			final Object rawdata = _cache.get(path);
 			if (rawdata == null) {
 				if (Servlets.isIncluded(request))
 					log.error("Failed to load the resource: "+path);
 					//It might be eaten, so log the error
 				response.sendError(response.SC_NOT_FOUND, path);
-				return;
+				return null;
 			}
 
 			final boolean cacheable;
@@ -109,6 +142,7 @@ public class WpdExtendlet extends AbstractExtendlet {
 				final WpdContent wc = (WpdContent)rawdata;
 				data = wc.toByteArray(request);
 				cacheable = wc.cacheable;
+				zkpkg = wc.zkpkg;
 			}
 			if (cacheable)
 				org.zkoss.zk.fn.JspFns.setCacheControl(getServletContext(),
@@ -117,15 +151,50 @@ public class WpdExtendlet extends AbstractExtendlet {
 			setProvider(null);
 		}
 
-		response.setContentType("text/javascript;charset=UTF-8");
-		if (_webctx.shallCompress(request, "wpd") && data.length > 200) {
-			byte[] bs = Https.gzip(request, response, null, data);
-			if (bs != null) data = bs; //yes, browser support compress
-		}
-		response.setContentLength(data.length);
-		response.getOutputStream().write(data);
-		response.flushBuffer();
+		return zkpkg ? mergeJavaScript(request, response, data): data;
 	}
+	/** Returns the device type for this WpdExtendlet.
+	 * <p>Default: ajax.
+	 * The derived class might override it to implement a Wpd extendlet
+	 * for other devices.
+	 * @since 5.0.4
+	 */
+	protected String getDeviceType() {
+		return "ajax";
+	}
+	/** Merges the JavaScript code of the mergeable packages defined in
+	 * {@link LanguageDefinition#getMergeJavaScriptPackages}.
+	 * @since 5.0.4.
+	 */
+	protected byte[] mergeJavaScript(HttpServletRequest request,
+	HttpServletResponse response, byte[] data)
+	throws ServletException, IOException {
+		ByteArrayOutputStream out = null;
+		Device device = null;
+		final String deviceType = getDeviceType();
+		for (Iterator it = LanguageDefinition.getByDeviceType(deviceType).iterator();
+		it.hasNext();) {
+			for (Iterator it2 = ((LanguageDefinition)it.next())
+			.getMergeJavaScriptPackages().iterator(); it2.hasNext();) {
+				final String pkg = (String)it2.next();
+				if (out == null) {
+					out = new ByteArrayOutputStream(1024*100);
+					out.write(data);
+
+					device = Devices.getDevice(deviceType);
+				}
+
+				final String path = device.packageToPath(pkg);
+				data = retrieve(request, response, path);
+				if (data != null)
+					out.write(data);
+				else
+					log.error("Failed to load the resource: "+path);
+			}
+		}
+		return out != null ? out.toByteArray(): data;
+	}
+
 	/*package*/ Object parse(InputStream is, String path)
 	throws Exception {
 		final Element root = new SAXBuilder(true, false, true).build(is).getRootElement();
@@ -139,19 +208,16 @@ public class WpdExtendlet extends AbstractExtendlet {
 			lang != null ? LanguageDefinition.lookup(lang): null;
 		final String dir = path.substring(0, path.lastIndexOf('/') + 1);
 		final boolean cacheable = !"false".equals(root.getAttributeValue("cacheable"));
+
 		final WpdContent wc =
 			zk || aaas || !cacheable || isWpdContentRequired(root) ?
-				new WpdContent(dir, cacheable): null;
+				new WpdContent(dir, zk, cacheable): null;
 
 		final Provider provider = getProvider();
-		final ByteArrayOutputStream out = new ByteArrayOutputStream(1024*8);
+		final ByteArrayOutputStream out = new ByteArrayOutputStream(1024*16);
 		String depends = null;
 		if (zk) {
-			write(out, "//ZK, Copyright 2009 Potix Corporation. Distributed under LGPL 3.0\n"
-				+ "//jQuery, Copyright 2009 John Resig\n"
-				+ "function $eval(s){return eval(s);}"
-					//jq.globalEval() seems have memory leak problem, so use eval()
-				+ "if(!window.zk){");
+			write(out, "if(!window.zk){\n");
 					//may be loaded multiple times because specified in lang.xml
 		} else if (!aaas) {
 			depends = root.getAttributeValue("depends");
@@ -163,12 +229,12 @@ public class WpdExtendlet extends AbstractExtendlet {
 				write(out, "',");
 			} else
 				write(out, '(');
-			write(out, "function(){zk._p=zkpi('");
+			write(out, "function(){if(zk._p=zkpi('");
 			write(out, name);
 			write(out, '\'');
 			if (provider != null && provider.getResource(dir + "wv/zk.wpd") != null)
 				write(out, ",true");
-			write(out, ");try{");
+			write(out, "))try{\n");
 		}
 
 		final Map moldInfos = new HashMap();
@@ -537,10 +603,15 @@ public class WpdExtendlet extends AbstractExtendlet {
 	/*package*/ class WpdContent {
 		private final String _dir;
 		private final List _cnt = new LinkedList();
+		private final boolean zkpkg;
 		private final boolean cacheable;
 
-		private WpdContent(String dir, boolean cacheable) {
+		/**
+		 * @param zkpkg whether it is the zk package.
+		 */
+		private WpdContent(String dir, boolean zkpkg, boolean cacheable) {
 			_dir = dir;
+			this.zkpkg = zkpkg;
 			this.cacheable = cacheable;
 		}
 		private void add(byte[] bs) {

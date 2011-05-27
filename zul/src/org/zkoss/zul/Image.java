@@ -21,7 +21,7 @@ import java.awt.image.RenderedImage;
 import org.zkoss.lang.Objects;
 import org.zkoss.image.Images;
 import org.zkoss.util.media.Media;
-import org.zkoss.html.HTMLs;
+import org.zkoss.xml.HTMLs;
 
 import org.zkoss.zk.ui.Desktop;
 import org.zkoss.zk.ui.Execution;
@@ -34,11 +34,11 @@ import org.zkoss.zul.impl.Utils;
 /**
  * An image.
  *
- * <p>See also <a href="http://docs.zkoss.org/wiki/ZK/How-Tos/Concepts-and-Tricks#How_to_fix_the_alpha_transparency_problem_of_PNG_files_found_in_IE6.3F">how to fix the alpha transparency problem of PNG files found in IE6?</a>
+ * <p>See also <a href="http://books.zkoss.org/wiki/ZK_Client-side_Reference/Customization/Alphafix_for_IE6">how to fix the alpha transparency problem of PNG files found in IE6?</a>
  * @author tomyeh
  */
 public class Image extends XulElement implements org.zkoss.zul.api.Image{
-	private String _align, _border, _hspace, _vspace;
+	private String _align, _hspace, _vspace;
 	private String _src;
 	/** The image. _src and _image cannot be nonnull at the same time.  */
 	private org.zkoss.image.Image _image;
@@ -75,22 +75,15 @@ public class Image extends XulElement implements org.zkoss.zul.api.Image{
 			smartUpdate("align", _align);
 		}
 	}
-	/** Returns the width of the border.
-	 * <p>Default: null (use browser default).
+	/** 
+	 * @deprecated As of release 5.0.5, use CSS instead.
 	 */
 	public String getBorder() {
-		return _border;
+		return null;
 	}
-	/** Sets the width of the border.
+	/** @deprecated As of release 5.0.5, use CSS instead.
 	 */
 	public void setBorder(String border) {
-		if (border != null && border.length() == 0)
-			border = null;
-
-		if (!Objects.equals(_border, border)) {
-			_border = border;
-			smartUpdate("border", _border);
-		}
 	}
 	/** Returns number of pixels of extra space to the left and right
 	 * side of the image.
@@ -296,7 +289,6 @@ public class Image extends XulElement implements org.zkoss.zul.api.Image{
 		if (_hoversrc != null || _hoverimg != null)
 			render(renderer, "hover", getEncodedHoverURL());
 		render(renderer, "align", _align);
-		render(renderer, "border", _border);
 		render(renderer, "hspace", _hspace);
 		render(renderer, "vspace", _vspace);
 	}
@@ -310,7 +302,7 @@ public class Image extends XulElement implements org.zkoss.zul.api.Image{
 	}
 
 	//-- ComponentCtrl --//
-	protected Object newExtraCtrl() {
+	public Object getExtraCtrl() {
 		return new ExtraCtrl();
 	}
 	/** A utility class to implement {@link #getExtraCtrl}.

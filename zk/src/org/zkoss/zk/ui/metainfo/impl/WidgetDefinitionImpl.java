@@ -34,7 +34,7 @@ import org.zkoss.zk.ui.UiException;
 public class WidgetDefinitionImpl implements WidgetDefinition {
 	/** The widget class. */
 	private final String _class;
-	/** A map of molds (String mold, [String moldURI,String cssURI,String z2cURI]). */
+	/** A map of molds (String mold, [String moldURI]). */
 	private Map _molds;
 	/** Whether to preserve the blank text. */
 	private final boolean _blankpresv;
@@ -51,13 +51,18 @@ public class WidgetDefinitionImpl implements WidgetDefinition {
 	public boolean isBlankPreserved() {
 		return _blankpresv;
 	}
-	public void addMold(String name, String moldURI, String cssURI, String z2cURI) {
+	public void addMold(String name, String moldURI) {
 		if (name == null || name.length() == 0)
 			throw new IllegalArgumentException();
 
 		if (_molds == null)
 			_molds = new HashMap(2);
-		_molds.put(name, new String[] {moldURI, cssURI, z2cURI});
+		_molds.put(name, new String[] {moldURI});
+	}
+	/** @deprecated As of release 5.0.4, replaced with {@link #addMold(String, String)}.
+	 */
+	public void addMold(String name, String moldURI, String cssURI, String z2cURI) {
+		addMold(name, moldURI);
 	}
 	public String getMoldURI(String name) {
 		if (_molds == null)
@@ -66,19 +71,13 @@ public class WidgetDefinitionImpl implements WidgetDefinition {
 		final String[] info = (String[])_molds.get(name);
 		return info != null ? info[0]: null;
 	}
+	/** @deprecated As of release 5.0.4, always return null. */
 	public String getCSSURI(String name) {
-		if (_molds == null)
-			return null;
-
-		final String[] info = (String[])_molds.get(name);
-		return info != null ? info[1]: null;
+		return null;
 	}
+	/** @deprecated As of release 5.0.4, always return null. */
 	public String getZ2CURI(String name) {
-		if (_molds == null)
-			return null;
-
-		final String[] info = (String[])_molds.get(name);
-		return info != null ? info[2]: null;
+		return null;
 	}
 	public boolean hasMold(String name) {
 		return _molds != null && _molds.containsKey(name);

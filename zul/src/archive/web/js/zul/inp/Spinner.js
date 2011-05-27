@@ -57,21 +57,7 @@ zul.inp.Spinner = zk.$extends(zul.inp.FormatWidget, {
 			}
 			this.onSize();
 			return;
-		},
-		/** Returns the minimum value.
-		 * @return int
-		 */
-		/** Set the minimum value.
-		 * @param int min
-		 */
-		min: _zkf = function(v){this._min = parseInt(v);},
-		/** Returns the maximum value.
-		 * @return int
-		 */
-		/** Set the maximum value.
-		 * @param int max
-		 */
-		max: _zkf
+		}
 	},
 	getZclass: function () {
 		var zcls = this._zclass;
@@ -87,19 +73,19 @@ zul.inp.Spinner = zk.$extends(zul.inp.FormatWidget, {
 		return this.$supers('getValue', arguments);
 	},
 	setConstraint: function (constr){
-		if(constr != null){
+		if (typeof constr == 'string' && constr.charAt(0) != '['/*by server*/) {
 			var constraint = new zul.inp.SimpleSpinnerConstraint(constr);
 			this._min = constraint._min;
 			this._max = constraint._max;
 			this.$supers('setConstraint', [constraint]);
-		}else
+		} else
 			this.$supers('setConstraint', arguments);
 	},
 	coerceFromString_: function (value) {//copy from intbox
 		if (!value) return null;
 
 		var info = zk.fmt.Number.unformat(this._format, value),
-			val = parseInt(info.raw);
+			val = parseInt(info.raw, 10);
 		if (info.raw != ''+val && info.raw != '-'+val)
 			return {error: zk.fmt.Text.format(msgzul.INTEGER_REQUIRED, value)};
 
@@ -142,36 +128,57 @@ zul.inp.Spinner = zk.$extends(zul.inp.FormatWidget, {
 		}
 		this.$supers('doKeyDown_', arguments);
 	},
-	ondropbtnup: function (evt) {
-		jq(this._currentbtn).removeClass(this.getZclass() + "-btn-clk");
-		this.domUnlisten_(document.body, "mouseup", "ondropbtnup");
+	_ondropbtnup: function (evt) {
+		var zcls = this.getZclass();
+		
+		jq(this._currentbtn).removeClass(zcls + "-btn-clk");
+		if (!this.inRoundedMold()) {
+			jq(this._currentbtn).removeClass(zcls + "-btn-up-clk");
+			jq(this._currentbtn).removeClass(zcls + "-btn-down-clk");
+		}
+		this.domUnlisten_(document.body, "onZMouseUp", "_ondropbtnup");
 		this._currentbtn = null;
 	},
 	_btnDown: function(evt){
-		if (this.inRoundedMold() && !this._buttonVisible) return;
-		if (this.inp && !this.inp.disabled && !zk.dragging) {
+		var isRounded = this.inRoundedMold();
+		if (isRounded && !this._buttonVisible) return;
+		
+		var inp;
+		if(!(inp = this.inp) || inp.disabled) return;
+		
+		var btn = this.$n("btn"),
+			zcls = this.getZclass();
+			
+		if (!zk.dragging) {
 			if (this._currentbtn)
 				this.ondropbtnup(evt);
-			jq(btn).addClass(this.getZclass() + "-btn-clk");
-			this.domListen_(document.body, "mouseup", "ondropbtnup");
+			jq(btn).addClass(zcls + "-btn-clk");
+			this.domListen_(document.body, "onZMouseUp", "_ondropbtnup");
 			this._currentbtn = btn;
 		}
-		var inp = this.inp,
-			btn = this.$n("btn");
-			
-		if(inp.disabled) return;
-
+		
 		this.checkValue();
 		
-		ofs = zk(btn).revisedOffset();
+		var ofs = zk(btn).revisedOffset(),
+			isOverUpBtn = (evt.pageY - ofs[1]) < btn.offsetHeight/2;
 		
-		if ((evt.pageY - ofs[1]) < btn.offsetHeight / 2) { //up
+		if (isOverUpBtn) { //up
 			this._increase(true);
 			this._startAutoIncProc(true);
 		} else {	// down
 			this._increase(false);
 			this._startAutoIncProc(false);
 		}
+		
+		var sfx = isRounded? "" : 
+						isOverUpBtn? "-up":"-down";
+		if ((btn = this.$n("btn" + sfx)) && !isRounded) {
+			jq(btn).addClass(zcls + "-btn" + sfx + "-clk");
+			this._currentbtn = btn;
+		}
+		
+		// disable browser's text selection
+		evt.stop();
 	},
 	/**
 	 * Sets bound value if the value out of range 
@@ -223,7 +230,7 @@ zul.inp.Spinner = zk.$extends(zul.inp.FormatWidget, {
 	},
 	_increase: function (is_add){
 		var inp = this.inp,
-			value = parseInt(inp.value);
+			value = parseInt(inp.value, 10);
 		if (is_add)
 			result = value + this._step;
 		else
@@ -233,8 +240,9 @@ zul.inp.Spinner = zk.$extends(zul.inp.FormatWidget, {
 		if ( result > Math.pow(2,31)-1 )	result = Math.pow(2,31)-1;
 		else if ( result < -Math.pow(2,31) ) result = -Math.pow(2,31);
 
-		if (this._max!=null && result > this._max) result = this._max;
-		else if (this._min!=null && result < this._min) result = this._min;
+		//over bound shall restore value
+		if (this._max!=null && result > this._max) result = value;
+		else if (this._min!=null && result < this._min) result = value;
 
 		inp.value = result;
 		
@@ -243,7 +251,7 @@ zul.inp.Spinner = zk.$extends(zul.inp.FormatWidget, {
 	},
 	_clearValue: function(){
 		var real = this.inp;
-		real.value = real.defaultValue = "";
+		real.value = this._defValue = "";
 		return true;
 	},
 	_startAutoIncProc: function (isup){
@@ -262,27 +270,7 @@ zul.inp.Spinner = zk.$extends(zul.inp.FormatWidget, {
 	/** Synchronizes the input element's width of this component
 	 */
 	syncWidth: function () {
-		var node = this.$n();
-		if (!zk(node).isRealVisible() || (!this._inplace && !node.style.width))
-			return;
-		
-		if (this._buttonVisible && this._inplace) {
-			if (!node.style.width) {
-				var $n = jq(node),
-					inc = this.getInplaceCSS();
-				$n.removeClass(inc);
-				if (zk.opera)
-					node.style.width = jq.px0(zk(node).revisedWidth(node.clientWidth) + zk(node).borderWidth());
-				else
-					node.style.width = jq.px0(zk(node).revisedWidth(node.offsetWidth));
-				$n.addClass(inc);
-			}
-		} 
-		var width = zk.opera ? zk(node).revisedWidth(node.clientWidth) + zk(node).borderWidth()
-							 : zk(node).revisedWidth(node.offsetWidth),
-			btn = this.$n('btn'),
-			inp = this.getInputNode();
-		inp.style.width = jq.px0(zk(inp).revisedWidth(width - (btn ? btn.offsetWidth : 0)));
+		zul.inp.RoundUtl.syncWidth(this, this.$n('btn'));
 	},
 	doFocus_: function (evt) {
 		var n = this.$n();
@@ -300,10 +288,11 @@ zul.inp.Spinner = zk.$extends(zul.inp.FormatWidget, {
 	},
 	doBlur_: function (evt) {
 		var n = this.$n();
-		if (this._inplace && this._inplaceout) {
+		if (this._inplace && this._inplaceout)
 			n.style.width = jq.px0(zk(n).revisedWidth(n.offsetWidth));
-		}
+
 		this.$supers('doBlur_', arguments);
+
 		if (this._inplace && this._inplaceout) {
 			jq(n).addClass(this.getInplaceCSS());
 			this.onSize();
@@ -319,24 +308,18 @@ zul.inp.Spinner = zk.$extends(zul.inp.FormatWidget, {
 	bind_: function () {//after compose
 		this.$supers(zul.inp.Spinner, 'bind_', arguments); 
 		this.timeId = null;
-		var inp = this.inp = this.$n("real"),
-			btn = this.$n("btn");
-		zWatch.listen({onSize: this, onShow: this});
+		var inp = this.inp = this.$n("real"), btn;
 		
 		if (this._inplace)
 			jq(inp).addClass(this.getInplaceCSS());
-
-		if (this._readonly && !this.inRoundedMold())
-			jq(inp).addClass(this.getZclass() + '-right-edge');
 		
-		if(btn){
-			this._auxb = new zul.Auxbutton(this, btn, inp);
-			this.domListen_(btn, "onmousedown", "_btnDown");
-			this.domListen_(btn, "onmouseup", "_btnUp");
-			this.domListen_(btn, "onmouseout", "_btnOut");
-			this.domListen_(btn, "mouseover", "_btnOver");
-		}
-		this.syncWidth();
+		if(btn = this.$n("btn"))
+			this.domListen_(btn, "onZMouseDown", "_btnDown")
+				.domListen_(btn, "onZMouseUp", "_btnUp")
+				.domListen_(btn, "onMouseOut", "_btnOut")
+				.domListen_(btn, "onMouseOver", "_btnOver");
+
+		zWatch.listen({onSize: this, onShow: this});
 	},
 	unbind_: function () {
 		if(this.timerId){
@@ -345,14 +328,12 @@ zul.inp.Spinner = zk.$extends(zul.inp.FormatWidget, {
 		}
 		zWatch.unlisten({onSize: this, onShow: this});
 		var btn = this.$n("btn");
-		if(btn){
-			this._auxb.cleanup();
-			this._auxb = null;
-			this.domUnlisten_(btn, "onmousedown", "_btnDown");
-			this.domUnlisten_(btn, "onmouseup", "_btnUp");
-			this.domUnlisten_(btn, "onmouseout", "_btnOut");
-			this.domUnlisten_(btn, "mouseover", "_btnOver");
-		}
+		if(btn)
+			this.domUnlisten_(btn, "onZMouseDown", "_btnDown")
+				.domUnlisten_(btn, "onZMouseUp", "_btnUp")
+				.domUnlisten_(btn, "onMouseOut", "_btnOut")
+				.domUnlisten_(btn, "onMouseOver", "_btnOver");
+
 		this.$supers(zul.inp.Spinner, 'unbind_', arguments);
 	}
 	

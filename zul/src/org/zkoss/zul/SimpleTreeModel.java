@@ -17,6 +17,7 @@ Copyright (C) 2005 Potix Corporation. All Rights Reserved.
 package org.zkoss.zul;
 
 /**
+ * @deprecated As of release 5.0.6, replaced with {@link DefaultTreeModel}.
  * A simple implementation of {@link TreeModel}.
  * Note: It assumes the content is immutable.
  *
@@ -24,8 +25,8 @@ package org.zkoss.zul;
  * @since 3.0.0
  */
 public class SimpleTreeModel extends AbstractTreeModel {
-	
 	/**
+	 * @deprecated As of release 5.0.6, replaced with {@link DefaultTreeModel}.
 	 * Constructor
 	 * @param root - the root of tree 
 	 */
@@ -33,26 +34,27 @@ public class SimpleTreeModel extends AbstractTreeModel {
 		super(root);
 	}
 	
-	//--TreeModel--//
+	//@Override
 	public Object getChild(Object parent, int index) {
-		SimpleTreeNode node = (SimpleTreeNode)parent;
-		return node.getChildAt(index);
+		return ((SimpleTreeNode)parent).getChildAt(index);
 	}
 	
-	//--TreeModel--//
+	//@Override
 	public int getChildCount(Object parent) {
-		SimpleTreeNode node = (SimpleTreeNode)parent;
-		return node.getChildCount();
-	}
-	
-	//--TreeModel--//
-	public boolean isLeaf(Object node) {
-		if(node instanceof SimpleTreeNode){
-			SimpleTreeNode node_ = (SimpleTreeNode)node;
-			return node_.isLeaf();
-		}else{
-			return true;
-		}
+		return ((SimpleTreeNode)parent).getChildCount();
 	}
 
+	//@Override
+	public int getIndexOfChild(Object parent, Object child) {
+		return ((SimpleTreeNode)parent).getIndex(child);
+	}
+	
+	//@Override
+	public boolean isLeaf(Object node) {
+		if(node instanceof SimpleTreeNode){
+			SimpleTreeNode n = (SimpleTreeNode)node;
+			return n.isLeaf();
+		}
+		return true;
+	}
 }

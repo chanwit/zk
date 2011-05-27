@@ -33,30 +33,101 @@ it will be useful, but WITHOUT ANY WARRANTY.
 			val = valStr.substring(0, j) + val;
 		return k ? '1'+val : val;
 	}
+	function compareHalf(valStr, ri) {
+		var ch,
+			result,
+			base = '5';
+		for (var j = ri, len = valStr.length; j < len; ++j) {
+			result = valStr.charAt(j) - base;
+			if (j == ri) { //first digit
+				base = '0';
+			}
+			if (result != 0) 
+				return result;
+		}
+		return result;
+	}
+	function preDigit(valStr, ri) {
+		for (var j = ri; --j >= 0;) {
+			var ch = valStr.charAt(j);
+			if (ch >= '0' && ch <= '9')
+				return ch;
+		}
+		return null;
+	}
 zk.fmt.Number = {
+	setScale: function (val, scale, rounding) { //bug #3089502: setScale in decimalbox not working
+		if (scale === undefined || scale < 0)
+			return val;
+		var valStr = val.$toString(),
+			indVal = valStr.indexOf('.'),
+			valFixed = indVal >= 0 ? valStr.length - indVal - 1 : 0;
+		if (valFixed <= scale) // no need to do any thing
+			return val;
+		else {
+			var ri = indVal + scale + 1;
+			valStr = this.rounding(valStr, ri, rounding, valStr < 0);
+			return new zk.BigDecimal(valStr);
+		}
+	},
+	rounding: function (valStr, ri, rounding, minus) {
+		switch(rounding) {
+			case 0: //UP
+				valStr = up(valStr, ri);
+				break;
+			case 1: //DOWN
+				valStr = down(valStr, ri);
+				break;
+			case 2: //CELING
+				valStr = minus ? down(valStr, ri) : up(valStr, ri);
+				break;
+			case 3: //FLOOR
+				valStr = !minus ? down(valStr, ri) : up(valStr, ri);
+				break;
+			case 4: //HALF_UP
+				var r = compareHalf(valStr, ri);
+				valStr = r < 0 ? down(valStr, ri) : up(valStr, ri);
+				break;
+			case 5: //HALF_DOWN
+				var r = compareHalf(valStr, ri);
+				valStr = r > 0 ? up(valStr, ri) : down(valStr, ri);
+				break;
+			case 6: //HALF_EVEN
+				//falling down
+			default:
+				var r = compareHalf(valStr, ri);
+				if (r == 0) { //half
+					var evenChar = preDigit(valStr, ri);
+					valStr = (evenChar & 1) ? up(valStr, ri) : down(valStr, ri);
+				} else
+					valStr = r < 0 ? down(valStr, ri) : up(valStr, ri);
+		}
+		return valStr;
+	},
 	format: function (fmt, val, rounding) {
 		if (val == null) return '';
-		if (!fmt) return '' + val;
+		if (!fmt) return val + '';
 		
-		var isMINUS;
+		var useMinsuFmt;
 		if (fmt.indexOf(';') != -1) {
 			fmt = fmt.split(';');
-			isMINUS = (''+val).charAt(0) == '-';
-			fmt = fmt[isMINUS ? 1 : 0];
+			useMinsuFmt = val < 0;
+			fmt = fmt[useMinsuFmt ? 1 : 0];
 		}
 		
 		//calculate number of fixed decimals
-		var re = new RegExp("[^#0.]", 'g'),
-			pureFmtStr = fmt.replace(re, ''),
-			ind = pureFmtStr.indexOf('.'),
+		var efmt = this._escapeQuote(fmt);
+		fmt = efmt.fmt;
+		var pureFmtStr = efmt.pureFmtStr,
+			ind = efmt.purejdot,
 			fixed = ind >= 0 ? pureFmtStr.length - ind - 1 : 0,
-			valStr = (val + '').replace(/[^0123456789.]/g, ''),
+			valStr = (val + '').replace(/[^e\-0123456789.]/g, '').substring(val < 0 ? 1 : 0),
+			ei = valStr.lastIndexOf('e'),
 			indVal = valStr.indexOf('.'),
-			valFixed = indVal >= 0 ? valStr.length - indVal - 1 : 0;
+			valFixed = indVal >= 0 ? (ei < 0 ? valStr.length : ei) - indVal - 1 : 0,
+			shift = efmt.shift + (ei < 0 ? 0 : parseInt(valStr.substring(ei+1), 10));
 			
-		//handle PERCENT and PER_MILL case(/000)
-		//cannot just parseFloat(val) * 100, or large long integer and big decimal will not work
-		var shift = fmt.endsWith('%') ? 2 : fmt.endsWith(zk.PER_MILL) ? 3 : 0;
+		if(ei > 0) valStr = valStr.substring(0, ei);
 		if (shift > 0) {
 			if (indVal >= 0) { //with dot
 				if (valFixed > shift) {
@@ -67,15 +138,31 @@ zk.fmt.Number = {
 					valStr = valStr.substring(0, indVal) + valStr.substring(indVal+1);
 					for(var len = shift - valFixed; len-- > 0;)
 						valStr = valStr + '0';
-					if (valFixed == shift) indVal = -1;
+					indVal = -1;
 					valFixed = 0;
 				}
 			} else { //without dot
 				for(var len = shift; len-- > 0;)
 					valStr = valStr + '0';
 			}
+		} else if (shift < 0) {
+			var nind = (indVal < 0 ? varStr.length : indVal) + shift;
+			if(nind > 0) {
+				valStr = valStr.substring(0, nind) + '.' + 
+					(indVal < 0 ? valStr.substring(nind) : valStr.substring(nind, indVar) + valStr.substring(indVar+1));
+				valFixed -= shift;
+				indVal = nind;
+			} else {
+				if(indVal >= 0)
+					valStr = valStr.substring(0, indVal) + valStr.substring(indVal+1);
+				for(; nind++ < 0;)
+					valStr = '0' + valStr;
+				valStr = '0.' + valStr;
+				indVal = 1;
+				valFixed = valStr.length - 2;
+			}
 		}
-			
+		
 		//fix value subpart
 		if (valFixed <= fixed) {
 			if (indVal == -1)
@@ -84,42 +171,9 @@ zk.fmt.Number = {
 				valStr = valStr + '0';
 		} else { //preprocess for rounding
 			var ri = indVal + fixed + 1;
-			switch(rounding) {
-				case 0: //UP
-					valStr = up(valStr, ri);
-					break;
-				case 1: //DOWN
-					valStr = down(valStr, ri);
-					break;
-				case 2: //CELING
-					valStr = val < 0 ? down(valStr, ri) : up(valStr, ri);
-					break;
-				case 3: //FLOOR
-					valStr = val >= 0 ? down(valStr, ri) : up(valStr, ri);
-					break;
-				case 4: //HALF_UP
-					var h = Math.pow(10, valFixed - fixed) * 5,
-						r = valStr.substring(indVal + fixed + 1) | 0;
-					valStr = r < h ? down(valStr, ri) : up(valStr, ri);
-					break;
-				case 5: //HALF_DOWN
-					var h = Math.pow(10, valFixed - fixed) * 5,
-						r = valStr.substring(indVal + fixed + 1) | 0;
-					valStr = r <= h ? down(valStr, ri) : up(valStr, ri);
-					break;
-				case 6: //HALF_EVEN
-					//falling down
-				default:
-					var h = Math.pow(10, valFixed - fixed - 1) * 5,
-						r = valStr.substring(indVal + fixed + 1) | 0;
-					if (r == h) { //half
-						var evenChar = valStr.charAt(fixed == 0 ? indVal - 1 : indVal + fixed);
-						valStr = (evenChar & 1) ? up(valStr, ri) : down(valStr, ri);
-					} else
-						valStr = r < h ? down(valStr, ri) : up(valStr, ri);
-			}
+			valStr = this.rounding(valStr, ri, rounding, val < 0);
 		}
-		var indFmt = fmt.indexOf('.'),
+		var indFmt = efmt.jdot,
 			pre = '', suf = '';
 		
 		//pre part
@@ -173,9 +227,10 @@ zk.fmt.Number = {
 			pre = valStr.substr(0, j + 1) + pre;
 		
 		// Bug #2926718
-		var len = (indFmt < 0 ? fmt.length : indFmt) - (ind < 0 ? pureFmtStr.length : ind);
+		var len = (indFmt < 0 ? fmt.length : indFmt) - (ind < 0 ? pureFmtStr.length : ind),
+			prej = efmt.prej;
 		if (len > 0) {
-			var p = fmt.substring(0, prefmt > 0 ? prefmt : len).replace(new RegExp("[#0.,]", 'g'), '');
+			var p = fmt.substring(prej, prefmt > 0 ? prefmt : len).replace(new RegExp("[#0.,]", 'g'), '');
 			if (p)
 				pre = p + pre;
 		}
@@ -197,10 +252,10 @@ zk.fmt.Number = {
 		var e = -1;
 		for (var m = suf.length, n = fmt.length; m > 0; --m) {
 			var cc = suf.charAt(m-1),
-				fmtcc = fmt.charAt(--n); 
+				fmtcc = fmt.charAt(--n);
 			if (cc == '0' &&  fmtcc == '#') { //optional 0
 				if (e < 0) e = m;
-			} else if (e >= 0)
+			} else if (e >= 0 || /[1-9]/.test(cc))
 				break;
 		}
 		if (e >= 0)
@@ -208,10 +263,51 @@ zk.fmt.Number = {
 		
 		//combine
 		if (pre)
-			pre = this._removePrefixSharps(pre);
+			pre = fmt.substring(0, prej) + this._removePrefixSharps(pre);
 		if (!pre && fmt.charAt(indFmt+1) == '#')
 			pre = '0';
-		return (val < 0 && !isMINUS? zk.MINUS : '') + (suf ? pre + (/[\d]/.test(suf.charAt(0)) ? zk.DECIMAL : '') + suf : pre);
+		if (!suf && (pre == zk.PERCENT || pre == zk.PER_MILL))
+			pre = '0' + pre;
+		var rexp = new RegExp('^0*['+zk.PERCENT+'|'+zk.PER_MILL+']?$'),
+			shownZero = suf? rexp.test(suf) && /^0*$/.test(pre) : rexp.test(pre);
+		return (val < 0 && !shownZero && !useMinsuFmt? zk.MINUS : '') + (suf ? pre + (/[\d]/.test(suf.charAt(0)) ? zk.DECIMAL : '') + suf : pre);
+	},
+	_escapeQuote: function (fmt) {
+		//note we do NOT support mixing of quoted and unquoted percent
+		var cc, q = -2, shift = 0, ret = '', jdot = -1, purejdot = -1, pure = '', prej= -1,
+			validPercent = fmt ? !new RegExp('\(\'['+zk.PERCENT+'|'+zk.PER_MILL+']+\'\)', 'g').test(fmt) : true; 
+			//note we do NOT support mixing of quoted and unquoted percent|permill
+		for (var j = 0, len = fmt.length; j < len; ++j) {
+			cc = fmt.charAt(j);
+			if (cc == '%' && validPercent)
+				shift += 2;
+			else if (cc == zk.PER_MILL && validPercent)
+				shift += 3;
+			
+			if (cc == '\'') { // a single quote
+				if (q >= 0) {//close single quote
+					ret += q == (j-1) ? '\'' : fmt.substring(q+1, j);
+					q = -2;
+				} else
+					q = j; //open single quote
+			} else if (q < 0) { //not in quote
+				if (prej < 0 
+					&& (cc == '#' || cc == '0' || cc == '.' || cc == '-' || cc == ',' || cc == 'E'))
+					prej = ret.length;
+					
+				if (cc == '#' || cc == '0')
+					pure += cc;
+				else if(cc == '.') {
+					if (purejdot < 0) 
+						purejdot = pure.length;
+					if (jdot < 0) 
+						jdot = ret.length;
+					pure += cc;
+				}
+				ret += cc;
+			}
+		}
+		return {shift:shift, fmt:ret, pureFmtStr: pure, jdot:jdot, purejdot:purejdot, prej:prej};
 	},
 	_extraFmtIndex: function (fmt) {
 		var j = 0;
@@ -235,20 +331,26 @@ zk.fmt.Number = {
 		}
 		return ret;
 	},
-	unformat: function (fmt, val) {
+	unformat: function (fmt, val, ignoreLocale) {
 		if (!val) return {raw: val, divscale: 0};
 
 		var divscale = 0, //the second element
 			minus, sb, cc, ignore,
-			zkMinus = fmt ? zk.MINUS : '-',
-			zkDecimal = fmt ? zk.DECIMAL : '.'; //bug #2932443, no format and German Locale
+			zkMinus = ignoreLocale ? '-': zk.MINUS,
+			zkDecimal = ignoreLocale ? '.': zk.DECIMAL, //bug #2932443, no format and German Locale
+			zkPercent = ignoreLocale ? '%': zk.PERCENT,
+			permill = String.fromCharCode(0x2030),
+			zkPermill = ignoreLocale ? permill: zk.PER_MILL, 
+			zkGrouping = ignoreLocale ? ',': zk.GROUPING,
+			validPercent = !new RegExp('\(\'[%|'+permill+']+\'\)', 'g').test(fmt); 
+				//note we do NOT support mixing of quoted and unquoted percent|permill
 		for (var j = 0, len = val.length; j < len; ++j) {
 			cc = val.charAt(j);
 			ignore = true;
 
 			//We handle percent and (nnn) specially
-			if (cc == zk.PERCENT) divscale += 2;
-			else if (cc == zk.PER_MILL) divscale += 3;
+			if (cc == zkPercent && validPercent) divscale += 2;
+			else if (cc == zkPermill && validPercent) divscale += 3;
 			else if (cc == '(') minus = true;
 			else if (cc != '+') ignore = false;
 
@@ -256,8 +358,8 @@ zk.fmt.Number = {
 			if (!ignore)
 				ignore = (cc < '0' || cc > '9')
 				&& cc != zkDecimal && cc != zkMinus && cc != '+'
-				&& (zUtl.isChar(cc,{whitespace:1}) || cc == zk.GROUPING || cc == ')'
-					|| (fmt && fmt.indexOf(cc) >= 0));
+				&& (zUtl.isChar(cc,{whitespace:1}) || cc == zkGrouping
+					|| cc == ')' || (fmt && fmt.indexOf(cc) >= 0));
 			if (ignore) {
 				if (sb == null) sb = val.substring(0, j);
 			} else {
@@ -278,6 +380,26 @@ zk.fmt.Number = {
 				sb = sb.substring(2);
 			else
 				break;
+		}
+
+		//remove leading 0
+		//keep the zero after the decimal point (to preserve precision)
+		for (var j = 0, k, len = sb.length; j < len; ++j) {
+			cc = sb.charAt(j);
+			if (cc > '0' && cc <= '9') {
+				if (k !== undefined)
+					sb = sb.substring(0, k) + sb.substring(j);
+				break; //done
+			} else if (cc == '0') {
+				if (k === undefined)
+					k = j;
+			} else if (k !== undefined) {
+				if (cc == '.' && j > ++k)
+					sb = sb.substring(0, k) + sb.substring(j);
+				break;
+			} else if (cc == '.') { //.xxx or . // B50-3297864
+				break;
+			}
 		}
 		return {raw: sb, divscale: divscale};
 	}

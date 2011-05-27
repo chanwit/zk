@@ -56,6 +56,7 @@ var Borderlayout =
  * 
  */
 zul.layout.Borderlayout = zk.$extends(zul.Widget, {
+	_ignoreOffsetTop: zk.ie7_ || zk.ie6_,  //borderlayout in IE6/IE7, will give incorrect offsetTop, ignore it!
 	setResize: function () {
 		this.resize();
 	},
@@ -151,6 +152,13 @@ zul.layout.Borderlayout = zk.$extends(zul.Widget, {
 				w: width,
 				h: height
 			};
+		
+		// fixed Opera 10.5+ bug
+		if (zk.opera && !height && (!el.style.height || el.style.height == '100%')) {
+			var parent = el.parentNode;
+			center.h = height = zk(parent).revisedHeight(parent.offsetHeight);
+		}
+		
 		for (var region, ambit, margin,	j = 0; j < k; ++j) {
 			region = this[rs[j]];
 			if (region && zk(region.$n()).isVisible()) {
@@ -198,16 +206,23 @@ zul.layout.Borderlayout = zk.$extends(zul.Widget, {
 		ambit.w = Math.max(0, ambit.w);
 		ambit.h = Math.max(0, ambit.h);
 		var el = wgt.$n('real'),
-			bodyEl = wgt.isFlex() && wgt.firstChild ?
-						wgt.firstChild.$n() : wgt.$n('cave');
+			fchild = wgt.isFlex() && wgt.firstChild,
+			bodyEl = fchild ? wgt.firstChild.$n() : wgt.$n('cave');
 		if (!this._ignoreResize(el, ambit.w, ambit.h)) {
 			ambit.w = zk(el).revisedWidth(ambit.w);
 			el.style.width = jq.px0(ambit.w);
 			ambit.w = zk(bodyEl).revisedWidth(ambit.w);
 			bodyEl.style.width = jq.px0(ambit.w);
-
+			
 			ambit.h = zk(el).revisedHeight(ambit.h);
 			el.style.height = jq.px0(ambit.h);
+			// Bug: B50-3201762: Borderlayout flex has issue with listbox hflex in IE 6 
+			if ((zk.ie6_ || zk.ie7_) && fchild) {
+				// In IE 6/7 setting height to cave is still required
+				var cv;
+				if (cv = wgt.$n('cave'))
+					cv.style.height = jq.px0(ambit.h);
+			}
 			ambit.h = zk(bodyEl).revisedHeight(ambit.h);
 			if (wgt.$n('cap'))
 				ambit.h = Math.max(0, ambit.h - wgt.$n('cap').offsetHeight);

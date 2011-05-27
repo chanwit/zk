@@ -22,6 +22,7 @@ import java.util.Collection;
 import java.io.IOException;
 import java.io.Writer;
 
+import org.zkoss.json.JSONArray;
 import org.zkoss.zk.ui.WebApp;
 import org.zkoss.zk.ui.Desktop;
 import org.zkoss.zk.ui.Page;
@@ -77,6 +78,7 @@ public interface UiEngine {
 	 *} finally {
 	 *  ue.setOwner(old);
 	 *}</code></pre>
+	 * <p>Since 5.0.6, the owner must implement {@link org.zkoss.zk.ui.ext.Includer}.
 	 * @return the previous owner
 	 * @since 5.0.0
 	 */
@@ -184,6 +186,35 @@ public interface UiEngine {
 	public void execUpdate(Execution exec, List requests, AuWriter out)
 	throws IOException;
 
+	/** Activates an execution that will allow developers to update
+	 * the state of components.
+	 * <p>It is designed to implement {@link org.zkoss.zkplus.embed.Bridge}.
+	 *
+	 * @return a context that shall be passed to {@link #finishUpdate}.
+	 * @since 5.0.5
+	 * @see #finishUpdate
+	 * @see #closeUpdate
+	 */
+	public Object startUpdate(Execution exec) throws IOException;
+	/** Finishes the update and returns the result in an array of JSON object.
+	 * Notice it does not deactivate the execution. Rather, the caller
+	 * has to invoke {@link #closeUpdate}.
+	 * <p>It is designed to implement {@link org.zkoss.zkplus.embed.Bridge}.
+	 *
+	 * @param ctx the context returned by the previous call to {@link #startUpdate}
+	 * @since 5.0.5
+	 * @see #startUpdate
+	 * @see #closeUpdate
+	 */
+	public JSONArray finishUpdate(Object ctx) throws IOException;
+	/** Deactivates the execution and cleans up.
+	 * <p>It is designed to implement {@link org.zkoss.zkplus.embed.Bridge}.
+	 * @since 5.0.5
+	 * @see #startUpdate
+	 * @see #finishUpdate
+	 */
+	public void closeUpdate(Object ctx) throws IOException;
+
 	/** Executes the recovering.
 	 */
 	public void execRecover(Execution exec, FailoverManager failover);
@@ -198,8 +229,8 @@ public interface UiEngine {
 	 *
 	 * @param exec the execution (never null).
 	 * @param pagedef the page definition (never null).
-	 * @param page the page. Ignored if parent is specified (and
-	 * parent's page is used).
+	 * @param page the page. Ignored if parent is specified and
+	 * parent's page is not null (parent's page will be used).
 	 * If both page and parent are null, the created components won't belong
 	 * to any page.
 	 * @param parent the parent component, or null if no parent compoent.
@@ -341,6 +372,16 @@ public interface UiEngine {
 	 * invalidate and do any smart updates. In other words, READ ONLY.
 	 */
 	public void activate(Execution exec);
+	/** Activates an execution such that you can access a component.
+	 * Unlike {@link #activate(Execution)}, you could specify an amount of
+	 * time (timeout), and it returns false if it takes longer than the given
+	 * amount of time before granted.
+	 * @param timeout the number of milliseconds to wait before giving up.
+	 * It is ignored if negative, i.e., it waits until granted if negative.
+	 * @return whether the activation succeeds
+	 * @since 5.0.6
+	 */
+	public boolean activate(Execution exec, int timeout);
 	/** Deactivates an execution, such that other threads could activate
 	 * and access components.
 	 */

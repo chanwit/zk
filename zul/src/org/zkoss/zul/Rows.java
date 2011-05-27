@@ -27,9 +27,11 @@ import java.util.Set;
 import org.zkoss.zk.ui.AbstractComponent;
 import org.zkoss.zk.ui.Component;
 import org.zkoss.zk.ui.UiException;
+import org.zkoss.zk.ui.WebApps;
 import org.zkoss.zk.ui.ext.render.Cropper;
 import org.zkoss.zul.ext.Paginal;
 import org.zkoss.zul.impl.GroupsListModel;
+import org.zkoss.zul.impl.LoadStatus;
 import org.zkoss.zul.impl.XulElement;
 
 /**
@@ -237,17 +239,34 @@ public class Rows extends XulElement implements org.zkoss.zul.api.Rows {
 		}
 		super.beforeChildAdded(child, refChild);
 	}
+
+	private boolean hasModelButNotROD() {
+		if (!WebApps.getFeature("ee")) {
+			final Grid grid = getGrid();
+			return grid != null && grid.getModel() != null;
+		}
+		return false;
+	}
+	
 	private boolean hasGroupsModel() {
 		final Grid grid = getGrid();
 		return grid != null && grid.getModel() instanceof GroupsListModel;
 	}
 	public boolean insertBefore(Component child, Component refChild) {
 		final Grid grid = getGrid();
+		final boolean isReorder = child.getParent() == this;
+		//bug #3051305: Active Page not update when drag & drop item to the end
+		if (isReorder) {
+			checkInvalidateForMoved(child, true);
+		}
 		if (grid != null && grid.isRod() && hasGroupsModel()) {
 			if (_groupsInfo.isEmpty())
 				_groupsInfo = ((GroupsListModel)grid.getModel()).getGroupsInfo();
 			if (super.insertBefore(child, refChild)) {
-				afterInsert(child);
+				//bug #3049167: Bug in drag & drop demo
+				if (!isReorder) {
+					afterInsert(child);
+				}
 				return true;
 			}
 			return false;
@@ -256,7 +275,6 @@ public class Rows extends XulElement implements org.zkoss.zul.api.Rows {
 		Row newItem = (Row) child;
 		final int jfrom = hasGroup() && newItem.getParent() == this ? newItem.getIndex(): -1;	
 
-		final boolean isReorder = child.getParent() == this;
 		if (newItem instanceof Groupfoot){
 			if (refChild == null) {
 				if (isReorder) {
@@ -335,7 +353,10 @@ public class Rows extends XulElement implements org.zkoss.zul.api.Rows {
 				
 			}
 			
-			afterInsert(child);
+			//bug #3049167: Totalsize increase when drag & drop in paging Listbox/Grid
+			if (!isReorder) {
+				afterInsert(child);
+			}
 			return true;
 		}
 		return false;
@@ -347,7 +368,9 @@ public class Rows extends XulElement implements org.zkoss.zul.api.Rows {
 		if (child.getParent() == this)
 			beforeRemove(child);
 		
-		int index = hasGroup() ? ((Row)child).getIndex() : -1;
+		final boolean hasGroup = hasGroup();
+		final boolean hasModelButNotROD = hasModelButNotROD();
+		int index = hasGroup || hasModelButNotROD ? ((Row)child).getIndex() : -1;
 		if(super.removeChild(child)) {
 			if (child instanceof Group) {
 				int[] prev = null, remove = null;
@@ -372,7 +395,7 @@ public class Rows extends XulElement implements org.zkoss.zul.api.Rows {
 							removeChild((Component) getChildren().get(realIndex));
 					}
 				}
-			} else if (hasGroup()) {
+			} else if (hasGroup) {
 				final int[] g = getGroupsInfoAt(index);
 				if (g != null) {
 					g[1]--;
@@ -386,6 +409,8 @@ public class Rows extends XulElement implements org.zkoss.zul.api.Rows {
 						g1[2] = -1;
 					}
 				}
+			} else if (hasModelButNotROD) {
+				fixRowIndices(index, -1);
 			}
 			
 			if (hasGroupsModel() && getChildren().size() <= 0) { //remove to empty, reset _groupsInfo
@@ -396,6 +421,26 @@ public class Rows extends XulElement implements org.zkoss.zul.api.Rows {
 		}
 		return false;
 	}
+	/**
+	 * Fix Childitem._index since j-th item.
+	 *
+	 * @param j
+	 *            the start index (inclusion)
+	 * @param to
+	 *            the end index (inclusion). If -1, up to the end.
+	 */
+	private void fixRowIndices(int j, int to) {
+		int realj = getRealIndex(j);
+		if (realj < 0)
+			realj = 0;
+		List items = getChildren();
+		if (realj < items.size()) {
+			for (Iterator it = items.listIterator(realj); it.hasNext()
+					&& (to < 0 || j <= to); ++j)
+				((LoadStatus)(((AbstractComponent)it.next()).getExtraCtrl())).setIndex(j);
+		}
+	}
+	
 	/** Callback if a child has been inserted.
 	 * <p>Default: invalidate if it is the paging mold and it affects
 	 * the view of the active page.
@@ -490,21 +535,16 @@ public class Rows extends XulElement implements org.zkoss.zul.api.Rows {
 		}
 	}
 
-	/** Returns an iterator to iterate thru all visible children.
-	 * Unlike {@link #getVisibleItemCount}, it handles only the direct children.
-	 * Component developer only.
-	 * @since 3.5.1
-	 */
-	public Iterator getVisibleChildrenIterator() {
-		return new VisibleChildrenIterator();
-	}
 	/**
 	 * An iterator used by visible children.
 	 */
+/** Not used
 	private class VisibleChildrenIterator implements Iterator {
 		private final ListIterator _it = getChildren().listIterator();
 		private Grid _grid = getGrid();
 		private int _count = 0;
+		private VisibleChildrenIterator() {
+		}
 		public boolean hasNext() {
 			if (_grid == null || !_grid.inPagingMold()) return _it.hasNext();
 			
@@ -545,6 +585,8 @@ public class Rows extends XulElement implements org.zkoss.zul.api.Rows {
 			throw new UnsupportedOperationException();
 		}
 	}
+*/
+
 	public String getZclass() {
 		return _zclass == null ? "z-rows" : _zclass;
 	}
@@ -560,7 +602,7 @@ public class Rows extends XulElement implements org.zkoss.zul.api.Rows {
 		s.defaultReadObject();
 		init();
 	}
-	protected List newChildren() {
+	public List getChildren() {
 		return new Children();
 	}
 	protected class Children extends AbstractComponent.Children {
@@ -584,7 +626,7 @@ public class Rows extends XulElement implements org.zkoss.zul.api.Rows {
 	}
 	
 	//-- ComponentCtrl --//
-	protected Object newExtraCtrl() {
+	public Object getExtraCtrl() {
 		return new ExtraCtrl();
 	}
 	/** A utility class to implement {@link #getExtraCtrl}.

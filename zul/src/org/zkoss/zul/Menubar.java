@@ -21,7 +21,7 @@ import java.io.IOException;
 import org.zkoss.lang.JVMs;
 import org.zkoss.lang.Objects;
 
-import org.zkoss.html.HTMLs;
+import org.zkoss.xml.HTMLs;
 import org.zkoss.zk.ui.Component;
 import org.zkoss.zk.ui.HtmlBasedComponent;
 import org.zkoss.zk.ui.UiException;
@@ -98,6 +98,7 @@ public class Menubar extends XulElement implements org.zkoss.zul.api.Menubar {
 	
 	/**
 	 * Sets whether to enable the menubar scrolling
+	 * When enable, if menubar is shorter than total width of menu, left,right arrow will appear.
 	 * @since 3.6.3
 	 */
 	public void setScrollable(boolean scrollable){

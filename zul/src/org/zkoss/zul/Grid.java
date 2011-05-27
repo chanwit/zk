@@ -26,9 +26,11 @@ import java.util.Map;
 import java.util.Set;
 
 import org.zkoss.lang.Classes;
-import org.zkoss.lang.D;
 import org.zkoss.lang.Exceptions;
+import org.zkoss.lang.Library;
 import org.zkoss.lang.Objects;
+import org.zkoss.lang.Strings;
+import org.zkoss.io.Serializables;
 import org.zkoss.util.logging.Log;
 import org.zkoss.zk.au.AuRequests;
 import org.zkoss.zk.ui.Component;
@@ -40,10 +42,12 @@ import org.zkoss.zk.ui.WrongValueException;
 import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
+import org.zkoss.zk.ui.event.SerializableEventListener;
 import org.zkoss.zk.ui.ext.render.Cropper;
 import org.zkoss.zul.event.DataLoadingEvent;
 import org.zkoss.zul.event.ListDataEvent;
 import org.zkoss.zul.event.ListDataListener;
+import org.zkoss.zul.event.PageSizeEvent;
 import org.zkoss.zul.event.PagingEvent;
 import org.zkoss.zul.event.RenderEvent;
 import org.zkoss.zul.event.ZulEvents;
@@ -52,7 +56,9 @@ import org.zkoss.zul.ext.Paginated;
 import org.zkoss.zul.impl.DataLoader;
 import org.zkoss.zul.impl.GridDataLoader;
 import org.zkoss.zul.impl.GroupsListModel;
+import org.zkoss.zul.impl.MeshElement;
 import org.zkoss.zul.impl.Padding;
+import org.zkoss.zul.impl.Utils;
 import org.zkoss.zul.impl.XulElement;
 
 /**
@@ -61,6 +67,9 @@ import org.zkoss.zul.impl.XulElement;
  * Both the rows and columns are displayed at once although only one will
  * typically contain content, while the other may provide size information.
  *
+ * <p>Events: onAfterRender<br/>
+ * onAfterRender is sent when the model's data has been rendered.(since 5.0.4)
+ * 
  * <p>Besides creating {@link Row} programmingly, you can assign
  * a data model (a {@link ListModel} or {@link GroupsModel} instance) to a grid via
  * {@link #setModel(ListModel)} or {@link #setModel(GroupsModel)}
@@ -159,17 +168,39 @@ import org.zkoss.zul.impl.XulElement;
  * Basically, you shall operate on the item of the ListModel rather than on the 
  * {@link Row} if you use the ListModel and ROD.</p>
  * 
+ * <h3>Custom Attributes</h3>
+ * <dl>
+ * <dt>org.zkoss.zul.grid.rod</dt>
+ * <dd>Specifies whether to enable ROD (render-on-demand).</br>
+ * Notice that you could specify this attribute in any of its ancestor's attributes.
+ * It will be inherited.</dd>
+ * <dt>org.zkoss.zul.grid.autoSort</dt>.(since 5.0.7) 
+ * <dd>Specifies whether to sort the model when the following cases:</br>
+ * <ol>
+ * <li>{@link #setModel} is called and {@link Column#setSortDirection} is set.</li>
+ * <li>{@link Column#setSortDirection} is called.</li>
+ * <li>Model receives {@link ListDataEvent} and {@link Column#setSortDirection} is set.</li>
+ * </ol>
+ * If you want to ignore sort when receiving {@link ListDataEvent}, 
+ * you can specifies the value as "ignore.change".</br>
+ * Notice that you could specify this attribute in any of its ancestor's attributes.
+ * It will be inherited.</dd>
+ * </dl>
  * @author tomyeh
  * @see ListModel
  * @see RowRenderer
  * @see RowRendererExt
  */
-public class Grid extends XulElement implements Paginated, org.zkoss.zul.api.Grid {
+public class Grid extends MeshElement implements Paginated, org.zkoss.zul.api.Grid {
 	private static final Log log = Log.lookup(Grid.class);
 	private static final long serialVersionUID = 20091111L;
 
 	private static final String ATTR_ON_INIT_RENDER_POSTED =
 		"org.zkoss.zul.Grid.onInitLaterPosted";
+	private static final String ATTR_ON_PAGING_INIT_RENDER_POSTED = 
+		"org.zkoss.zul.Grid.onPagingInitLaterPosted";
+
+	private static final int INIT_LIMIT = 100;
 
 	private transient DataLoader _dataLoader;
 	private transient Rows _rows;
@@ -183,33 +214,34 @@ public class Grid extends XulElement implements Paginated, org.zkoss.zul.api.Gri
 	private transient ListDataListener _dataListener;
 	/** The paging controller, used only if mold = "paging". */
 	private transient Paginal _pgi;
-	private boolean _autopaging;
 	/** The paging controller, used only if mold = "paging" and user
 	 * doesn't assign a controller via {@link #setPaginal}.
 	 * If exists, it is the last child.
 	 */
 	private transient Paging _paging;
-	private transient EventListener _pgListener, _pgImpListener, _modelInitListener;
+	private EventListener _pgListener, _pgImpListener, _modelInitListener;
 	/** The style class of the odd row. */
 	private String _scOddRow = null;
 	/** the # of rows to preload. */
 	private int _preloadsz = 7;
 	private String _innerWidth = "100%";
-	private boolean _sizedByContent, _vflex;
 	private int _currentTop = 0; //since 5.0.0 scroll position
 	private int _currentLeft = 0;
 	private int _topPad; //since 5.0.0 top padding
 	private boolean _renderAll; //since 5.0.0
+	
+	
+	private String _emptyMessage;
 	
 	private transient boolean _rod;
 	
 	static {
 		addClientEvent(Grid.class, Events.ON_RENDER, CE_DUPLICATE_IGNORE|CE_IMPORTANT|CE_NON_DEFERRABLE);
 		addClientEvent(Grid.class, "onInnerWidth", CE_DUPLICATE_IGNORE|CE_IMPORTANT);
-		addClientEvent(Grid.class, "onScrollPos", CE_DUPLICATE_IGNORE|CE_IMPORTANT); //since 5.0.0
+		addClientEvent(Grid.class, "onScrollPos", CE_DUPLICATE_IGNORE | CE_IMPORTANT); //since 5.0.0
 		addClientEvent(Grid.class, "onTopPad", CE_DUPLICATE_IGNORE); //since 5.0.0
 		addClientEvent(Grid.class, "onDataLoading", CE_DUPLICATE_IGNORE|CE_IMPORTANT|CE_NON_DEFERRABLE); //since 5.0.0
-		addClientEvent(Grid.class, "onChangePageSize", CE_DUPLICATE_IGNORE|CE_IMPORTANT|CE_NON_DEFERRABLE); //since 5.0.2
+		addClientEvent(Grid.class, ZulEvents.ON_PAGE_SIZE, CE_DUPLICATE_IGNORE|CE_IMPORTANT|CE_NON_DEFERRABLE); //since 5.0.2
 	}
 	
 	public Grid() {
@@ -235,7 +267,7 @@ public class Grid extends XulElement implements Paginated, org.zkoss.zul.api.Gri
 		super.onPageAttached(newpage, oldpage);
 		if (oldpage == null) {
 			Executions.getCurrent().setAttribute("zkoss.Grid.deferInitModel_"+getUuid(), Boolean.TRUE);
-			//prepare a right moment to init Grid
+			//prepare a right moment to init Grid(must be as early as possible)
 			this.addEventListener("onInitModel", _modelInitListener = new ModelInitListener());
 			Events.postEvent(20000, new Event("onInitModel", this));
 		}
@@ -247,7 +279,7 @@ public class Grid extends XulElement implements Paginated, org.zkoss.zul.api.Gri
 		}
 	}
 	
-	private class ModelInitListener implements EventListener {
+	private class ModelInitListener implements SerializableEventListener {
 		public void onEvent(Event event) throws Exception {
 			if (_modelInitListener != null) {
 				Grid.this.removeEventListener("onInitModel", _modelInitListener);
@@ -269,6 +301,10 @@ public class Grid extends XulElement implements Paginated, org.zkoss.zul.api.Gri
 				}
 			} else if (_model != null){ //rows not created yet
 				initModel();
+			} else {
+				//bug# 3039282: NullPointerException when assign a model to Grid at onCreate
+				//The attribute shall be removed, otherwise DataLoader will not syncModel when setModel
+				Executions.getCurrent().removeAttribute("zkoss.Grid.deferInitModel_"+getUuid());
 			}
 			final DataLoader loader = getDataLoader();
 			
@@ -290,7 +326,14 @@ public class Grid extends XulElement implements Paginated, org.zkoss.zul.api.Gri
 	 * @since 3.5.0
 	 */
 	public boolean isVflex() {
-		return _vflex;
+		final String vflex = getVflex();
+		if ("true".equals(vflex) || "min".equals(vflex)) {
+			return true;
+		}
+		if (Strings.isBlank(vflex) || "false".equals(vflex)) {
+			return false;
+		}
+		return Integer.parseInt(vflex) > 0;
 	}
 	/** Sets whether to grow and shrink vertical to fit their given space,
 	 * so called vertical flexibility.
@@ -298,9 +341,8 @@ public class Grid extends XulElement implements Paginated, org.zkoss.zul.api.Gri
 	 * @since 3.5.0
 	 */
 	public void setVflex(boolean vflex) {
-		if (_vflex != vflex) {
-			_vflex = vflex;
-			smartUpdate("vflex", _vflex);
+		if (isVflex() != vflex) {
+			setVflex(String.valueOf(vflex));
 		}
 	}
 	/**
@@ -315,40 +357,6 @@ public class Grid extends XulElement implements Paginated, org.zkoss.zul.api.Gri
 	 */
 	public boolean isFixedLayout() {
 		return !isSizedByContent();
-	}
-	
-	/**
-	 * Sets whether sizing grid column width by its content. Default is false, i.e.
-	 * the outline of grid is dependent on browser. It means, we don't 
-	 * calculate the width of each cell. If set to true, the outline will count on 
-	 * the content of body. In other words, the outline of grid will be like 
-	 * ZK version 2.4.1 that the header's width is only for reference.
-	 * 
-	 * <p> You can also specify the "sized-by-content" attribute of component in 
-	 * lang-addon.xml directly, it will then take higher priority.
-	 * @param byContent 
-	 * @since 5.0.0
-	 */
-	public void setSizedByContent(boolean byContent) {
-		if(_sizedByContent != byContent) {
-			_sizedByContent = byContent;
-			smartUpdate("sizedByContent", byContent);
-		}
-	}
-	/**
-	 * Returns whether sizing grid column width by its content. Default is false.
-	 * <p>Note: if the "sized-by-content" attribute of component is specified, 
-	 * it's prior to the original value.
-	 * @since 5.0.0
-	 * @see #setSizedByContent
-	 */
-	public boolean isSizedByContent() {
-		String s = (String) getAttribute("sized-by-content");
-		if (s == null) {
-			s = (String) getAttribute("fixed-layout");
-			return s != null ? !"true".equalsIgnoreCase(s) : _sizedByContent;
-		} else
-			return "true".equalsIgnoreCase(s);
 	}
 	
 	/** Returns the rows.
@@ -500,8 +508,8 @@ public class Grid extends XulElement implements Paginated, org.zkoss.zul.api.Gri
 	/** Creates the internal paging component.
 	 */
 	private void newInternalPaging() {
-		assert D.OFF || inPagingMold(): "paging mold only";
-		assert D.OFF || (_paging == null && _pgi == null);
+//		assert D.OFF || inPagingMold(): "paging mold only";
+//		assert D.OFF || (_paging == null && _pgi == null);
 
 		final Paging paging = new Paging();
 		paging.setAutohide(true);
@@ -514,7 +522,7 @@ public class Grid extends XulElement implements Paginated, org.zkoss.zul.api.Gri
 	/** Adds the event listener for the onPaging event. */
 	private void addPagingListener(Paginal pgi) {
 		if (_pgListener == null)
-			_pgListener = new EventListener() {
+			_pgListener = new SerializableEventListener() {
 				public void onEvent(Event event) {
 					final PagingEvent evt = (PagingEvent)event;
 					Events.postEvent(
@@ -525,7 +533,7 @@ public class Grid extends XulElement implements Paginated, org.zkoss.zul.api.Gri
 		pgi.addEventListener(ZulEvents.ON_PAGING, _pgListener);
 
 		if (_pgImpListener == null)
-			_pgImpListener = new EventListener() {
+			_pgImpListener = new SerializableEventListener() {
 	public void onEvent(Event event) {
 		if (_rows != null && _model != null && inPagingMold()) {
 		//theorectically, _rows shall not be null if _model is not null when
@@ -536,10 +544,16 @@ public class Grid extends XulElement implements Paginated, org.zkoss.zul.api.Gri
 			if (_rod) {
 				getDataLoader().syncModel(ofs, pgsz);
 			}
-			postOnInitRender();
+			postOnPagingInitRender();
 		}
 		if (getModel() != null || getPagingPosition().equals("both")) invalidate(); // just in case.
-		else if (_rows != null) _rows.invalidate();
+		else if (_rows != null) {
+			_rows.invalidate();
+			
+			// Bug 3218078
+			if (_frozen != null)
+				_frozen.invalidate();
+		}
 	}
 			};
 		pgi.addEventListener("onPagingImpl", _pgImpListener);
@@ -579,30 +593,6 @@ public class Grid extends XulElement implements Paginated, org.zkoss.zul.api.Gri
 	 */
 	public void setPageSize(int pgsz) throws WrongValueException {
 		pgi().setPageSize(pgsz);
-	}
-	/**
-	 * Sets whether the auto-paging facility is turned on when mold is
-	 * "paging". If it is set to true, the {@link #setPageSize} is ignored; 
-	 * rather, the page size is automatically determined by the height of the 
-	 * Grid dynamically. 
-	 * @param autopaging true to turn on the auto-paging facility.
-	 */
-	public void setAutopaging(boolean autopaging) {
-		if (_autopaging != autopaging) {
-			_autopaging = autopaging;
-			smartUpdate("autopaging", autopaging);
-		}
-	}
-	
-	/**
-	 * Returns whether the auto-paging facility is turned on when mold is
-	 * "paging". If it is set to true, the {@link #setPageSize} is ignored; 
-	 * rather, the page size is automatically determined by the height of the 
-	 * Grid dynamically. 
-	 * @return whether the "autopaging" facility is turned on.
-	 */
-	public boolean isAutopaging() {
-		return _autopaging;
 	}
 
 	/** Returns the number of pages.
@@ -707,7 +697,8 @@ public class Grid extends XulElement implements Paginated, org.zkoss.zul.api.Gri
 				final Paginal pgi = getPaginal();
 				pgi.setTotalSize(getDataLoader().getTotalSize());
 			}
-			postOnInitRender();
+			if (!doSort(this))
+				postOnInitRender();
 			//Since user might setModel and setRender separately or repeatedly,
 			//we don't handle it right now until the event processing phase
 			//such that we won't render the same set of data twice
@@ -749,6 +740,25 @@ public class Grid extends XulElement implements Paginated, org.zkoss.zul.api.Gri
 			};
 			
 		_model.addListDataListener(_dataListener);
+	}
+	
+	/**
+	 * Sort the rows based on {@link Column#getSortDirection}.
+	 * @return
+	 */
+	private static boolean doSort(Grid grid) {
+		Columns cols = grid.getColumns();
+		if (!grid.isAutosort() || cols == null) return false;
+		for (Iterator it = cols.getChildren().iterator();
+		it.hasNext();) {
+			final Column hd = (Column)it.next();
+			String dir = hd.getSortDirection();
+			if (!"natural".equals(dir)) {
+				hd.doSort("ascending".equals(dir));
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** Returns the renderer to render each row, or null if the default
@@ -865,7 +875,19 @@ public class Grid extends XulElement implements Paginated, org.zkoss.zul.api.Gri
 	 */
 	public void onInitRender() {
 		removeAttribute(ATTR_ON_INIT_RENDER_POSTED);
+		doInitRenderer();
+	}
 
+	/**
+	 * Handles a private event, onPagingInitRender. It is used only for
+	 * implementation, and you rarely need to invoke it explicitly.
+	 */
+	public void onPagingInitRender() {
+		removeAttribute(ATTR_ON_PAGING_INIT_RENDER_POSTED);
+		doInitRenderer();
+	}
+
+	private void doInitRenderer() {
 		final Renderer renderer = new Renderer();
 		try {
 			int pgsz, ofs;
@@ -904,7 +926,9 @@ public class Grid extends XulElement implements Paginated, org.zkoss.zul.api.Gri
 		} finally {
 			renderer.doFinally();
 		}
+		Events.postEvent(ZulEvents.ON_AFTER_RENDER, this, null);// notify the grid when all of the row have been rendered. 		
 	}
+	
 	private void postOnInitRender() {
 		//20080724, Henri Chen: optimize to avoid postOnInitRender twice
 		if (getAttribute(ATTR_ON_INIT_RENDER_POSTED) == null) {
@@ -913,11 +937,26 @@ public class Grid extends XulElement implements Paginated, org.zkoss.zul.api.Gri
 		}
 	}
 
+	private void postOnPagingInitRender() {
+		if (getAttribute(ATTR_ON_PAGING_INIT_RENDER_POSTED) == null) {
+			setAttribute(ATTR_ON_PAGING_INIT_RENDER_POSTED, Boolean.TRUE);
+			Events.postEvent("onPagingInitRender", this, null);
+		}
+	}
+
 	/** Handles when the list model's content changed.
 	 */
 	private void onListDataChange(ListDataEvent event) {
-		getDataLoader().doListDataChange(event);
-		postOnInitRender(); //to improve performance
+		//sort when add
+		int type = event.getType();
+		if ((type == ListDataEvent.INTERVAL_ADDED || 
+				type == ListDataEvent.CONTENTS_CHANGED) && 
+				!isIgnoreSortWhenChanged()) {
+			doSort(this);
+		} else {
+			getDataLoader().doListDataChange(event);
+			postOnInitRender(); // to improve performance
+		}
 	}
 
 	/** Returns the label for the cell generated by the default renderer.
@@ -1089,6 +1128,12 @@ public class Grid extends XulElement implements Paginated, org.zkoss.zul.api.Gri
 		}
 	}
 
+	/** Sets the mold to render this component.
+	 *
+	 * @param mold the mold. If null or empty, "default" is assumed.
+	 * Allowed values: default, paging
+	 * @see org.zkoss.zk.ui.metainfo.ComponentDefinition
+	 */
 	//-- super --//
 	public void setMold(String mold) {
 		final String old = getMold();
@@ -1105,7 +1150,7 @@ public class Grid extends XulElement implements Paginated, org.zkoss.zul.api.Gri
 					removePagingListener(_pgi);
 				}
 				if (getModel() != null) {
-					getDataLoader().syncModel(0, 40); //change offset back to 0
+					getDataLoader().syncModel(0, INIT_LIMIT); //change offset back to 0
 					postOnInitRender();
 				}
 				invalidate(); //paging mold -> non-paging mold
@@ -1203,18 +1248,36 @@ public class Grid extends XulElement implements Paginated, org.zkoss.zul.api.Gri
 	}
 	
 	private boolean evalRod() {
-		final String rod1 = org.zkoss.lang.Library.getProperty("org.zkoss.zul.grid.rod", "false");
-		Object rod2 = getAttribute("org.zkoss.zul.grid.rod", true); //might be String or Boolean
-		if (rod2 == null) {
-			rod2 = rod1;
-		}
-		return rod2 instanceof Boolean ? ((Boolean)rod2).booleanValue() : "true".equals(rod2);
+		return Utils.testAttribute(this, "org.zkoss.zul.grid.rod", false, true);
+	}
+	
+	/** Returns whether to sort all of item when model or sort direction be changed.
+	 * @since 5.0.7
+	 */
+	/*package*/ boolean isAutosort() {
+		String attr = "org.zkoss.zul.grid.autoSort";
+		Object val = getAttribute(attr, true);
+		if (val == null)
+			val = Library.getProperty(attr);
+		return val instanceof Boolean ? ((Boolean)val).booleanValue():
+			val != null ? "true".equals(val) || "ignore.change".equals(val): false;
+	}
+	
+	/** Returns whether to sort all of item when model or sort direction be changed.
+	 * @since 5.0.7
+	 */
+	private boolean isIgnoreSortWhenChanged() {
+		String attr = "org.zkoss.zul.grid.autoSort";
+		Object val = getAttribute(attr, true);
+		if (val == null)
+			val = Library.getProperty(attr);
+		return val == null ? true: "ignore.change".equals(val);
 	}
 	
 	/*package*/ DataLoader getDataLoader() {
 		if (_dataLoader == null) {
 			_rod = evalRod();
-			final String loadercls = (String) getAttribute("grid-dataloader");
+			final String loadercls = (String) Library.getProperty("org.zkoss.zul.grid.DataLoader.class");
 			try {
 				_dataLoader = _rod && loadercls != null ? 
 						(DataLoader) Classes.forNameByThread(loadercls).newInstance() :
@@ -1222,7 +1285,7 @@ public class Grid extends XulElement implements Paginated, org.zkoss.zul.api.Gri
 			} catch (Exception e) {
 				throw UiException.Aide.wrap(e);
 			}
-			_dataLoader.init(this, 0, 40);
+			_dataLoader.init(this, 0, INIT_LIMIT);
 		}
 		return _dataLoader;
 	}
@@ -1231,7 +1294,10 @@ public class Grid extends XulElement implements Paginated, org.zkoss.zul.api.Gri
 	public Object clone() {
 		final Grid clone = (Grid)super.clone();
 		clone.init();
-
+		
+		// remove cached listeners
+		clone._pgListener = clone._pgImpListener = null;
+		
 		//recreate the DataLoader 
 		final int offset = clone.getDataLoader().getOffset(); 
 		final int limit = clone.getDataLoader().getLimit();
@@ -1245,7 +1311,7 @@ public class Grid extends XulElement implements Paginated, org.zkoss.zul.api.Gri
 		if (clone._frozen != null) ++cnt;
 		if (clone._paging != null) ++cnt;
 		if (cnt > 0) clone.afterUnmarshal(cnt);
-
+		
 		if (clone._model != null) {
 			clone.getDataLoader().setLoadAll(_renderAll);
 		}
@@ -1266,6 +1332,7 @@ public class Grid extends XulElement implements Paginated, org.zkoss.zul.api.Gri
 				if (--cnt == 0) break;
 			} else if (child instanceof Paging) {
 				_pgi = _paging = (Paging)child;
+				addPagingListener(_pgi);
 				if (--cnt == 0) break;
 			} else if (child instanceof Frozen) {
 				_frozen = (Frozen)child;
@@ -1277,6 +1344,19 @@ public class Grid extends XulElement implements Paginated, org.zkoss.zul.api.Gri
 		}
 	}
 
+	
+	
+	public String getEmptyMessage() {
+		return _emptyMessage;
+	}
+	
+	public void setEmptyMessage(String emptyMessage) {
+		if(!Objects.equals(emptyMessage, _emptyMessage)){
+			_emptyMessage = emptyMessage;
+			smartUpdate("emptyMessage",_emptyMessage);
+		}
+	}
+	
 	//Serializable//
 	//NOTE: they must be declared as private
 	private synchronized void writeObject(java.io.ObjectOutputStream s)
@@ -1284,9 +1364,9 @@ public class Grid extends XulElement implements Paginated, org.zkoss.zul.api.Gri
 		s.defaultWriteObject();
 
 		willSerialize(_model);
-		s.writeObject(_model instanceof java.io.Serializable || _model instanceof java.io.Externalizable ? _model: null);
+		Serializables.smartWrite(s, _model);
 		willSerialize(_renderer);
-		s.writeObject(_renderer instanceof java.io.Serializable || _renderer instanceof java.io.Externalizable ? _renderer: null);
+		Serializables.smartWrite(s, _renderer);
 	}
 	private synchronized void readObject(java.io.ObjectInputStream s)
 	throws java.io.IOException, ClassNotFoundException {
@@ -1315,11 +1395,6 @@ public class Grid extends XulElement implements Paginated, org.zkoss.zul.api.Gri
 
 		render(renderer, "oddRowSclass", _scOddRow);
 		
-		if (isSizedByContent())
-			renderer.render("sizedByContent", true);
-		
-		render(renderer, "vflex", _vflex);
-		
 		if (_model != null)
 			render(renderer, "model", true);
 
@@ -1333,14 +1408,15 @@ public class Grid extends XulElement implements Paginated, org.zkoss.zul.api.Gri
 			renderer.render("_currentLeft", _currentLeft);
 
 		renderer.render("_topPad", _topPad);
+		
+		renderer.render("emptyMessage", _emptyMessage);
+		
 		renderer.render("_totalSize", getDataLoader().getTotalSize());
 		renderer.render("_offset", getDataLoader().getOffset());
 		
 		if (_rod && ((Cropper)getDataLoader()).isCropper()) {//bug #2936064 
 			renderer.render("_grid$rod", true);
 		}
-		if (isAutopaging())
-			renderer.render("autopaging", true);
 	}
 	/*package*/ boolean isRod() {
 		return _rod;
@@ -1357,7 +1433,7 @@ public class Grid extends XulElement implements Paginated, org.zkoss.zul.api.Gri
 	}
 
 	//-- ComponentCtrl --//
-	protected Object newExtraCtrl() {
+	public Object getExtraCtrl() {
 		return new ExtraCtrl();
 	}
 	/** A utility class to implement {@link #getExtraCtrl}.
@@ -1367,7 +1443,6 @@ public class Grid extends XulElement implements Paginated, org.zkoss.zul.api.Gri
 	implements Padding {
 		//-- Padding --//
 		public int getHeight() {
-			// TODO Auto-generated method stub
 			return _topPad;
 		}
 
@@ -1386,7 +1461,7 @@ public class Grid extends XulElement implements Paginated, org.zkoss.zul.api.Gri
 		final String cmd = request.getCommand();
 		if (cmd.equals("onDataLoading")) {
 			Events.postEvent(DataLoadingEvent.getDataLoadingEvent(request, getPreloadSize()));
-		} else if (inPagingMold() && cmd.equals("onChangePageSize")) {
+		} else if (inPagingMold() && cmd.equals(ZulEvents.ON_PAGE_SIZE)) {
 			final Map data = request.getData();
 			final int oldsize = getPageSize();
 			int size = AuRequests.getInt(data, "size", oldsize);
@@ -1398,6 +1473,8 @@ public class Grid extends XulElement implements Paginated, org.zkoss.zul.api.Gri
 				int newpg = sel / size;
 				setPageSize(size);
 				setActivePage(newpg);
+				// Bug: B50-3204965: onPageSize is not fired in autopaging scenario
+				Events.postEvent(new PageSizeEvent(cmd, this, pgi(), size));
 			}
 		} else if (cmd.equals("onScrollPos")) {
 			final Map data = request.getData();

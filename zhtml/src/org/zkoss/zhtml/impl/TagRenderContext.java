@@ -48,12 +48,12 @@ public class TagRenderContext {
 	}
 
 	/** Completes the rendering by returning what are generated
-	 * by {@link #renderBegin} and {@link #renderEnd} (never null).
+	 * by {@link #renderBegin} and {@link #renderEnd} (never return null).
 	 * After rendering, the context is reset.
 	 */
 	public String complete() {
 		if (_jsout.length() > 0) {
-			_jsout.insert(0, "<script>\nzkmb(true);try{");
+			_jsout.insert(0, "<script type=\"text/javascript\">\nzkmb(true);try{");
 			_jsout.append("\n}finally{zkme();}</script>");
 			final String txt = _jsout.toString();
 			_jsout.setLength(0); //reset
@@ -95,6 +95,11 @@ public class TagRenderContext {
 				first = false;
 				_jsout.append("id:'")
 					.append(Strings.escape(id, Strings.ESCAPE_JAVASCRIPT)).append('\'');
+			}
+			if (!comp.isVisible()) {
+				if (first) first = false;
+				else _jsout.append(',');
+				_jsout.append("visible:false");
 			}
 
 			if (clientEvents != null) {

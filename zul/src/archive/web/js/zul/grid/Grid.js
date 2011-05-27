@@ -16,6 +16,21 @@ it will be useful, but WITHOUT ANY WARRANTY.
  */
 //zk.$package('zul.grid');
 
+/** @class zul.grid.Renderer
+ * The renderer used to render a grid.
+ * It is designed to be overriden
+ */
+zul.grid.Renderer = {
+	/** Update the size of the column menu button when mouse over
+	 * 
+	 * @param zul.grid.Column col the column
+	 */
+	updateColumnMenuButton: function (col) {
+		var btn;
+		if (btn = col.$n('btn')) btn.style.height = col.$n().offsetHeight - 1 + "px";
+	}
+};
+
 /**
  * A grid is an element that contains both rows and columns elements.
  * It is used to create a grid of elements.
@@ -30,13 +45,19 @@ it will be useful, but WITHOUT ANY WARRANTY.
  * 
  */
 zul.grid.Grid = zk.$extends(zul.mesh.MeshWidget, {
+	$define:{
+		emptyMessage:function(msg){
+			if(this.desktop) jq("td",this.$n("empty")).html(msg);
+		}
+	},
 	/** Returns the specified cell, or null if not available.
 	 * @param int row which row to fetch (starting at 0).
 	 * @param int col which column to fetch (starting at 0).
 	 * @return zk.Widget
 	 */	
 	getCell: function (row, col) {
-		if (!this.rows) return null;
+		var rows;
+		if (!(rows = this.rows)) return null;
 		if (rows.nChildren <= row) return null;
 
 		var row = rows.getChildAt(row);
@@ -72,17 +93,29 @@ zul.grid.Grid = zk.$extends(zul.mesh.MeshWidget, {
 		return this;
 	},
 	//-- super --//
+	getFocusCell: function (el) {
+		var tbody = this.rows.$n();
+		if (jq.isAncestor(tbody, el)) {
+			var tds = jq(el).parents('td'), td;
+			for (var i = 0, j = tds.length; i < j; i++) {
+				td = tds[i];
+				if (td.parentNode.parentNode == tbody) {
+					return td;
+				}
+			}
+		}
+	},
 	getZclass: function () {
 		return this._zclass == null ? "z-grid" : this._zclass;
 	},
 	insertBefore: function (child, sibling, ignoreDom) {
-		if (this.$super('insertBefore', child, sibling, true)) {
+		if (this.$super('insertBefore', child, sibling, !this.z_rod)) {
 			this._fixOnAdd(child, ignoreDom, ignoreDom);
 			return true;
 		}
 	},
 	appendChild: function (child, ignoreDom) {
-		if (this.$super('appendChild', child, true)) {
+		if (this.$super('appendChild', child, !this.z_rod)) {
 			if (!this.insertingBefore_)
 				this._fixOnAdd(child, ignoreDom, ignoreDom);
 			return true;
@@ -107,12 +140,9 @@ zul.grid.Grid = zk.$extends(zul.mesh.MeshWidget, {
 		if (!isRows && !_noSync)
 			this._syncSize();  //sync-size required
 	},
-	onChildReplaced_: function (oldc, newc) {
-		this.onChildRemoved_(oldc, true);
-		this._fixOnAdd(newc, true); //_syncSize required
-	},
-	onChildRemoved_: function (child, _noSync) {
+	onChildRemoved_: function (child) {
 		this.$supers('onChildRemoved_', arguments);
+
 		var isRows;
 		if (child == this.rows) {
 			this.rows = null;
@@ -126,8 +156,45 @@ zul.grid.Grid = zk.$extends(zul.mesh.MeshWidget, {
 		else if (child == this.frozen) 
 			this.frozen = null;
 
-		if (!isRows && !_noSync)
+		if (!isRows && !this.childReplacing_) //not called by onChildReplaced_
 			this._syncSize();
+	},
+	/**
+	 * empty means no any row .
+	 * @return boolean
+	 */
+	_isEmpty: function () {
+		return this.rows ? this.rows.nChildren : false; 
+	},
+	/**
+	 * a redraw method for the empty message , if you want to customize the message ,
+	 * you could overwrite this.
+	 * @param Array out A array that contains html structure ,
+	 * 			it usually come from mold(redraw_). 
+	 */
+	redrawEmpty_: function (out) {
+		var cols = this.columns ? this.columns.nChildren : 1,
+			uuid = this.uuid, zcls = this.getZclass();
+		out.push('<tbody id="',uuid,'-empty" class="',zcls,'-empty-body" ', 
+		( !this._emptyMessage || this._isEmpty()  ? ' style="display:none"' : '' ),
+			'><tr><td colspan="', cols ,'">' , this._emptyMessage ,'</td></tr></tbody>');
+	},
+	/**
+	 * Fix for the empty message shows up or now. 
+	 */
+	fixForEmpty_: function () {
+		if (this.desktop) {
+			if(this._isEmpty())
+				jq(this.$n("empty")).hide();
+			else
+				jq(this.$n("empty")).show();
+		}
+	},	
+	onChildAdded_: function(child) {
+		this.$supers('onChildAdded_', arguments);
+		if (this.childReplacing_) //called by onChildReplaced_
+			this._fixOnAdd(child, true); //_syncSize required
+		//else handled by insertBefore/appendChild
 	},
 	insertChildHTML_: function (child, before, desktop) {
 		if (child.$instanceof(zul.grid.Rows)) {
@@ -167,8 +234,8 @@ zul.grid.Grid = zk.$extends(zul.mesh.MeshWidget, {
 	 * Returns the tree item iterator.
 	 * @return zul.grid.RowIter
 	 */
-	getBodyWidgetIterator: function () {
-		return new zul.grid.RowIter(this);
+	getBodyWidgetIterator: function (opts) {
+		return new zul.grid.RowIter(this, opts);
 	}
 });
 /**
@@ -179,13 +246,17 @@ zul.grid.RowIter = zk.$extends(zk.Object, {
 	/** Constructor
 	 * @param Grid grid the widget that the iterator belongs to
 	 */
-	$init: function (grid) {
+	$init: function (grid, opts) {
 		this.grid = grid;
+		this.opts = opts;
 	},
 	_init: function () {
 		if (!this._isInit) {
 			this._isInit = true;
-			this.p = this.grid.rows ? this.grid.rows.firstChild: null;
+			var p = this.grid.rows ? this.grid.rows.firstChild: null;
+			if (this.opts && this.opts.skipHidden)
+				for (; p && !p.isVisible(); p = p.nextSibling) {}
+			this.p = p;
 		}
 	},
 	 /**
@@ -203,8 +274,12 @@ zul.grid.RowIter = zk.$extends(zk.Object, {
      */
 	next: function () {
 		this._init();
-		var p = this.p;
-		if (p) this.p = p.nextSibling;
+		var p = this.p,
+			q = p ? p.nextSibling : null;
+		if (this.opts && this.opts.skipHidden)
+			for (; q && !q.isVisible(); q = q.nextSibling) {}
+		if (p) 
+			this.p = q;
 		return p;
 	}
 });

@@ -58,10 +58,10 @@ implements ComponentDefinition, java.io.Serializable {
 	private EvaluatorRef _evalr;
 	/** Either String or Class. */
 	private Object _implcls;
-	/** A map of (String mold, String widget). */
+	/** A map of (String mold, ExValue widgetClass). */
 	private Map _molds;
 	/** The default widget class. */
-	private String _defWgtClass;
+	private ExValue _defWgtClass;
 	/** A map of custom attributs (String name, ExValue value). */
 	private Map _custAttrs;
 	/** A list of {@link Property}. */
@@ -400,20 +400,23 @@ implements ComponentDefinition, java.io.Serializable {
 	}
 	public void applyProperties(Component comp) {
 		//Note: it doesn't apply annotations since it is done
-		//by AbstractComponent's initial with getAnnotationMap()
+		//by AbstractComponent's constructor
+		//AbstractComponent's constructor also invokes applyAttributes automatically
 
+		if (_props != null) {
+			for (Iterator it = _props.iterator(); it.hasNext();) {
+				final Property prop = (Property)it.next();
+				prop.assign(comp);
+			}
+		}
+	}
+	public void applyAttributes(Component comp) {
 		if (_custAttrs != null) {
 			for (Iterator it = _custAttrs.entrySet().iterator();
 			it.hasNext();) {
 				final Map.Entry me = (Map.Entry)it.next();
 				comp.setAttribute((String)me.getKey(),
 					((ExValue)me.getValue()).getValue(_evalr, comp));
-			}
-		}
-		if (_props != null) {
-			for (Iterator it = _props.iterator(); it.hasNext();) {
-				final Property prop = (Property)it.next();
-				prop.assign(comp);
 			}
 		}
 	}
@@ -443,8 +446,14 @@ implements ComponentDefinition, java.io.Serializable {
 
 		if (_molds == null)
 			_molds = new HashMap(2);
-
-		_molds.put(name, widgetClass);
+		_molds.put(name, new ExValue(widgetClass, String.class));
+	}
+	/** @deprecated As of release 5.0.0, replaced with {@link #addMold(String,String)}
+	 * and {@link WidgetDefinition#addMold}.
+	 * <p>It always throws UnsupportedOperationException.
+	 */
+	public void addMold(String name, String moldURI, String z2cURI) {
+		throw new UnsupportedOperationException();
 	}
 
 	public boolean hasMold(String name) {
@@ -454,26 +463,37 @@ implements ComponentDefinition, java.io.Serializable {
 		return _molds != null ?
 			_molds.keySet(): (Collection)Collections.EMPTY_LIST;
 	}
-	public String getWidgetClass(String moldName) {
+	public String getWidgetClass(Component comp, String moldName) {
 		if (_molds != null) {
-			final String wc = (String)_molds.get(moldName);
-			if (wc != null) return wc;
+			final ExValue wc = (ExValue)_molds.get(moldName);
+			if (wc != null) {
+				final String s = (String)wc.getValue(_evalr, comp);
+				if (s != null)
+					return s;
+			}
 		}
-		return _defWgtClass;
+		return getDefaultWidgetClass(comp);
+	}
+	public String getDefaultWidgetClass(Component comp) {
+		return _defWgtClass != null ?
+			(String)_defWgtClass.getValue(_evalr, comp): null;
+	}
+	public String getWidgetClass(String moldName) {
+		return getWidgetClass(null, moldName);
 	}
 	public String getDefaultWidgetClass() {
-		return _defWgtClass;
+		return getDefaultWidgetClass(null);
 	}
 	public void setDefaultWidgetClass(String widgetClass) {
-		final String oldwc = _defWgtClass;
-		_defWgtClass = widgetClass;
+		final ExValue oldwc = _defWgtClass;
+		_defWgtClass = new ExValue(widgetClass, String.class);
 
 		//replace mold's widget class if it is the old default one
 		if (oldwc != null && _molds != null)
 			for (Iterator it = _molds.entrySet().iterator(); it.hasNext();) {
 				final Map.Entry me = (Map.Entry)it.next();
 				if (oldwc.equals(me.getValue()))
-					me.setValue(widgetClass);
+					me.setValue(_defWgtClass);
 			}
 	}
 

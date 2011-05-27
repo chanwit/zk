@@ -13,24 +13,27 @@ Copyright (C) 2008 Potix Corporation. All Rights Reserved.
 	it will be useful, but WITHOUT ANY WARRANTY.
 */
 (function () {
-	var _errURIs = {}, errCode,
+	var _errURIs = {}, _errCode,
 		_perrURIs = {}, //server-push error URI
+		_onErrs = [], //onError functions
 		cmdsQue = [], //response commands in XML
 		ajaxReq, ajaxReqInf, pendingReqInf, ajaxReqTries,
 		sendPending, ctlUuid, ctlTime, ctlCmd, responseId,
-		seqId = (zUtl.now() % 9999) + 1, //1-9999 (random init: bug 2691017)
+		seqId = (jq.now() % 9999) + 1, //1-9999 (random init: bug 2691017)
 		doCmdFns = [],
 		idTimeout, //timer ID for automatica timeout
-		pfIndex = 0; //performance meter index
+		pfIndex = 0, //performance meter index
+		_detached = []; //used for resolving #stub in mount.js (it stores detached widgets in this AU)
 
 	// Checks whether to turn off the progress prompt
-	function checkProcessng() {
+	function checkProgressing() {
 		if (!zAu.processing()) {
+			_detached = []; //clean up
 			zk.endProcessing();
-			zAu.doneTime = zUtl.now();
+			zAu.doneTime = jq.now();
 		}
 	}
-	function pushCmds(reqInf, req) {
+	function pushReqCmds(reqInf, req) {
 		var dt = reqInf.dt,
 			rt = req.responseText;
 		if (!rt) {
@@ -46,13 +49,16 @@ Copyright (C) 2008 Potix Corporation. All Rights Reserved.
 		}
 
 		rt = jq.evalJSON(rt);
-		var	rs = rt.rs,
-			rid = rt.rid;
+		var	rid = rt.rid;
 		if (rid) {
 			rid = parseInt(rid); //response ID
 			if (!isNaN(rid)) cmds.rid = rid;
 		}
 
+		pushCmds(cmds, rt.rs);
+		return true;
+	}
+	function pushCmds(cmds, rs) {
 		for (var j = 0, rl = rs ? rs.length: 0; j < rl; ++j) {
 			var r = rs[j],
 				cmd = r[0],
@@ -67,16 +73,16 @@ Copyright (C) 2008 Potix Corporation. All Rights Reserved.
 		}
 
 		cmdsQue.push(cmds);
-		return true;
 	}
 	function doProcess(cmd, data) { //decoded
 		//1. process zAu.cmd1 (cmd1 has higher priority)
-		var fn = zAu.cmd1[cmd];
+		var fn = zAu.cmd1[cmd], id;
 		if (fn) {
 			if (!data.length)
 				return zAu.showError("ILLEGAL_RESPONSE", "uuid required", cmd);
 
-			data[0] = zk.Widget.$(data[0]); //might be null (such as rm)
+			data[0] = zk.Widget.$(id = data[0]); //might be null (such as rm)
+				//assign to id for debugging purpose (go thru stacktrace)
 		} else {
 			//2. process zAu.cmd0
 			fn = zAu.cmd0[cmd];
@@ -116,6 +122,12 @@ Copyright (C) 2008 Potix Corporation. All Rights Reserved.
 				ajaxSendNow(reqInf);
 		}
 	}
+	function onError(req, errCode) {
+		//$clone first since it might add or remove onError
+		for (var errs = _onErrs.$clone(), fn; fn = errs.shift();)
+			if (fn(req, errCode))
+				return true; //ignored
+	}
 	// Called when the response is received from ajaxReq.
 	function onResponseReady() {
 		var req = ajaxReq, reqInf = ajaxReqInf;
@@ -126,52 +138,65 @@ Copyright (C) 2008 Potix Corporation. All Rights Reserved.
 
 				if (zk.pfmeter) zAu._pfrecv(reqInf.dt, pfGetIds(req));
 
-				var sid = req.getResponseHeader("ZK-SID");
-				if (req.status == 200) { //correct
+				var sid = req.getResponseHeader("ZK-SID"), rstatus;
+				if ((rstatus = req.status) == 200) { //correct
 					if (sid && sid != seqId) {
-						errCode = "ZK-SID " + (sid ? "mismatch": "required");
+						_errCode = "ZK-SID " + (sid ? "mismatch": "required");
+						afterResponse(); //continue the pending request if any
 						return;
 					} //if sid null, always process (usually for error msg)
 
-					if (pushCmds(reqInf, req)) { //valid response
+					var v;
+					if ((v = req.getResponseHeader("ZK-Error"))
+					&& !onError(req, v = zk.parseInt(v)||v)
+					&& v == 5501 //Handle only ZK's SC_OUT_OF_SEQUENCE
+					&& zAu.confirmRetry("FAILED_TO_RESPONSE", "out of sequence")) {
+						ajaxReqResend(reqInf);
+						return;
+					}
+					if (v != 410) //not timeout (SC_GONE)
+						zAu._resetTimeout();
+
+					if (pushReqCmds(reqInf, req)) { //valid response
 						//advance SID to avoid receive the same response twice
 						if (sid && ++seqId > 9999) seqId = 1;
 						ajaxReqTries = 0;
 						pendingReqInf = null;
 					}
-				} else if (!sid || sid == seqId) { //ignore only if out-of-seq (note: 467 w/o sid)
-					errCode = req.status;
-					var eru = _errURIs['' + req.status];
+				} else if ((!sid || sid == seqId) //ignore only if out-of-seq (note: 467 w/o sid)
+				&& !onError(req, _errCode = rstatus)) {
+					var eru = _errURIs['' + rstatus];
 					if (typeof eru == "string") {
 						zUtl.go(eru, {reload: true});
-					} else {
+						return;
+					}
+
 					//handle MSIE's buggy HTTP status codes
 					//http://msdn2.microsoft.com/en-us/library/aa385465(VS.85).aspx
-						switch (req.status) { //auto-retry for certain case
-						default:
-							if (!ajaxReqTries) break;
-							//fall thru
-						case 12002: //server timeout
-						case 12030: //http://danweber.blogspot.com/2007/04/ie6-and-error-code-12030.html
-						case 12031:
-						case 12152: // Connection closed by server.
-						case 12159:
-						case 13030:
-						case 503: //service unavailable
-							if (!ajaxReqTries) ajaxReqTries = 3; //two more try
-							if (--ajaxReqTries) {
-								ajaxReqResend(reqInf, 200);
-								return;
-							}
+					switch (rstatus) { //auto-retry for certain case
+					default:
+						if (!ajaxReqTries) break;
+						//fall thru
+					case 12002: //server timeout
+					case 12030: //http://danweber.blogspot.com/2007/04/ie6-and-error-code-12030.html
+					case 12031:
+					case 12152: // Connection closed by server.
+					case 12159:
+					case 13030:
+					case 503: //service unavailable
+						if (!ajaxReqTries) ajaxReqTries = 3; //two more try
+						if (--ajaxReqTries) {
+							ajaxReqResend(reqInf, 200);
+							return;
 						}
+					}
 
-						if (!reqInf.ignorable && !zk.unloading) {
-							var msg = req.statusText;
-							if (zAu.confirmRetry("FAILED_TO_RESPONSE", req.status+(msg?": "+msg:""))) {
-								ajaxReqTries = 2; //one more try
-								ajaxReqResend(reqInf);
-								return;
-							}
+					if (!reqInf.ignorable && !zk.unloading) {
+						var msg = req.statusText;
+						if (zAu.confirmRetry("FAILED_TO_RESPONSE", rstatus+(msg?": "+msg:""))) {
+							ajaxReqTries = 2; //one more try
+							ajaxReqResend(reqInf);
+							return;
 						}
 					}
 				}
@@ -189,16 +214,21 @@ Copyright (C) 2008 Potix Corporation. All Rights Reserved.
 			//NOTE: if connection is off and req.status is accessed,
 			//Mozilla throws exception while IE returns a value
 			if (reqInf && !reqInf.ignorable && !zk.unloading) {
-				var msg = _exmsg(e);
-				errCode = "[Receive] " + msg;
-				//if (e.fileName) errCode += ", "+e.fileName;
-				//if (e.lineNumber) errCode += ", "+e.lineNumber;
+				var msg = e.message||e;
+				_errCode = "[Receive] " + msg;
+				//if (e.fileName) _errCode += ", "+e.fileName;
+				//if (e.lineNumber) _errCode += ", "+e.lineNumber;
 				if (zAu.confirmRetry("FAILED_TO_RESPONSE", (msg&&msg.indexOf("NOT_AVAILABLE")<0?msg:""))) {
 					ajaxReqResend(reqInf);
 					return;
 				}
 			}
 		}
+
+		afterResponse();
+	}
+	function afterResponse() { 
+		zAu._doCmds(); //invokes checkProgressing
 
 		//handle pending ajax send
 		if (sendPending && !ajaxReq && !pendingReqInf) {
@@ -207,16 +237,6 @@ Copyright (C) 2008 Potix Corporation. All Rights Reserved.
 			for (var dtid in dts)
 				ajaxSend2(dts[dtid], 0);
 		}
-
-		zAu._doCmds();
-	}
-	function _exmsg(e) {
-		var msg = e.message, m2 = "";
-		if (e.name) m2 = " " +e.name;
-//		if (e.fileName) m2 += " " +e.fileName;
-//		if (e.lineNumber) m2 += ":" +e.lineNumber;
-//		if (e.stack) m2 += " " +e.stack;
-		return msg + (m2 ? " (" + m2.substring(1) + ")": m2);
 	}
 
 	function ajaxSend(dt, aureq, timeout) {
@@ -227,7 +247,7 @@ Copyright (C) 2008 Potix Corporation. All Rights Reserved.
 			&& ajaxReqInf.ctlc == aureq.cmd)
 				return;
 
-			var t = zUtl.now();
+			var t = jq.now();
 			if (ctlUuid == aureq.uuid && ctlCmd == aureq.cmd //Bug 1797140
 			&& t - ctlTime < clkfd)
 				return; //to prevent key stroke are pressed twice (quickly)
@@ -254,16 +274,16 @@ Copyright (C) 2008 Potix Corporation. All Rights Reserved.
 	function ajaxSendNow(reqInf) {
 		var setting = zAu.ajaxSettings,
 			req = setting.xhr(),
-			uri = shallUseQS(reqInf) ? reqInf.uri + '?' + reqInf.content: null;
-		zAu.sentTime = zUtl.now(); //used by server-push (cpsp)
+			uri = zjq._useQS(reqInf) ? reqInf.uri + '?' + reqInf.content: null;
+		zAu.sentTime = jq.now(); //used by server-push (cpsp)
 		try {
 			req.onreadystatechange = onResponseReady;
 			req.open("POST", uri ? uri: reqInf.uri, true);
 			req.setRequestHeader("Content-Type", setting.contentType);
 			req.setRequestHeader("ZK-SID", reqInf.sid);
-			if (errCode) {
-				req.setRequestHeader("ZK-Error-Report", errCode);
-				errCode = null;
+			if (_errCode) {
+				req.setRequestHeader("ZK-Error-Report", _errCode);
+				_errCode = null;
 			}
 
 			if (zk.pfmeter) zAu._pfsend(reqInf.dt, req);
@@ -285,8 +305,8 @@ Copyright (C) 2008 Potix Corporation. All Rights Reserved.
 			}
 
 			if (!reqInf.ignorable && !zk.unloading) {
-				var msg = _exmsg(e);
-				errCode = "[Send] " + msg;
+				var msg = e.message||e;
+				_errCode = "[Send] " + msg;
 				if (zAu.confirmRetry("FAILED_TO_SEND", msg)) {
 					ajaxReqResend(reqInf);
 					return;
@@ -297,32 +317,27 @@ Copyright (C) 2008 Potix Corporation. All Rights Reserved.
 	/* @param zk.Widget target
 	 */
 	function toJSON(target, data) {
-		if (data.pageX != null && data.x == null)  {
-			var ofs = target ? target.fromPageCoord(data.pageX, data.pageY):
-				[data.pageX, data.pageY];
-			data.x = ofs[0];
-			data.y = ofs[1];
+		if (!jq.isArray(data)) {
+			if (data.pageX != null && data.x == null)  {
+				var ofs = target ? target.fromPageCoord(data.pageX, data.pageY):
+					[data.pageX, data.pageY];
+				data.x = ofs[0];
+				data.y = ofs[1];
+			}
+
+			for (var n in data) {
+				var v;
+				if (jq.type(v = data[n]) == 'date') {
+					data[n] = jq.d2j(v);
+					data["z_type_" + n] = "Date";
+				}
+			}
 		}
 		return jq.toJSON(data);
 	}
 
-	//IE: use query string if possible to avoid incomplete-request problem
-	var shallUseQS = zk.ie ? function (reqInf) {
-		var s = reqInf.content, j = s.length, prev, cc;
-		if (j + reqInf.uri.length < 2000) {
-			while (j--) {
-				cc = s.charAt(j);
-				if (cc == '%' && prev >= '8') //%8x, %9x...
-					return false;
-				prev = cc;
-			}
-			return true;
-		}
-		return false;
-	}: zk.$void;
-
 	function doCmdsNow(cmds) {
-		var rtags = cmds.rtags||{};
+		var rtags = cmds.rtags||{}, ex;
 		try {
 			while (cmds && cmds.length) {
 				if (zk.mounting) return false;
@@ -331,8 +346,9 @@ Copyright (C) 2008 Potix Corporation. All Rights Reserved.
 				try {
 					doProcess(cmd.cmd, cmd.data);
 				} catch (e) {
+					zk.mounting = false; //make it able to proceed
 					zAu.showError("FAILED_TO_PROCESS", null, cmd.cmd, e);
-					throw e;
+					if (!ex) ex = e;
 				}
 			}
 		} finally {
@@ -341,6 +357,8 @@ Copyright (C) 2008 Potix Corporation. All Rights Reserved.
 				zWatch.fire('onResponse', null, {timeout:0, rtags: rtags}); //use setTimeout
 			}
 		}
+		if (ex)
+			throw ex;
 		return true;
 	}
 	function _asBodyChild(child) {
@@ -354,7 +372,7 @@ Copyright (C) 2008 Potix Corporation. All Rights Reserved.
 	}
 	function pfAddIds(dt, prop, pfIds) {
 		if (pfIds && (pfIds = pfIds.trim())) {
-			var s = pfIds + "=" + Math.round(zUtl.now());
+			var s = pfIds + "=" + Math.round(jq.now());
 			if (dt[prop]) dt[prop] += ',' + s;
 			else dt[prop] = s;
 		}
@@ -369,6 +387,28 @@ Copyright (C) 2008 Potix Corporation. All Rights Reserved.
 			//serverAlive: the server shall not ignore it if session timeout
 	}
 
+	//store all widgets into a map
+	function _wgt2map(wgt, map) {
+		map[wgt.uuid] = wgt;
+		for (wgt = wgt.firstChild; wgt; wgt = wgt.nextSibling)
+			_wgt2map(wgt, map);
+	}
+
+	function _beforeAction(wgt, actnm) {
+		var act;
+		if (wgt._visible && (act = wgt.actions_[actnm])) {
+			wgt.z$display = "none"; //control zk.Widget.domAttrs_
+			return act;
+		}
+	}
+	function _afterAction(wgt, act) {
+		if (act) {
+			delete wgt.z$display;
+			act[0].call(wgt, wgt.$n(), act[1]);
+			return true;
+		}
+	}
+
 /** @class zAu
  * @import zk.Widget
  * @import zk.Desktop
@@ -378,7 +418,7 @@ Copyright (C) 2008 Potix Corporation. All Rights Reserved.
  * The AU Engine used to send the AU requests to the server and to process
  * the AU responses.
  * <p>Notice {@link zAu}, {@link AuCmd0} and {@link AuCmd1}
- * are not available in <a href="http://docs.zkoss.org/wiki/ZK_Light">ZK Light</a>.
+ * are not available in <a href="http://code.google.com/p/zkuery/">ZKuery</a>.
  */
 zAu = {
 	_resetTimeout: function () { //called by mount.js
@@ -395,8 +435,43 @@ zAu = {
 			//otherwise, FF will pass 1 as the firt argument,
 			//i.e., it is equivalent to zAu.cmd0.clientInfo(1)
 	},
+	//Used by mount.js to search widget being detached in this AU
+	_wgt$: function (uuid) {
+		var map = _detached.wgts = _detached.wgts || {}, wgt;
+		while (wgt = _detached.shift())
+			_wgt2map(wgt, map);
+		return map[uuid];
+	},
 
 	//Error Handling//
+	/** Register a listener that will be called when the Ajax request failed.
+	 * The listener shall be
+	 * <pre><code>function (req, errCode)</code></pre>
+	 *
+	 * where req is an instance of {@link  _global_.XMLHttpRequest},
+	 * and errCode is the error code.
+	 * Furthermore, the listener could return true to ignore the error.
+	 * In other words, if true is returned, the error is ignored (the
+	 * listeners registered after won't be called either).
+	 * <p>Notice that req.status might be 200, since ZK might send the error
+	 * back with the ZK-Error header.
+	 *
+	 * <p>To remove the listener, use {@link #unError}.
+	 * @since 5.0.4
+	 * @see #unError
+	 * @see #confirmRetry
+	 */
+	onError: function (fn) {
+		_onErrs.push(fn);
+	},
+	/** Unregister a listener for handling errors.
+	 * @since 5.0.4
+	 * @see #onError
+	 */
+	unError: function (fn) {
+		_onErrs.$remove(fn);
+	},
+
 	/** Called to confirm the user whether to retry, when an error occurs.
 	 * @param String msgCode the message code
 	 * @param String msg2 the additional message. Ignored if not specified or null.
@@ -416,7 +491,7 @@ zAu = {
 	showError: function (msgCode, msg2, cmd, ex) {
 		var msg = msgzk[msgCode];
 		zk.error((msg?msg:msgCode)+'\n'+(msg2?msg2+": ":"")+(cmd||"")
-				+ (ex?"\n"+(_exmsg(ex) || ex):""));
+				+ (ex?"\n"+(ex.message || ex):""));
 	},
 	/** Returns the URI for the specified error.
 	 * @param int code the error code
@@ -476,9 +551,9 @@ zAu = {
 	/** Sends an AU request and appends it to the end if there is other pending
 	 * AU requests.
 	 *
-	 * @param Event the request. If {@link Event#target} is null,
+	 * @param Event aureq the request. If {@link Event#target} is null,
 	 * the request will be sent to each desktop at the client.
-	 * @param int timeout the time to wait before sending the request.
+	 * @param int timeout the time (milliseconds) to wait before sending the request.
 	 * 0 is assumed if not specified or negative.
 	 * If negative, the request is assumed to be implicit, i.e., no message will
 	 * be shown if an error occurs.
@@ -497,9 +572,9 @@ zAu = {
 		}
 	},
 	/** Sends an AU request by placing in front of any other pending request.
-	 * @param Event the request. If {@link Event#target} is null,
+	 * @param Event aureq the request. If {@link Event#target} is null,
 	 * the request will be sent to each desktop at the client.
-	 * @param int timeout the time to wait before sending the request.
+	 * @param int timeout the time (milliseconds) to wait before sending the request.
 	 * 0 is assumed if not specified or negative.
 	 * If negative, the request is assumed to be implicit, i.e., no message will
 	 * be shown if an error occurs.
@@ -535,6 +610,17 @@ zAu = {
 	 */
 	shallIgnoreESC: function () {
 		return ajaxReq;
+	},
+	/** Process the specified commands.
+	 * @param String dtid the desktop's ID
+	 * @param Array rs a list of responses
+	 * @since 5.0.5
+	 */
+	doCmds: function (dtid, rs) {
+		var cmds = [];
+		cmds.dt = zk.Desktop.$(dtid);
+		pushCmds(cmds, rs);
+		zAu._doCmds();
 	},
 	_doCmds: function () { //called by mount.js, too
 		for (var fn; fn = doCmdFns.shift();)
@@ -590,13 +676,13 @@ zAu = {
 				}
 			}, 3600);
 		} else
-			checkProcessng();
+			checkProgressing();
 
 		if (ex) throw ex;
 	},
 
 	/** Called before sending an AU request.
-	 * <p>Default: append {@link zk.Widget#autag} to <code>uri</code>.
+	 * <p>Default: does nothing but return uri.
 	 * <p>It is designed to be overriden by an application to record
 	 * what AU requests have been sent. For example, to work with Google Analytics,
 	 * you can add the following code:
@@ -625,26 +711,52 @@ zAu.beforeSend = function (uri, req) {
 	 *
 	 * @param String uri the AU's request URI (such as /zkau)
 	 * @param Event aureq the AU request
+	 * @param Desktop dt the desktop
 	 * @return String the AU's request URI.
 	 * @since 5.0.2
 	 */
-	beforeSend: function (uri, aureq) {
-		var target = aureq.target, tag;
-		if (target && (tag = target.autag)) {
-			tag = '/' + encodeURIComponent(tag);
-			if (uri.indexOf("/_/") < 0) {
-				var v = target.desktop;
-				if ((v = v ? v.requestPath: "") && v.charAt(0) != '/')
-					v = '/' + v; //just in case
-				tag = "/_" + v + tag;
-			}
-
-			var j = uri.lastIndexOf(';');
-			if (j >= 0) uri = uri.substring(0, j) + tag + uri.substring(j);
-			else uri += tag;
-		}
+	beforeSend: function (uri/*, aureq, dt*/) {
 		return uri;
 	},
+	/** Returns the content to send to the server.
+	 * By default, it is encoded into several parameters and the data
+	 * parameters (data_*) is encoded in JSON.
+	 * <p>If you prefer to encode it into another format, you could override
+	 * this method, and also implement a Java interface called
+	 * <a href="http://www.zkoss.org/javadoc/latest/zk/org/zkoss/zk/au/AuDecoder.html">org.zkoss.zk.au.AuDecoder</a>\
+	 * to decode the format at the server.
+	 * <p>If you prefer to encode it into URI, you could override
+	 * {@link #beforeSend}.
+	 * @param int j the order of the AU request. ZK sends a batch of AU
+	 * request at once and this argument indicates the order an AU request is
+	 * (starting from 0).
+	 * @param Event aureq the AU request
+	 * @param Desktop dt the desktop
+	 * @return String the content of the AU request.
+	 * @since 5.0.4
+	 */
+	encode: function (j, aureq, dt) {
+		var target = aureq.target,
+			opts = aureq.opts||{},
+			content = j ? "": "dtid="+dt.id;
+
+		content += "&cmd_"+j+"="+aureq.name
+		if ((opts.implicit || opts.ignorable) && !(opts.serverAlive))
+			content += "&opt_"+j+"=i";
+			//thus, the server will ignore it if session timeout
+
+		if (target && target.className != 'zk.Desktop')
+			content += "&uuid_"+j+"="+target.uuid;
+
+		var data = aureq.data, dtype = typeof data;
+		if (dtype == 'string' || dtype == 'number' || dtype == 'boolean'
+		|| jq.isArray(data))
+			data = {'':data};
+		if (data)
+			content += "&data_"+j+"="+encodeURIComponent(toJSON(target, data));
+		return content;
+	},
+
 	/** Enforces all pending AU requests of the specified desktop to send immediately
 	 * @param Desktop dt
 	 * @return boolean whether it is sent successfully. If it has to wait
@@ -690,7 +802,7 @@ zAu.beforeSend = function (uri, req) {
 		//bug 1721809: we cannot filter out ctl even if zAu.processing
 
 		//decide ignorable
-		var ignorable = true, ctli, ctlc, alive;
+		var ignorable = true, ctli, ctlc;
 		for (var j = 0, el = es.length; j < el; ++j) {
 			var aureq = es[j],
 				evtnm = aureq.name,
@@ -704,12 +816,7 @@ zAu.beforeSend = function (uri, req) {
 				ctli = aureq.target.uuid;
 				ctlc = evtnm;
 			}
-			if (!alive && (zk.timerAlive || evtnm != "onTimer") && evtnm != "dummy")
-				alive = true;
 		}
-
-		if (alive)
-			zAu._resetTimeout();
 
 		//Consider XML (Pros: ?, Cons: larger packet)
 		var content = "", rtags = {},
@@ -721,33 +828,14 @@ zAu.beforeSend = function (uri, req) {
 				break;
 			}
 
-			requri = zAu.beforeSend(requri, aureq);
-
-			var evtnm = aureq.name,
-				target = aureq.target,
-				opts = aureq.opts||{};
-
-			zk.copy(rtags, opts.rtags);
-
-			content += "&cmd_"+j+"="+evtnm;
-			if ((opts.implicit || opts.ignorable) && !(opts.serverAlive))
-				content += "&opt_"+j+"=i";
-				//thus, the server will ignore it if session timeout
-			if (target && target.className != 'zk.Desktop')
-				content += "&uuid_"+j+"="+target.uuid;
-
-			var data = aureq.data, dtype = typeof data;
-			if (dtype == 'string' || dtype == 'number' || dtype == 'boolean'
-			|| jq.isArray(data))
-				data = {'':data};
-			if (data)
-				content += "&data_"+j+"="+encodeURIComponent(toJSON(target, data));
+			requri = zAu.beforeSend(requri, aureq, dt);
+			content += zAu.encode(j, aureq, dt);
+			zk.copy(rtags, (aureq.opts||{}).rtags);
 		}
 
 		if (content)
 			ajaxSendNow({
-				sid: seqId, uri: requri,
-				dt: dt, content: "dtid=" + dt.id + content,
+				sid: seqId, uri: requri, dt: dt, content: content,
 				ctli: ctli, ctlc: ctlc, implicit: implicit,
 				ignorable: ignorable, tmout: 0, rtags: rtags
 			});
@@ -776,7 +864,7 @@ zAu.beforeSend = function (uri, req) {
 	_pfsend: function (dt, req, completeOnly) {
 		if (!completeOnly)
 			req.setRequestHeader("ZK-Client-Start",
-				dt.id + "-" + pfIndex++ + "=" + Math.round(zUtl.now()));
+				dt.id + "-" + pfIndex++ + "=" + Math.round(jq.now()));
 
 		var ids;
 		if (ids = dt._pfRecvIds) {
@@ -802,9 +890,11 @@ zAu.beforeSend = function (uri, req) {
 	 * <code>fn</code> is called with an array of {@link Widget}. In other words,
 	 * the callback's signature is as follows:<br/>
 	 * <code>void callback(zk.Widget[] wgts);</code>
+	 * @param Function filter the filter to avoid the use of widgets being replaced.
+	 * Ignored if null
 	 * @since 5.0.2
 	 */
-	createWidgets: function (codes, fn) {
+	createWidgets: function (codes, fn, filter) {
 		//bug #3005632: Listbox fails to replace with empty model if in ROD mode
 		var wgts = [], len = codes.length;
 		if (len > 0) {
@@ -813,7 +903,7 @@ zAu.beforeSend = function (uri, req) {
 					wgts.push(newwgt);
 					if (wgts.length == len)
 						fn(wgts);
-				});
+				}, filter);
 		} else
 			fn(wgts);
 	},
@@ -843,7 +933,7 @@ zAu.beforeSend = function (uri, req) {
  * The AU command handler for processes commands not related to widgets,
  * sent from the server.
  * <p>Notice {@link zAu}, {@link zk.AuCmd0} and {@link zk.AuCmd1}
- * are not available in <a href="http://docs.zkoss.org/wiki/ZK_Light">ZK Light</a>.
+ * are not available in <a href="http://code.google.com/p/zkuery/">ZKuery</a>.
  * @see zAu#cmd0
  */
 zAu.cmd0 = /*prototype*/ { //no uuid at all
@@ -860,6 +950,9 @@ zAu.cmd0 = /*prototype*/ { //no uuid at all
 	 * @param String msg the error message
 	 */
 	obsolete: function (dtid, msg) {
+		if (msg.startsWith("script:"))
+			return $eval(msg.substring(7));
+
 		var v = zk.Desktop.$(dtid);
 		if (v && (v = v.requestPath))
 			msg = msg.replace(dtid, v + ' (' + dtid + ')');
@@ -876,8 +969,8 @@ zAu.cmd0 = /*prototype*/ { //no uuid at all
 	 * For widget's error message, use {@link #wrongValue} instead.
 	 * @param String msg the error message
 	 */
-	alert: function (msg) {
-		jq.alert(msg, {icon:'ERROR'});
+	alert: function (msg, title, icon) {
+		jq.alert(msg, {icon: icon||'ERROR', title: title});
 	},
 	/** Redirects to the specified URL.
 	 * @param String url the URL to redirect to
@@ -909,10 +1002,22 @@ zAu.cmd0 = /*prototype*/ { //no uuid at all
 	 * a long operation.
 	 * @param String dtid the desktop ID ({@link zk.Desktop}).
 	 * @see zk.AuCmd1#echo2
+	 * @see #echoGx
 	 */
 	echo: function (dtid) {
 		zAu.send(new zk.Event(zk.Desktop.$(dtid), "dummy", null, {ignorable: true}));
 	},
+	/** Ask the client to echo back globally.
+	 * <p>Unlike {@link #echo}, it will search all browser windows for
+	 * <p>Note: this feature requires ZK EE
+	 * the given desktop IDs.
+	 * @param String evtnm the event name
+	 * @param String data any string-typed data
+	 * @param String... any number of desktop IDs.
+	 * @since 5.0.4
+	 */
+	//echoGx: function () {}
+
 	/** Asks the client information.
 	 * The client will reply the information in the <code>onClientInfo</code> response.
 	 * @param String dtid the desktop ID ({@link zk.Desktop}).
@@ -1010,7 +1115,6 @@ zAu.cmd0 = /*prototype*/ { //no uuid at all
 		zAu.cmd0.clearBusy(uuid);
 
 		var w = uuid ? zk.Widget.$(uuid): null;
-		zUtl.destroyProgressbox("zk_loadprog");
 		if (!uuid)
 			zUtl.progressbox("zk_showBusy", msg || msgzk.PLEASE_WAIT, true, null, {busy:true});
 		else if (w) {
@@ -1087,13 +1191,8 @@ zAu.cmd0 = /*prototype*/ { //no uuid at all
 			var n = zk.Widget.$(id);
 			if (n && n.submit)
 				n.submit();
-			else {
-				n = zk(id).jq[0];
-				if (n && n.submit) {
-					jq.Event.fire(n, 'submit');
-					n.submit();
-				}
-			}
+			else
+				zk(id).submit();
 		}, 50);
 	},
 	/** Scrolls the widget or an DOM element into the view
@@ -1109,7 +1208,7 @@ zAu.cmd0 = /*prototype*/ { //no uuid at all
  * The AU command handler for processes commands related to widgets,
  * sent from the server.
  * <p>Notice {@link zAu}, {@link zk.AuCmd0} and {@link zk.AuCmd1}
- * are not available in <a href="http://docs.zkoss.org/wiki/ZK_Light">ZK Light</a>.
+ * are not available in <a href="http://code.google.com/p/zkuery/">ZKuery</a>.
  * @see zAu#cmd1
  */
 zAu.cmd1 = /*prototype*/ {
@@ -1134,7 +1233,14 @@ zAu.cmd1 = /*prototype*/ {
 	 */
 	outer: function (wgt, code) {
 		zkx_(code, function (newwgt) {
+			var act = _beforeAction(newwgt, "invalidate");
 			wgt.replaceWidget(newwgt);
+			_afterAction(newwgt, act);
+		}, function (wx) {
+			for (var w = wx; w; w = w.parent)
+				if (w == wgt)
+					return null; //ignore it since it is going to be removed
+			return wx;
 		});
 	},
 	/** Adds the widget(s) generated by evaluating the specified JavaScript code snippet
@@ -1145,74 +1251,73 @@ zAu.cmd1 = /*prototype*/ {
 	/** Adds the widget(s) generated by evaluating the specified JavaScript code snippet
 	 * after the specified widget (as sibling).
 	 * @param zk.Widget wgt the existent widget that new widget(s) will be inserted after
-	 * @param String code the JavaScript code snippet to generate new widget(s).
-	 * @param String pgid the page id which the new widget will append to
+	 * @param String... codes the JavaScript code snippet to generate new widget(s).
 	 */
-	addAft: function (wgt, code, pgid) {
-		//Bug 1939059: This is a dirty fix. Refer to AuInsertBefore
-		//Format: comp-uuid:pg-uuid (if native root)
-		if ((!wgt || (!wgt.z_rod && !wgt.$n())) && pgid) {
-			wgt = zk.Widget.$(pgid);
-			if (wgt)
-				zAu.cmd1.addChd(wgt, code);
-			else
-				zkx_(code, _asBodyChild);
-			return;
-		}
-
-		zkx_(code, function (child) {
-			var p = wgt.parent;
-			if (p) {
-				p.insertBefore(child, wgt.nextSibling);
-				if (p.$instanceof(zk.Desktop))
-					_asBodyChild(child);
-			} else {
-				var n = wgt.$n();
-				if (n)
-					jq(n).after(child, wgt.desktop);
-				else
-					_asBodyChild(child);
-			}
-			if (!child.z_rod) {
-				zWatch.fireDown('beforeSize', child);
-				zWatch.fireDown('onSize', child);
-			}
-		});
+	addAft: function (wgt) {
+		for (var args = arguments, j = args.length; --j;)
+			zkx_(args[j], function (child) {
+				var p = wgt.parent,
+					act = _beforeAction(child, "show");
+				if (p) {
+					p.insertBefore(child, wgt.nextSibling);
+					if (p.$instanceof(zk.Desktop))
+						_asBodyChild(child);
+				} else {
+					var n = wgt.$n();
+					if (n)
+						jq(n).after(child, wgt.desktop);
+					else
+						_asBodyChild(child);
+				}
+				if (!_afterAction(child, act) && !child.z_rod) {
+					zWatch.fireDown('beforeSize', child);
+					zWatch.fireDown('onSize', child);
+				}
+			});
 	},
 	/** Adds the widget(s) generated by evaluating the specified JavaScript code snippet
 	 * before the specified widget (as sibling).
 	 * @param zk.Widget wgt the existent widget that new widget(s) will be inserted before
-	 * @param String code the JavaScript code snippet to generate new widget(s).
+	 * @param String... codes the JavaScript code snippet to generate new widget(s).
 	 */
-	addBfr: function (wgt, code) {
-		zkx_(code, function (child) {
-			wgt.parent.insertBefore(child, wgt);
-			if (!child.z_rod) {
-				zWatch.fireDown('beforeSize', child);
-				zWatch.fireDown('onSize', child);
-			}
-		});
+	addBfr: function (wgt) {
+		for (var args = arguments, j = 1; j < args.length; ++j)
+			zkx_(args[j], function (child) {
+				var act = _beforeAction(child, "show");
+				wgt.parent.insertBefore(child, wgt);
+				if (!_afterAction(child, act) && !child.z_rod) {
+					zWatch.fireDown('beforeSize', child);
+					zWatch.fireDown('onSize', child);
+				}
+			});
 	},
 	/** Adds the widget(s) generated by evaluating the specified JavaScript code snippet
 	 * as the last child of the specified widget.
 	 * @param zk.Widget wgt the existent widget that will become the parent of new widget(s)
-	 * @param String code the JavaScript code snippet to generate new widget(s).
+	 * @param String... codes the JavaScript code snippet to generate new widget(s).
 	 */
-	addChd: function (wgt, code) {
-		zkx_(code, function (child) {
-			wgt.appendChild(child);
-			if (!child.z_rod) {
-				zWatch.fireDown('beforeSize', child);
-				zWatch.fireDown('onSize', child);
-			}
-		});
+	addChd: function (wgt) {
+		for (var args = arguments, j = 1; j < args.length; ++j)
+			if (wgt)
+				zkx_(args[j], function (child) {
+					var act = _beforeAction(child, "show");
+					wgt.appendChild(child);
+					if (!_afterAction(child, act) && !child.z_rod) {
+						zWatch.fireDown('beforeSize', child);
+						zWatch.fireDown('onSize', child);
+					}
+				});
+			else //possible if <?page complete="true"?>
+				zkx_(args[j], _asBodyChild);
 	},
 	/** Removes the widget.
 	 * @param zk.Widget wgt the widget to remove
 	 */
 	rm: function (wgt) {
-		if (wgt)
+		if (wgt) {
 			wgt.detach();
+			_detached.push(wgt); //used by mount.js
+		}
 	},
 	/** Rename UUID.
 	 * @param zk.Widget wgt the widget to rename
@@ -1221,7 +1326,7 @@ zAu.cmd1 = /*prototype*/ {
 	 */
 	uuid: function (wgt, newId) {
 		if (wgt)
-			wgt._setUuid(newId);
+			zk._wgtutl.setUuid(wgt, newId); //see widget.js
 	},
 
 	/** Set the focus to the specified widget.
@@ -1264,6 +1369,8 @@ zAu.cmd1 = /*prototype*/ {
 	 * @param zk.Widget wgt the target widget to which the AU request will be sent
 	 * @param String evtnm the name of the event, such as onUser
 	 * @param Object data any data
+	 * @see zk.AuCmd0#echo
+	 * @see zk.AuCmd0#echoGx
 	 */
 	echo2: function (wgt, evtnm, data) {
 		zAu.send(new zk.Event(wgt, "echo",

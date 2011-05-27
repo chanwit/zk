@@ -26,7 +26,8 @@ import org.zkoss.zk.ui.event.Events;
  *
  * @author tomyeh
  */
-abstract public class FormatInputElement extends InputElement {
+abstract public class FormatInputElement extends InputElement
+implements org.zkoss.zul.impl.api.FormatInputElement {
 	private String _format;
 
 	/** Returns the format.
@@ -39,20 +40,27 @@ abstract public class FormatInputElement extends InputElement {
 	 */
 	public void setFormat(String format) throws WrongValueException {
 		if (!Objects.equals(_format, format)) {
-			final String old = _format;
 			_format = format;
-			smartUpdate("format", _format);
-			//bug #2998196: Problem with dynamic setting of format pattern
-			smartUpdate("value", this.coerceToString(_value));
+			smartUpdate("format", getRealFormat());
+			smartUpdate("_value", marshall(_value));
+				//Technically, it shall be indepedent of format, but it is
+				//safer to send again (since some implementation might not good)
+				//See also bug 2998196.
 		}
 	}
 	protected void renderProperties(org.zkoss.zk.ui.sys.ContentRenderer renderer)
 	throws java.io.IOException {
-		Object old = _value;
-		_value = null;
+		render(renderer, "format", getRealFormat());//value might depend on format (though it shall not)
 		super.renderProperties(renderer);
-		_value = old;
-		render(renderer, "format", _format);
-		render(renderer, "value", this.coerceToString(_value));
+	}
+	/** Returns the real format.
+	 * <p>Default: return {@link #getFormat}.
+	 * It is designed to allow the deriving class to provide another layer of
+	 * abstraction. For example, {@link org.zkoss.zul.Datebox#setFormat}
+	 * accepts short to denote the short format.
+	 * @since 5.0.7
+	 */
+	protected String getRealFormat() {
+		return _format;
 	}
 }

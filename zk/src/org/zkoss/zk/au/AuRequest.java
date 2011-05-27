@@ -16,11 +16,15 @@ Copyright (C) 2005 Potix Corporation. All Rights Reserved.
 */
 package org.zkoss.zk.au;
 
+import java.util.Iterator;
+import java.util.Collections;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.Set;
 import java.util.HashSet;
+import java.text.ParseException;
 
+import org.zkoss.json.JSONs;
 import org.zkoss.zk.ui.Desktop;
 import org.zkoss.zk.ui.Page;
 import org.zkoss.zk.ui.Component;
@@ -77,7 +81,7 @@ public class AuRequest {
 		_desktop = desktop;
 		_uuid = uuid;
 		_cmd = cmd;
-		_data = data;
+		_data = data != null ? parseType(data): Collections.EMPTY_MAP;
 	}
 	/** Constructor for a general request sent from client.
 	 * This is usully used to ask server to log or report status.
@@ -91,7 +95,26 @@ public class AuRequest {
 			throw new IllegalArgumentException();
 		_desktop = desktop;
 		_cmd = cmd;
-		_data = data;
+		_data = data != null ? parseType(data): Collections.EMPTY_MAP;
+	}
+	private static Map parseType(Map data) {
+		for (Iterator it = data.entrySet().iterator(); it.hasNext();) {
+			final Map.Entry me = (Map.Entry)it.next();
+			final Object key = me.getKey();
+			if (key instanceof String) {
+				Object val = data.get("z_type_" + key);
+				if (val != null)
+					if ("Date".equals(val)) {
+						try {
+							me.setValue(JSONs.j2d((String)me.getValue()));
+						} catch (ParseException ex) {
+							throw new UiException("Failed to convert, "+val+", found in zype_"+key);
+						}
+					} else
+						throw new UiException("Unknow type, "+val+", found in zype_"+key);
+			}
+		}
+		return data;
 	}
 
 	/** Activates this request.
@@ -155,12 +178,15 @@ public class AuRequest {
 	public Component getComponent() {
 		return _comp;
 	}
-	/** Returns the data of this request, or null if not available.
+	/** Returns the data of this request.
 	 * If the client sends a string, a number or an array as data,
 	 * the data can be retrieved by the key, "". For example,
 	 * <code>getData().getInt("")</code>.
 	 *
-	 * <p>See also <a href="http://docs.zkoss.org/wiki/How_to_Process_Request_with_JSON">how to process data with JSON</a>.
+	 * <p>See also <a href="http://books.zkoss.org/wiki/ZK_Client-side_Reference/Communication/AU_Requests/Server-side_Processing">ZK Client-side Reference: AU Requests: Server-side Processing</a>
+	 *
+	 * <p>Notice that, since 5.0.4, this method never returns null.
+	 * If no data at all, it simply returns an empty map.
 	 * @since 5.0.0
 	 */
 	public Map getData() {

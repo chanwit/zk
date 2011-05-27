@@ -17,7 +17,7 @@ Copyright (C) 2005 Potix Corporation. All Rights Reserved.
 package org.zkoss.zul;
 
 import org.zkoss.lang.Objects;
-import org.zkoss.html.HTMLs;
+import org.zkoss.xml.HTMLs;
 
 import org.zkoss.zul.impl.XulElement;
 
@@ -41,7 +41,7 @@ public class Div extends XulElement implements org.zkoss.zul.api.Div {
 	public String getAlign() {
 		return _align;
 	}
-	/** Sets the alignment: one of left, center, right, ustify,
+	/** Sets the alignment: one of left, center, right, justify,
 	 */
 	public void setAlign(String align) {
 		if (align != null && align.length() == 0)

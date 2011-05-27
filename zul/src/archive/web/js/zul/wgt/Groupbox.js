@@ -36,10 +36,11 @@ zul.wgt.Groupbox = zk.$extends(zul.Widget, {
 			var node = this.$n();
 			if (node && this._closable) {
 				if (this.isLegend()) { //legend
+					if (!open) zWatch.fireDown('onHide', this);
 					jq(node)[open ? 'removeClass': 'addClass'](this.getZclass() + "-colpsd");
-					zWatch.fireDown(open ? 'onShow': 'onHide', this);
 					if (zk.ie6_) // Bug Z35-groupbox-002.zul
 						zk(this).redoCSS();
+					if (open) zWatch.fireDown('onShow', this);
 				} else {
 					zk(this.getCaveNode())[open?'slideDown':'slideUp'](this);
 				}
@@ -57,7 +58,7 @@ zul.wgt.Groupbox = zk.$extends(zul.Widget, {
 		 * @param boolean closable
 		 */
 		closable: _zkf = function () {
-			this._updateDomOuter();
+			this._updDomOuter();
 		},
 		/** Returns the CSS style for the content block of the groupbox.
 		 * Used only if {@link #getMold} is not default.
@@ -92,7 +93,7 @@ zul.wgt.Groupbox = zk.$extends(zul.Widget, {
 		return this._mold == 'default';
 	},
 
-	_updateDomOuter: function () {
+	_updDomOuter: function () {
 		this.rerender(zk.Skipper.nonCaptionSkipper);
 	},
 	_contentAttrs: function () {
@@ -126,12 +127,14 @@ zul.wgt.Groupbox = zk.$extends(zul.Widget, {
 	_fixHgh: function () {
 		var hgh = this.$n().style.height;
 		if (hgh && hgh != "auto") {
-			var n = this.$n('cave');
-			if (n) {
+			var n;
+			if (n = this.$n('cave')) {
 				if (zk.ie6_) n.style.height = "";
-				var fix = function() {
-					n.style.height =
-						zk(n).revisedHeight(zk(n).vflexHeight(), true)
+				var wgt = this,
+					$n = zk(n),
+					fix = function() {
+					n.style.height = wgt.isLegend()? hgh:
+						$n.revisedHeight($n.vflexHeight(), true)
 						+ "px";
 				};
 				fix();
@@ -147,7 +150,7 @@ zul.wgt.Groupbox = zk.$extends(zul.Widget, {
 		this._fixHgh();
 		if (!this.isLegend())
 			setTimeout(this.proxy(this._fixShadow), 500);
-			//shadow raraly needs to fix so OK to delay for better performance
+			//shadow rarely needs to fix so OK to delay for better performance
 	},
 	onShow: _zkf,
 	_fixShadow: function () {
@@ -163,15 +166,12 @@ zul.wgt.Groupbox = zk.$extends(zul.Widget, {
 	},
 
 	//super//
-	focus: function (timeout) {
-		if (this.desktop && this.isVisible() && this.canActivate({checkOnly:true})) {
-			var cap = this.caption;
-			for (var w = this.firstChild; w; w = w.nextSibling)
-				if (w != cap && w.focus(timeout))
-					return true;
-			return cap && cap.focus(timeout);
-		}
-		return false;
+	focus_: function (timeout) {
+		var cap = this.caption;
+		for (var w = this.firstChild; w; w = w.nextSibling)
+			if (w != cap && w.focus_(timeout))
+				return true;
+		return cap && cap.focus_(timeout);
 	},
 	getZclass: function () {
 		var zcls = this._zclass;
@@ -179,13 +179,14 @@ zul.wgt.Groupbox = zk.$extends(zul.Widget, {
 	},
 	bind_: function () {
 		this.$supers(zul.wgt.Groupbox, 'bind_', arguments);
-
-		if (!this.isLegend())
-			zWatch.listen({onSize: this, onShow: this});
+		// Bug: B50-3205292: vflex with legend Groupbox
+		//if (!this.isLegend())
+		zWatch.listen({onSize: this, onShow: this});
 	},
 	unbind_: function () {
-		if (!this.isLegend())
-			zWatch.unlisten({onSize: this, onShow: this});
+		// Bug: B50-3205292: vflex with legend Groupbox
+		//if (!this.isLegend())
+		zWatch.unlisten({onSize: this, onShow: this});
 		this.$supers(zul.wgt.Groupbox, 'unbind_', arguments);
 	},
 	onChildAdded_: function (child) {

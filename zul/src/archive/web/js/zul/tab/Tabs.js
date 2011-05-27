@@ -26,6 +26,16 @@ zul.tab.Tabs = zk.$extends(zul.Widget, {
 	getTabbox: function() {
 		return this.parent;
 	},
+	//@Override
+	getWidth: function () {
+		var wd = this._width;
+		if (!wd) {
+			var tabbox = this.getTabbox();
+			if (tabbox && tabbox.isVertical())
+				return "50px";
+		}
+		return wd;
+	},
 	getZclass: function() {
 		if (this._zclass != null)
 			return this._zclass;
@@ -65,6 +75,16 @@ zul.tab.Tabs = zk.$extends(zul.Widget, {
 		}
 		return zcls;
 	},
+	//bug #3014664
+	setVflex: function (v) { //vflex ignored for Tabs
+		if (v != 'min') v = false;
+		this.$super(zul.tab.Tabs, 'setVflex', v);
+	},
+	//bug #3014664
+	setHflex: function (v) { //hflex ignored for Tabs
+		if (v != 'min') v = false;
+		this.$super(zul.tab.Tabs, 'setHflex', v);
+	},
 	bind_: function (desktop, skipper, after) {
 		this.$supers(zul.tab.Tabs, 'bind_', arguments);
 		zWatch.listen({onSize: this, onShow: this});
@@ -85,6 +105,9 @@ zul.tab.Tabs = zk.$extends(zul.Widget, {
 	},
 	unbind_: function () {
 		zWatch.unlisten({onSize: this, onShow: this});
+		for (var btn, key = ['right', 'left', 'down', 'up'], le = key.length; le--;)
+			if ((btn = this.$n(key[le])))
+				this.domUnlisten_(btn, "onClick");
 		this.$supers(zul.tab.Tabs, 'unbind_', arguments);
 	},
 	_isInited: function () {
@@ -92,7 +115,9 @@ zul.tab.Tabs = zk.$extends(zul.Widget, {
 	},
 	_scrollcheck: function(way, tb) {
 		var tabbox = this.getTabbox();
-		if (!tabbox.isRealVisible() || !tabbox.isTabscroll()) return;
+		if (!this.desktop || !tabbox.isRealVisible() || !tabbox.isTabscroll())
+			return;
+
 		var tbsdiv = this.$n(),
 			tbx = tabbox.$n();
 		if (!tbsdiv || !tbx) return;	// tabbox is delete , no need to check scroll
@@ -160,7 +185,7 @@ zul.tab.Tabs = zk.$extends(zul.Widget, {
 				headerScrollLeft = header.scrollLeft,
 				childWidth = 0,
 				toolbar = tabbox.toolbar;
-				
+
 			jq(cave).children().each(function () {
 				childWidth += this.offsetWidth;
 			});
@@ -168,9 +193,9 @@ zul.tab.Tabs = zk.$extends(zul.Widget, {
 			if (toolbar)
 				toolbar = toolbar.$n();
 			if (tabbox._scrolling) { //already in scrolling status
+				var btnsize = this._getArrowSize();
 				if (toolbar) {
-					var outer, hgh,
-						btnsize = this._getArrowSize();
+					var outer, hgh;
 						
 					// fixed FF2's bug
 					if (zk.gecko2_) {
@@ -378,7 +403,6 @@ zul.tab.Tabs = zk.$extends(zul.Widget, {
 	},
 	_fixWidth: function() {
 		var tabs = this.$n();
-		if (!zk(tabs).isRealVisible()) return;
 		
 		var	tabbox = this.getTabbox(),
 			tbx = tabbox.$n(),
@@ -447,8 +471,8 @@ zul.tab.Tabs = zk.$extends(zul.Widget, {
 		//fix tabpanels's height if tabbox's height is specified
 		//Ignore accordion since its height is controlled by each tabpanel
 		if (tabbox.isVertical()) {
-			var child = jq(tbx).children('div');
-			allTab = jq(cave).children();
+			var child = jq(tbx).children('div'),
+				allTab = jq(cave).children();
 			if (tbx.style.height) {
 				this._forceStyle(tabs, "h", jq.px0(jq(tabs).zk.revisedHeight(tbx.offsetHeight, true)));
 			} else {
@@ -464,7 +488,10 @@ zul.tab.Tabs = zk.$extends(zul.Widget, {
 			//separator(+border)
 			this._forceStyle(child[1], "h", jq.px0(jq(child[1]).zk.revisedHeight(tabs.offsetHeight, true)));
 			//tabpanels(+border)
-			this._forceStyle(child[2], "h", jq.px0(jq(child[1]).zk.revisedHeight(tabs.offsetHeight, true)));
+			this._forceStyle(child[2], "h", 
+				jq.px0(jq(child[1]).zk.revisedHeight(tabs.offsetHeight - (2 - zk.parseInt(jq(this.$n('cave')).css('padding-top'))), true)));
+			// Merge breeze: now in vertical orientation Tabs has no border, but Tabpanels 
+			// still has border, so we need to introduce a 2px offset
 		} else {
 			if (head) //accordion have no head
 				head.style.height = "";
@@ -488,8 +515,17 @@ zul.tab.Tabs = zk.$extends(zul.Widget, {
 
 	onChildRemoved_: function (child) {
 		var p = this.parent;
-		if (p && child == p._selTab)
+		if (p && child == p._selTab) {
 			p._selTab = null;
+			if (p = p.tabpanels)
+				p._selPnl = null; //stored in tabpanels
+		}
+		this._scrollcheck("init");
+		this.$supers("onChildRemoved_", arguments);
+	},
+	onChildAdded_: function () {
+		this._scrollcheck("init");
+		this.$supers("onChildAdded_", arguments);
 	},
 	
 	ignoreFlexSize_: function(attr) {

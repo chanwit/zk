@@ -68,13 +68,29 @@ zul.inp.Combobox = zk.$extends(zul.inp.ComboWidget, {
 				}
 				this._typeahead(this._bDel, ofs);
 				this._bDel = null;
+				
+				//Fixed bug 3290858: combobox with autodrop and setModel in onChanging
+				var pp = this.getPopupNode_();
+				//will update it later in onResponse with _fixsz
+				if (pp) {
+					pp.style.width = "auto";
+					if(zk.safari) this._shallRedoCss = true ;
+				}
 			}
 			this._repos = false;
+		}
+	},
+	onResponse: function () {
+		this.$supers('onResponse',arguments);
+		if (this._shallRedoCss) { //fix in case
+			zk(this.getPopupNode_()).redoCSS(-1);
+			this._shallRedoCss = null;
 		}
 	},
 	setValue: function (val) {
 		this.$supers('setValue', arguments);
 		this._reIndex();
+		this.valueEnter_ = null; // reset bug #3014660
 	},
 	_reIndex: function () {
 		var value = this.getValue();
@@ -96,7 +112,9 @@ zul.inp.Combobox = zk.$extends(zul.inp.ComboWidget, {
 	 * @param String val the name of flag, such as "no positive".
 	 */
 	validateStrict: function (val) {
-		return this._findItem(val, true) ? null: msgzul.VALUE_NOT_MATCHED;
+		var cst = this._cst;
+		return this._findItem(val, true) ? null: 
+			(cst ? cst._errmsg: '') || msgzul.VALUE_NOT_MATCHED;
 	},
 	_findItem: function (val, strict) {
 		return this._findItem0(val, strict);
@@ -123,7 +141,7 @@ zul.inp.Combobox = zk.$extends(zul.inp.ComboWidget, {
 				this._isStrict() || (opts && opts.strict)), opts);
 	},
 	_hilite2: function (sel, opts) {
-		if (!opts) opts = {};
+		opts = opts || {};
 
 		var oldsel = this._sel;
 		this._sel = sel;
@@ -142,7 +160,8 @@ zul.inp.Combobox = zk.$extends(zul.inp.ComboWidget, {
 				var inp = this.getInputNode(),
 					val = sel.getLabel();
 				this.valueEnter_ = inp.value = val;
-				zk(inp).setSelectionRange(0, val.length);
+				if (!opts.noSelectRange) //Bug 3058028
+					zk(inp).setSelectionRange(0, val.length);
 			}
 
 			if (opts.sendOnChange)
@@ -176,7 +195,12 @@ zul.inp.Combobox = zk.$extends(zul.inp.ComboWidget, {
 			val = val.toLowerCase();
 			var beg = this._sel,
 				last = this._next(null, !bUp);
-			if (!beg || beg.parent != this) beg = this._next(null, bUp);
+			if (!beg || beg.parent != this)
+				beg = this._next(null, bUp);
+			if (!beg) {
+				evt.stop();
+				return; //ignore it
+			}
 
 			//Note: we always assume strict when handling up/dn
 			for (var item = beg;;) {
@@ -283,7 +307,7 @@ zul.inp.Combobox = zk.$extends(zul.inp.ComboWidget, {
 
 		//autocomplete
 		val = val.toLowerCase();
-		var sel = this._sel;
+		sel = this._sel;
 		if (!sel || sel.parent != this) sel = fchild;
 
 		for (var item = sel;;) {
@@ -304,7 +328,7 @@ zul.inp.Combobox = zk.$extends(zul.inp.ComboWidget, {
 	},
 	updateChange_: function () {
 		if (this.$supers('updateChange_', arguments)) {
-			this._hilite({sendOnSelect:true});
+			this._hilite({sendOnSelect:true, noSelectRange:true});
 			return true;
 		}
 		this.valueEnter_ = null;
@@ -314,6 +338,7 @@ zul.inp.Combobox = zk.$extends(zul.inp.ComboWidget, {
 		this._sel = this._lastsel = null;
 		this.$supers(zul.inp.Combobox, 'unbind_', arguments);
 	},
+	//@Override
 	getZclass: function () {
 		var zcs = this._zclass;
 		return zcs ? zcs: "z-combobox" + (this.inRoundedMold() ? "-rounded": "");

@@ -105,6 +105,8 @@ public class Listitem extends XulElement implements org.zkoss.zul.api.Listitem {
 		return _checkable;
 	}
 	/** Sets whether it is checkable.
+	 * 
+	 * <p>Note that it is only applied when isCheckmark() of Listbox is true.
 	 * <p>Default: true.
 	 * @since 3.0.4
 	 */
@@ -359,7 +361,7 @@ public class Listitem extends XulElement implements org.zkoss.zul.api.Listitem {
 	}
 	
 	//-- ComponentCtrl --//
-	protected Object newExtraCtrl() {
+	public Object getExtraCtrl() {
 		return new ExtraCtrl();
 	}
 	/** A utility class to implement {@link #getExtraCtrl}.

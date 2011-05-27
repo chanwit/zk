@@ -81,12 +81,15 @@ public class WcsExtendlet extends AbstractExtendlet {
 			int hours = 8760;
 			final ThemeProvider tp = getWebApp().getConfiguration().getThemeProvider();
 			if (tp != null) {
-				final String p = "~." + path;
-				if (tp.beforeWCS(exec, p) == null) {
-					response.setContentType("text/css;charset=UTF-8");
-					return; //skip the whole file
+				try {
+					final String p = "~." + path;
+					if (tp.beforeWCS(exec, p) == null) {
+						response.setContentType("text/css;charset=UTF-8");
+						return; //skip the whole file
+					}
+					hours = tp.getWCSCacheControl(exec, p);
+				} catch (AbstractMethodError ex) { //ignore it (backward compatible)
 				}
-				hours = tp.getWCSCacheControl(exec, p);
 			}
 			if (hours > 0)
 				JspFns.setCacheControl(getServletContext(), request, response,
@@ -97,9 +100,12 @@ public class WcsExtendlet extends AbstractExtendlet {
 				if (o instanceof String) {
 					String uri = (String)o;
 					if (tp != null) {
-						uri = tp.beforeWidgetCSS(exec, uri);
-						if (uri == null)
-							continue; //skip it
+						try {
+							uri = tp.beforeWidgetCSS(exec, uri);
+							if (uri == null)
+								continue; //skip it
+						} catch (AbstractMethodError ex) { //ignore it (backward compatible)
+						}
 					}
 
 					try {
@@ -116,9 +122,12 @@ public class WcsExtendlet extends AbstractExtendlet {
 			for (Iterator it = wi.langdef.getCSSURIs().iterator(); it.hasNext();) {
 				String uri = (String)it.next();
 				if (tp != null) {
-					uri = tp.beforeWidgetCSS(exec, uri);
-					if (uri == null)
-						continue; //skip it
+					try {
+						uri = tp.beforeWidgetCSS(exec, uri);
+						if (uri == null)
+							continue; //skip it
+					} catch (AbstractMethodError ex) { //ignore it (backward compatible)
+					}
 				}
 				try {
 					_webctx.include(request, HttpBufferedResponse.getInstance(response, sw), uri, null);

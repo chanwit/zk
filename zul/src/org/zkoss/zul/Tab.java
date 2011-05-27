@@ -16,14 +16,14 @@ Copyright (C) 2005 Potix Corporation. All Rights Reserved.
  */
 package org.zkoss.zul;
 
-import java.util.Set;
+import java.util.HashSet;
 import java.util.Iterator;
+import java.util.Set;
 
-import org.zkoss.html.HTMLs;
 import org.zkoss.zk.ui.Component;
 import org.zkoss.zk.ui.UiException;
-import org.zkoss.zk.ui.event.*;
-
+import org.zkoss.zk.ui.event.Events;
+import org.zkoss.zk.ui.event.SelectEvent;
 import org.zkoss.zul.impl.LabelImageElement;
 
 /**
@@ -101,12 +101,37 @@ public class Tab extends LabelImageElement implements org.zkoss.zul.api.Tab {
 	 * @since 5.0.0
 	 */
 	public void close() {
+		if (_selected) {
+			final Tab tab = selectNextTab();
+			if (tab != null) {
+				final Set selItems = new HashSet(2);
+				selItems.add(tab);
+				Events.postEvent(new SelectEvent(Events.ON_SELECT, tab, selItems));
+			}
+		}
+		
+		//Cache panel before detach , or we couldn't get it after tab is detached.
 		final Tabpanel panel = getLinkedPanel();
-		if (panel != null)
-			panel.detach();
+		
 		detach();
+		if (panel != null)
+			panel.detach();		
 	}
 
+	private Tab selectNextTab() {
+		for (Tab tab = (Tab) getNextSibling(); tab != null; tab = (Tab) tab.getNextSibling())
+			if (!tab.isDisabled()) {
+				tab.setSelected(true);
+				return tab;
+			}
+		for (Tab tab = (Tab) getPreviousSibling(); tab != null; tab = (Tab) tab.getPreviousSibling())
+			if (!tab.isDisabled()) {
+				tab.setSelected(true);
+				return tab;
+			}
+		return null;
+	}
+	
 	/**
 	 * Returns the tabbox owns this component.
 	 */
@@ -246,8 +271,8 @@ public class Tab extends LabelImageElement implements org.zkoss.zul.api.Tab {
 	public void service(org.zkoss.zk.au.AuRequest request, boolean everError) {
 		final String cmd = request.getCommand();
 		if (cmd.equals(Events.ON_SELECT)) {
-			SelectEvent evt = SelectEvent.getSelectEvent(request);
-			Set selItems = evt.getSelectedItems();
+			final SelectEvent evt = SelectEvent.getSelectEvent(request);
+			final Set selItems = evt.getSelectedItems();
 			if (selItems == null || selItems.size() != 1)
 				throw new UiException("Exactly one selected tab is required: " + selItems); // debug purpose
 			final Tabbox tabbox = getTabbox();
@@ -267,7 +292,5 @@ public class Tab extends LabelImageElement implements org.zkoss.zul.api.Tab {
 			render(renderer, "selected", _selected);
 		if (_closable)
 			render(renderer, "closable", _closable);
-
-		org.zkoss.zul.impl.Utils.renderCrawlableText(getLabel());
 	}
 }

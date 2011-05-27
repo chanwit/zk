@@ -451,5 +451,4 @@ public interface Grid extends org.zkoss.zul.impl.api.XulElement, Paginated {
 	 * 
 	 */
 	public void setOddRowSclass(String scls);
-
 }

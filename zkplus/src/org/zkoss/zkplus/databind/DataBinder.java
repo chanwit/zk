@@ -43,6 +43,7 @@ import org.zkoss.zk.ui.Executions;
 import org.zkoss.zk.ui.Page;
 import org.zkoss.zk.ui.Path;
 import org.zkoss.zk.ui.UiException;
+import org.zkoss.zk.ui.event.CreateEvent;
 import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
@@ -87,6 +88,26 @@ public class DataBinder implements java.io.Serializable {
 	
 	protected Map _collectionItemMap = new HashMap(3);
 	protected Map _collectionOwnerMap = new HashMap(3); //bug#1950313 F - 1764967 bug
+	
+	private boolean _loadOnSave = true; //whether firing the onLoadOnSave event to automate the loadOnSave operation 
+	
+	/**
+	 * Sets whether this DataBinder shall do load-on-save automatically.
+	 * @param b true to have this DataBinder shall do load-on-save automatically.
+	 * @since 5.0.4
+	 */
+	public void setLoadOnSave(boolean b) {
+		_loadOnSave = b;
+	}
+	
+	/**
+	 * Returns whether this DataBinder shall do load-on-save automatically(default is true).
+	 * @return whether this DataBinder shall do load-on-save automatically(default is true).
+	 * @since 5.0.4
+	 */
+	public boolean isLoadOnSave() {
+		return _loadOnSave;
+	}
 	
 	/** Binding bean to UI component. This is the same as 
 	 * addBinding(Component comp, String attr, String expr, (List)null, (List)null, (String)null, (String)null). 
@@ -679,7 +700,19 @@ public class DataBinder implements java.io.Serializable {
 		addCollectionItem(Comboitem.class, Combobox.class, new ComboitemCollectionItem());
 	}
 	
-
+	/**
+	 * <p>This method is deprecated. Use 
+	 * {@link #addCollectionItem(Class item, Class owner, CollectionItem)} instead.</p>
+	 * <p>Adds a CollectionItem for this comp.</p>
+	 * @see CollectionItem
+	 * @see #addCollectionItem(Class, Class, CollectionItem)
+	 * @since 3.0.0
+	 * @deprecated
+	 */
+	public void addCollectionItem(String comp, CollectionItem decor){
+		_collectionItemMap.put(comp, decor);
+	}
+	
 	/**
 	 * Adds a CollectionItem for the specified item and owner component;
 	 * e.g. Listitem and Listbox, Row and Grid, Comoboitem and Combobox.
@@ -956,7 +989,7 @@ public class DataBinder implements java.io.Serializable {
 		return myGetBeanWithExpression(comp, path, true);
 	}
 	
-	private Object getBeanWithExpression(Component comp, String path) {
+	/* package */ Object getBeanWithExpression(Component comp, String path) {
 		return myGetBeanWithExpression(comp, path, false);
 	}
 	
@@ -995,7 +1028,7 @@ public class DataBinder implements java.io.Serializable {
 		if (bean != null) {
 			//feature#1766905 Binding to Map
 			//bug# 2630168, check Map case first and avoid throw unnecessary exception
-			if (bean instanceof Map) {
+			if (bean instanceof Map) { //regret the change for bug#2987511(follow the EL spec)
 				bean = ((Map)bean).get(nodeid);
 			} else {
 				try {
@@ -1023,7 +1056,7 @@ public class DataBinder implements java.io.Serializable {
 		Object orgVal = null;
 		Object bean = null;
 		BindingNode currentNode = _pathTree;
-		boolean refChanged = false; //wether this setting change the reference
+		boolean refChanged = false; // whether this setting change the reference
 		String beanid = null;
 		final List nodeids = parseExpression(path, ".");
 		final List nodes = new ArrayList(nodeids.size());
@@ -1063,13 +1096,13 @@ public class DataBinder implements java.io.Serializable {
 					throw new UiException("Cannot find the specified databind bean expression:" + path);
 				}
 				nodes.add(currentNode);
-				try {
-					bean = Fields.get(bean, beanid);
-				} catch (NoSuchMethodException ex) {
-					//feature#1766905 Binding to Map
-					if (bean instanceof Map) {
-						bean = ((Map)bean).get(beanid);
-					} else {
+				// Bug B50-3183438: Access to bean shall be consistent
+				if (bean instanceof Map) {
+					bean = ((Map)bean).get(beanid); //feature#1766905 Binding to Map
+				} else {
+					try {
+						bean = Fields.get(bean, beanid);
+					} catch (NoSuchMethodException ex) {
 						throw UiException.Aide.wrap(ex);
 					}
 				}
@@ -1078,22 +1111,22 @@ public class DataBinder implements java.io.Serializable {
 				return; //no bean to set value, skip
 			}
 			beanid = (String) it.next();
-			try {
-				orgVal = Fields.get(bean, beanid);
-				if(Objects.equals(orgVal, val)) {
-					return; //same value, no need to do anything
-				}
-				Fields.set(bean, beanid, val, autoConvert);
-			} catch (NoSuchMethodException ex) {
-				//feature#1766905 Binding to Map
-				if (bean instanceof Map) {
-					((Map)bean).put(beanid, val);
-				} else {
+			// Bug B50-3183438: Access to bean shall be consistent
+			if (bean instanceof Map)
+				((Map)bean).put(beanid, val); //feature#1766905 Binding to Map
+			else {
+				try {
+					orgVal = Fields.get(bean, beanid);
+					if(Objects.equals(orgVal, val))
+						return; //same value, no need to do anything
+					Fields.set(bean, beanid, val, autoConvert);
+				} catch (NoSuchMethodException ex) {
+					throw UiException.Aide.wrap(ex);
+				} catch (ModificationException ex) {
 					throw UiException.Aide.wrap(ex);
 				}
-			} catch (ModificationException ex) {
-				throw UiException.Aide.wrap(ex);
 			}
+			
 			if (!isPrimitive(val) && !isPrimitive(orgVal)) { //val is a bean (null is not primitive)
 				currentNode = (BindingNode) currentNode.getKidNode(beanid);
 				if (currentNode == null) {
@@ -1134,7 +1167,7 @@ public class DataBinder implements java.io.Serializable {
 			new Object[] {this, currentNode, binding, (refChanged ? val : bean), Boolean.valueOf(refChanged), nodes, comp, triggerEventName};
 		if (loadOnSaveInfos != null) {
 			loadOnSaveInfos.add(loadOnSaveInfo);
-		} else {
+		} else if (isLoadOnSave()) { //feature#2990932, allow disable load-on-save mechanism
 			//do loadOnSave immediately
 			Events.postEvent(new Event("onLoadOnSave", comp, loadOnSaveInfo));
 		}
@@ -1596,6 +1629,17 @@ public class DataBinder implements java.io.Serializable {
 				final Dual o = (Dual) other;
 				return o._comp == _comp && o._binding == _binding;
 			}
+		}
+	}
+	
+	//feature #3026221: Databinder shall fire onCreate when cloning each items
+	/*package*/ static void postOnCreateEvents(Component item) {
+		for(final Iterator it = item.getChildren().iterator(); it.hasNext();) {
+			final Component child = (Component) it.next();
+			postOnCreateEvents(child); //recursive
+		}
+		if (Events.isListened(item, Events.ON_CREATE, false)) {
+			Events.postEvent(new CreateEvent(Events.ON_CREATE, item, null));
 		}
 	}
 }

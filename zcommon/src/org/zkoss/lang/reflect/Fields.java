@@ -20,7 +20,6 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Field;
 import java.lang.reflect.AccessibleObject;
 
-import org.zkoss.mesg.MCommon;
 import org.zkoss.lang.Classes;
 import org.zkoss.lang.Objects;
 import org.zkoss.lang.SystemException;
@@ -119,7 +118,7 @@ public class Fields {
 		} catch (NoSuchMethodException ex) {
 			throw ex;
 		} catch (Exception ex) {
-			throw SystemException.Aide.wrap(ex, MCommon.NOT_FOUND, name);
+			throw SystemException.Aide.wrap(ex, "Not found: " + name);
 		}
 	}
 	/** Sets the value of the specified public filed or public method
@@ -159,7 +158,26 @@ public class Fields {
 		} catch (NoSuchMethodException ex) {
 			throw ex;
 		} catch (Exception ex) {
-			throw ModificationException.Aide.wrap(ex, MCommon.NOT_FOUND, name);
+			throw ModificationException.Aide.wrap(ex, "Not found: " + name);
 		}
+	}
+
+	/** @deprecated As of release 3.0.6, replaced with {@link #getByCompound}.
+	 */
+	public static final Object getField(Object obj, String name)
+	throws NoSuchMethodException {
+		return getByCompound(obj, name);
+	}
+	/** @deprecated As of release 3.0.6, replaced with {@link #setByCompound(Object, String, Object, boolean)}.
+	 */
+	public static final void setField(Object obj, String name, Object val)
+	throws NoSuchMethodException, ModificationException {
+		setByCompound(obj, name, val);
+	}
+	/** @deprecated As of release 3.0.6, replaced with {@link #setByCompound(Object, String, Object, boolean)}.
+	 */
+	public static final void setField(Object obj, String name, Object val,
+	boolean autoCoerce) throws NoSuchMethodException, ModificationException {
+		setByCompound(obj, name, val, autoCoerce);
 	}
 }

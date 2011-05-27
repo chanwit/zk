@@ -30,6 +30,8 @@ public class MacroDefinition extends ComponentDefinitionImpl {
 	/** Whether it is an inline macro. */
 	private final boolean _inline;
 
+	/** Constructor
+	 */
 	/*package*/ MacroDefinition(LanguageDefinition langdef,
 	PageDefinition pgdef, String name,
 	Class cls, String macroURI, boolean inline) {

@@ -19,6 +19,7 @@ import java.util.LinkedList;
 import java.util.Iterator;
 
 import org.zkoss.lang.Threads;
+import org.zkoss.util.CollectionsX;
 import org.zkoss.util.logging.Log;
 
 import org.zkoss.zk.ui.Executions;
@@ -34,66 +35,30 @@ import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.EventQueue;
 
 /**
- * The default implementation of the desktop-level event queue ({@link EventQueue}).
+ * The default implementation of the desktop-scoped event queue ({@link EventQueue}).
  * @author tomyeh
  * @since 5.0.0
  */
-public class DesktopEventQueue implements EventQueue {
+public class DesktopEventQueue implements EventQueue, java.io.Serializable {
 	/*package*/ static final Log log = Log.lookup(DesktopEventQueue.class);
 
-	private final Component _dummy = new AbstractComponent();
-	private final List _listeners = new LinkedList();
+	private static final String ON_QUEUE = "onQueue";
+
+	/** A dummy target for handling onQueue. */
+	private final Component _dummyTarget = new AbstractComponent();
+	private final List _listenerInfos = new LinkedList();
 	private int _nAsync;
 	private boolean _serverPushEnabled;
+	private boolean _closed;
 
 	public DesktopEventQueue() {
-		_dummy.addEventListener("onQueue", new EventListener() {
-			public void onEvent(Event event) throws Exception {
-				//Note: we cannot use the same algorithm as EventProcessor.process0() because
-				//listeners can be registered multiple times to the event queue
-				final Event evt = (Event)event.getData();
-				final List listenerCalled = new LinkedList();
-				for (Iterator it = _listeners.iterator();;) {
-					final ListenerInfo inf;
-					try {
-						if (!it.hasNext())
-							return; //done
-						inf = (ListenerInfo)it.next();
-					} catch (java.util.ConcurrentModificationException ex) {
-						break;
-					}
-
-					listenerCalled.add(inf);
-					invoke(inf, evt);
-				}
-
-				//make a copy and iterate again
-				for (Iterator it = new LinkedList(_listeners).iterator(); it.hasNext();) {
-					final ListenerInfo inf = (ListenerInfo)it.next();
-					if (!listenerCalled.remove(inf) && _listeners.contains(inf))
-						invoke(inf, evt);
-				}
-			}
-		});
-	}
-
-	/** A working thread is created to handle it if it is an asynchronous
-	 * listener.
-	 * @param async whether it is an asynchronous event listener.
-	 */
-	private void invoke(ListenerInfo inf, Event event)
-	throws Exception {
-		if (inf.async) {
-			new AsyncListenerThread(this, inf, event).start();
-		} else {
-			inf.listener.onEvent(event);
-		}
+		_dummyTarget.addEventListener(ON_QUEUE, new QueueListener());
 	}
 
 	/** Returns if there is listener being registered.
 	 */
 	public boolean isIdle() {
-		return _listeners.isEmpty();
+		return _listenerInfos.isEmpty();
 	}
 
 	//EventQueue//
@@ -107,7 +72,7 @@ public class DesktopEventQueue implements EventQueue {
 
 			((AsyncListenerThread)thd).postEvent(event);
 		} else {
-			Events.postEvent("onQueue", _dummy, event);
+			Events.postEvent(ON_QUEUE, _dummyTarget, event);
 		}
 	}
 	public void subscribe(EventListener listener) {
@@ -127,11 +92,11 @@ public class DesktopEventQueue implements EventQueue {
 				throw new IllegalStateException("Execution required");
 			_serverPushEnabled = !exec.getDesktop().enableServerPush(true);
 		}
-		_listeners.add(new ListenerInfo(listener, callback, async));
+		_listenerInfos.add(new ListenerInfo(listener, callback, async));
 	}
 	public boolean unsubscribe(EventListener listener) {
 		if (listener != null)
-			for (Iterator it = _listeners.iterator(); it.hasNext();) {
+			for (Iterator it = _listenerInfos.iterator(); it.hasNext();) {
 				final ListenerInfo inf = (ListenerInfo)it.next();
 				if (listener.equals(inf.listener)) {
 					it.remove();
@@ -144,14 +109,14 @@ public class DesktopEventQueue implements EventQueue {
 	}
 	public boolean isSubscribed(EventListener listener) {
 		if (listener != null)
-			for (Iterator it = _listeners.iterator(); it.hasNext();)
+			for (Iterator it = _listenerInfos.iterator(); it.hasNext();)
 				if (listener.equals(((ListenerInfo)it.next()).listener))
 					return true;
 		return false;
 	}
 	public void close() {
-		_listeners.clear();
-
+		_closed = true;
+		_listenerInfos.clear();
 		if (_serverPushEnabled) {
 			try {
 				Executions.getCurrent().getDesktop().enableServerPush(false);
@@ -160,9 +125,26 @@ public class DesktopEventQueue implements EventQueue {
 			}
 		}
 	}
+	public boolean isClose() {
+		return _closed;
+	}
+	private class QueueListener implements EventListener, java.io.Serializable {
+		public void onEvent(Event event) throws Exception {
+			event = (Event)event.getData();
+			for (Iterator it = CollectionsX.comodifiableIterator(_listenerInfos);
+			it.hasNext();) {
+				final ListenerInfo inf = (ListenerInfo)it.next();
+				if (inf.async)
+					new AsyncListenerThread(DesktopEventQueue.this, inf, event)
+						.start();
+				else
+					inf.listener.onEvent(event);
+			}
+		}
+	}
 }
 /** Info of a listener */
-/*package*/ class ListenerInfo {
+/*package*/ class ListenerInfo implements java.io.Serializable {
 	/*package*/ final EventListener listener;
 	/*package*/ final EventListener callback; //used only if async
 	/*package*/ final boolean async;
@@ -175,6 +157,10 @@ public class DesktopEventQueue implements EventQueue {
 		this.async = async;
 	}
 }
+/** Unlike ServerPushEventQueue, we cannot use Executions.schedule, and
+ * we have to use a thread and activate/deactivate, since asynchronous listener
+ * might take too long to execute (that is what it is used for).
+ */
 /*package*/ class AsyncListenerThread extends Thread {
 	private static final Log log = DesktopEventQueue.log;
 

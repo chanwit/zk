@@ -13,21 +13,74 @@ This program is distributed under LGPL Version 3.0 in the hope that
 it will be useful, but WITHOUT ANY WARRANTY.
 */
 (function () {
-	var _allowKeys = zul.inp.InputWidget._allowKeys+zk.DECIMAL+zk.PERCENT+zk.GROUPING;
-
+	var _allowKeys;
+    
+	// Fixed merging JS issue
+	zk.load('zul.lang', function () {
+		_allowKeys = zul.inp.InputWidget._allowKeys+zk.DECIMAL;
+	});
 /**
  * An edit box for holding BigDecimal.
  * <p>Default {@link #getZclass}: z-decimalbox.
  */
 zul.inp.Decimalbox = zk.$extends(zul.inp.FormatWidget, {
+	$define: { //zk.def
+		/** Returns the rounding mode.
+		 * <ul>
+		 * <li>0: ROUND_UP</li>
+		 * <li>1: ROUND_DOWN</li>
+		 * <li>2: ROUDN_CEILING</li>
+		 * <li>3: ROUND_FLOOR</li>
+		 * <li>4: ROUND_HALF_UP</li>
+		 * <li>5: ROUND_HALF_DOWN</li>
+		 * <li>6: ROUND_HALF_EVEN</li>
+		 * </ul>
+		 * @return int
+		 */
+		/** Sets the rounding mode.
+		 * <ul>
+		 * <li>0: ROUND_UP</li>
+		 * <li>1: ROUND_DOWN</li>
+		 * <li>2: ROUDN_CEILING</li>
+		 * <li>3: ROUND_FLOOR</li>
+		 * <li>4: ROUND_HALF_UP</li>
+		 * <li>5: ROUND_HALF_DOWN</li>
+		 * <li>6: ROUND_HALF_EVEN</li>
+		 * </ul>
+		 * @param int rounding mode
+		 */
+		rounding: null,
+		/** Returns the precision scale.
+		 * @return int
+		 */
+		/** Sets the precision scale.
+		 * @param int scale
+		 */
+		scale: null
+	},
+	onSize: _zkf = function() {
+		var width = this.getWidth();
+		if (!width || width.indexOf('%') != -1)
+			this.getInputNode().style.width = '';
+		this.syncWidth();
+	},
+	onShow: _zkf,
+	/** Synchronizes the input element's width of this component
+	 */
+	syncWidth: function () {
+		zul.inp.RoundUtl.syncWidth(this, this.$n('right-edge'));
+	},
 	coerceFromString_: function (value) {
 		if (!value) return null;
 
 		var info = zk.fmt.Number.unformat(this._format, value),
-			val = new zk.BigDecimal(info.raw);
-		if (info.raw != val.$toString() && info.raw != '-'+val) //1e2 not supported (unlike Doublebox)
+			val = new zk.BigDecimal(info.raw),
+			sval = val.$toString();
+		if (info.raw != sval && info.raw != '-'+sval) //1e2 not supported (unlike Doublebox)
 			return {error: zk.fmt.Text.format(msgzul.NUMBER_REQUIRED, value)};
 		if (info.divscale) val.setPrecision(val.getPrecision() + info.divscale);
+		if (this._scale > 0) //bug #3089502: setScale in decimalbox not working
+			val = zk.fmt.Number.setScale(val, this._scale, this._rounding);
 		return val;
 	},
 	coerceToString_: function(value) {
@@ -37,11 +90,27 @@ zul.inp.Decimalbox = zk.$extends(zul.inp.FormatWidget, {
 	},
 	getZclass: function () {
 		var zcs = this._zclass;
-		return zcs != null ? zcs: "z-decimalbox";
+		return zcs != null ? zcs: "z-decimalbox" + (this.inRoundedMold() ? "-rounded": "");
 	},
 	doKeyPress_: function(evt){
 		if (!this._shallIgnore(evt, _allowKeys))
 			this.$supers('doKeyPress_', arguments);
+	},
+	marshall_: function(val) {
+		return val ? val.$toString() : val;
+	},
+	unmarshall_: function(val) {
+		return val ? new zk.BigDecimal(val) : val; 
+	},
+	bind_: function(){
+		this.$supers(zul.inp.Decimalbox, 'bind_', arguments);
+		if (this.inRoundedMold())
+			zWatch.listen({onSize: this, onShow: this});
+	},	
+	unbind_: function(){
+		if (this.inRoundedMold())
+			zWatch.unlisten({onSize: this, onShow: this});
+		this.$supers(zul.inp.Decimalbox, 'unbind_', arguments);
 	}
 });
 

@@ -27,14 +27,15 @@ import java.util.LinkedList;
 import java.util.Collections;
 import java.util.Iterator;
 
+import org.zkoss.lang.Objects;
 import org.zkoss.util.FastReadArray;
 import org.zkoss.util.CollectionsX;
 import org.zkoss.util.resource.Locator;
 import org.zkoss.util.logging.Log;
 import org.zkoss.xel.taglib.Taglibs;
 import org.zkoss.xel.taglib.Taglib;
-import org.zkoss.html.JavaScript;
-import org.zkoss.html.StyleSheet;
+import org.zkoss.web.servlet.JavaScript;
+import org.zkoss.web.servlet.StyleSheet;
 
 import org.zkoss.zk.mesg.MZk;
 import org.zkoss.zk.ui.Page;
@@ -74,15 +75,30 @@ public class LanguageDefinition {
 	/** The namespace for ZK annotations.
 	 */
 	public static final String ANNO_NAMESPACE = "http://www.zkoss.org/2005/zk/annotation";
-	/** The namespace for ZK native namespace.
+	/** The namespace for ZK native components.
 	 * @since 3.0.0
 	 */
 	public static final String NATIVE_NAMESPACE = "http://www.zkoss.org/2005/zk/native";
-	/*** The namespace for ZK client namespace. It is used to specify
-	 * the client attributes, such as the event listener.
+	/*** The namespace for ZK client (aka., widget). It is used to specify
+	 * the widget's properties and event listeners.
+	 * <p>Notice that {@link #CLIENT_NAMESPACE} specifies the property
+	 * or event listener for a widget, while {@link #CLIENT_ATTRIBUTE_NAMESPACE}
+	 * specifies the DOM attributes. In other words, the attribute specified
+	 * with {@link #CLIENT_ATTRIBUTE_NAMESPACE} are generated directly.
 	 * @since 5.0.0
 	 */
 	public static final String CLIENT_NAMESPACE = "http://www.zkoss.org/2005/zk/client";
+	/*** The namespace for ZK client attributes. It is used to specify
+	 * custom DOM attributes.
+	 * <p>Notice that {@link #CLIENT_NAMESPACE} specifies the property
+	 * or event listener for a widget, while {@link #CLIENT_ATTRIBUTE_NAMESPACE}
+	 * specifies the DOM attributes. In other words, the attribute specified
+	 * with {@link #CLIENT_ATTRIBUTE_NAMESPACE} are generated directly.
+	 * <p>You can use it to listen DOM events such as onload and specify
+	 * browser-specific attributes (such as accessibility related attributes).
+	 * @since 5.0.3
+	 */
+	public static final String CLIENT_ATTRIBUTE_NAMESPACE = "http://www.zkoss.org/2005/zk/client/attribute";
 
 	/** The namespace for ZK native namespace prefix.
 	 * If a namespace starts with {@link #NATIVE_NAMESPACE_PREFIX} ("native:"),
@@ -128,7 +144,7 @@ public class LanguageDefinition {
 	/** A list of JavaScript. */
 	private final FastReadArray _js = new FastReadArray(JavaScript.class);
 	/** A list of deferrable JavaScript package. */
-	private final FastReadArray _pkgs = new FastReadArray(String.class);
+	private final FastReadArray _mergepkgs = new FastReadArray(String.class);
 	private final Map _jsmods = new HashMap(5),
 		_rojsmods = Collections.unmodifiableMap(_jsmods);
 	/** A list of StyleSheet. */
@@ -177,6 +193,14 @@ public class LanguageDefinition {
 		final LanguageDefinition langdef;
 		synchronized (_ldefByName) {
 			langdef = (LanguageDefinition)_ldefByName.get(name);
+			if (langdef == null) {
+				final String nm = "/" + name;
+				for (Iterator it = _ldefByName.entrySet().iterator(); it.hasNext();) {
+					Map.Entry me = (Map.Entry)it.next();
+					if (((String)me.getKey()).endsWith(nm))
+						return (LanguageDefinition)me.getValue();
+				}
+			}
 		}
 		if (langdef == null)
 			if (ZK_NAMESPACE.equals(name))
@@ -576,6 +600,20 @@ public class LanguageDefinition {
 			throw new IllegalArgumentException();
 		_js.add(js);
 	}
+	/** Removes a {@link JavaScript} of the give source required by this language.
+	 * @see #addJavaScript
+	 * @since 5.0.4
+	 */
+	public void removeJavaScript(String src) {
+		final Object[] ary = _js.toArray();
+		for (int j = 0; j < ary.length; ++j) {
+			final JavaScript js = (JavaScript)ary[j];
+			if (Objects.equals(src, js.getSrc())) {
+				_js.remove(js);
+				return; //found
+			}
+		}
+	}
 	/** Returns a readonly list of all {@link JavaScript} required
 	 * by this language.
 	 */
@@ -583,21 +621,30 @@ public class LanguageDefinition {
 		return new CollectionsX.ArrayCollection(_js.toArray());
 	}
 
-	/** Adds a deferrable JavaScript package required by this langauge.
+	/** Adds a mergeable JavaScript package required by this langauge.
+	 * The mergeable packages are packages that will be merged into
+	 * the zk package (to minimize the number of packages to load).
+	 * It reduces the load time if the package's footprint is small.
 	 * @param pkg the package name, such as "foo.fly"
-	 * @since 5.0.0
+	 * @since 5.0.4
 	 */
-	public void addDeferJavaScriptPackage(String pkg) {
+	public void addMergeJavaScriptPackage(String pkg) {
 		if (pkg == null || pkg.length() == 0)
 			throw new IllegalArgumentException();
-		_pkgs.add(pkg);
+		_mergepkgs.add(pkg);
 	}
-	/** Returns a list of deferrable JavaScript package (String)
-	 * required by this language.
-	 * @since 5.0.0
+	/** Removes a mergeable JavaScript package required by this language.
+	 * @since 5.0.4
 	 */
-	public Collection getDeferJavaScriptPackages() {
-		return new CollectionsX.ArrayCollection(_pkgs.toArray());
+	public boolean removeMergeJavaScriptPackage(String pkg) {
+		return _mergepkgs.remove(pkg);
+	}
+	/** Returns a list of mergeable JavaScript package (String)
+	 * required by this language.
+	 * @since 5.0.4
+	 */
+	public Collection getMergeJavaScriptPackages() {
+		return new CollectionsX.ArrayCollection(_mergepkgs.toArray());
 	}
 
 	/** Adds the definition of a JavaScript module to this language.

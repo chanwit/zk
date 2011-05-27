@@ -231,16 +231,30 @@ public interface ComponentDefinition extends Cloneable {
 	 * @since 5.0.0 (the 2nd argument is the class name of the peer widget)
 	 */
 	public void addMold(String name, String widgetClass);
+	/** @deprecated As of release 5.0.0, replaced with {@link #addMold(String,String)}
+	 * and {@link WidgetDefinition#addMold}.
+	 */
+	public void addMold(String name, String moldURI, String z2cURI);
 
 	/** Returns the widget class assoicated with specified mold,
 	 * or the default widget class ({@link #getWidgetClass}) if not available.
 	 * The returned widget class includes the package name (JavaScript class).
+	 * @param comp the component used to evaluate EL expression, if any,
+	 * when retreiving the widget class. Ignored if null.
 	 * @param moldName the mold name
-	 * @since 5.0.0
+	 * @since 5.0.4
+	 */
+	public String getWidgetClass(Component comp, String moldName);
+	/** Returns the default widget class, or null if not available.
+	 * @param comp the component used to evaluate EL expression, if any,
+	 * when retreiving the widget class. Ignored if null.
+	 * @since 5.0.4
+	 */
+	public String getDefaultWidgetClass(Component comp);
+	/** @deprecated As of release 5.0.4, replaced with {@link #getWidgetClass(Component, String)}.
 	 */
 	public String getWidgetClass(String moldName);
-	/** Returns the default widget class, or null if not available.
-	 * @since 5.0.0
+	/** @deprecated As of release 5.0.4, replaced with {@link #getDefaultWidgetClass(Component)}.
 	 */
 	public String getDefaultWidgetClass();
 	/** Sets the default widget class.
@@ -264,14 +278,25 @@ public interface ComponentDefinition extends Cloneable {
 	 * @param value the value. It might contain expressions (${}).
 	 */
 	public void addProperty(String name, String value);
-	/** Applies the properties and custom attributes defined in
+	/** Applies the properties defined in
 	 * this definition to the specified component.
 	 *
 	 * <p>Note: annotations are applied to the component when a component
 	 * is created. So, this method doesn't and need not to copy them.
-	 * See also {@link org.zkoss.zk.ui.AbstractComponent#AbstractComponent}.
+	 * <p>Also notice that, since 5.0.7, custom-attributes are applied automatically
+	 * in the constructor of {@link org.zkoss.zk.ui.AbstractComponent#AbstractComponent}
+	 * (by invoking {@link #applyAttributes},
+	 * so they are always available no mather this method is called or not.
 	 */
 	public void applyProperties(Component comp);
+	/** Applies the custom attributes defined in this definition
+	 * to the specified component.
+	 * <p>It is called automatically in 
+	 * {@link org.zkoss.zk.ui.AbstractComponent#AbstractComponent}, so
+	 * you rarely need to invoke this method.
+	 * @since 5.0.7
+	 */
+	public void applyAttributes(Component comp);
 	/** Evaluates and retrieves properties to the specified map.
 	 *
 	 * @param propmap the map to store the retrieved properties.

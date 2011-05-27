@@ -18,14 +18,12 @@
 package org.zkoss.zkplus.jpa;
 
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.Map;
 
 import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
 import javax.persistence.Persistence;
 
-import org.hibernate.HibernateException;
 import org.zkoss.util.logging.Log;
 import org.zkoss.zk.ui.Desktop;
 import org.zkoss.zk.ui.Execution;
@@ -36,7 +34,7 @@ import org.zkoss.zk.ui.WebApp;
 /**
  * This class is used to create and hold open EntityManagerFactory objects
  * within a Java EE environment.
- * 
+ * <p>Applicable to EJB version 3.2.ga or later</p>
  * @author Jeff
  * @since 3.0.2
  */
@@ -230,11 +228,11 @@ public class JpaUtil {
 			em = (EntityManager) getEmMap().get(puName);
 			if (em == null) {
 				em = createEntityManager(puName, null);
-				getEmMap().put(puName, em);
+				getEmMap().put(getPersistenceUnitName(puName), em);
 			}
 		} else {
 			em = createEntityManager(puName, properties);
-			getEmMap().put(puName, em);
+			getEmMap().put(getPersistenceUnitName(puName), em);
 		}
 		return em;
 	}

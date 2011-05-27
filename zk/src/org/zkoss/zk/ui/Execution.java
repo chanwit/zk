@@ -167,12 +167,20 @@ public interface Execution extends Scope {
 	 * In other words, the event is placed to the event queue.
 	 *
 	 * <p>The priority of the event is assumed to be 0. Refer to
-	 * {@link #postEvent(int, Event)}.
+	 * {@link #postEvent(int, Event)} for more information.
+	 * @see #postEvent(int, Event)
+	 * @see #postEvent(int, Component, Event)
 	 */
 	public void postEvent(Event evt);
 	/** Queues an event with the specified priority to this execution.
 	 * In other words, the event is placed to the event queue
 	 * with the specified prority.
+	 *
+	 * <p>The event will be sent to the component specified in {@link Event#getTarget}.
+	 * If {@link Event#getTarget} is null, it means broadcast, i.e.,
+	 * all root components will receive this event.
+	 * If you prefer a different target, you could use {@link #postEvent(int, Component, Event)}
+	 * instead.
 	 *
 	 * <p>The posted events are processed from the higher priority to the 
 	 * lower one. If two events are posted with the same priority,
@@ -185,10 +193,24 @@ public interface Execution extends Scope {
 	 * lower than -10,000 since they are reserved for component
 	 * development.
 	 *
-	 * @param priority the priority of the event.
+	 * @param priority the priority of the event. The default priority is 0
+	 * and the higher value means higher priority.
+	 * @see #postEvent(int, Component, Event)
 	 * @since 3.0.7
 	 */
 	public void postEvent(int priority, Event evt);
+	/** Queues the give event for the specified target to this execution.
+	 * The target could be different from {@link Event#getTarget}.
+	 * @param priority the priority of the event. The default priority is 0
+	 * and the higher value means higher priority.
+	 * @param realTarget the target component that will receive the event.
+	 * If null, it means broadcast, i.e., all root components will receive
+	 * this event.
+	 * <br/>Notice that postEvent(n, event) is the same as postEvent(n, event.getTarget(), event),
+	 * but different from postEvent(n, 0, event).
+	 * @since 5.0.7
+	 */
+	public void postEvent(int priority, Component realTarget, Event evt);
 
 	/** Whether to overwrite uri if both uri and params contain the same
 	 * parameter.
@@ -282,7 +304,9 @@ public interface Execution extends Scope {
 	public String locate(String path);
 
 	/** Returns whether the execution is voided.
-	 * By void we mean the request is taken charged by other servlet.
+	 * By void we mean ZK Loader shall stop evaluation of a ZUML document,
+	 * since the request will be taken charged by other servlet
+	 * or redirect to another page.
 	 * The execution shall not do anything more. In other words,
 	 * the execution is avoided and won't generate any ouput.
 	 *
@@ -293,12 +317,17 @@ public interface Execution extends Scope {
 	 */
 	public boolean isVoided();
 	/** Sets whether the execution is voided.
-	 * By void we mean the request is taken charged by other servlet.
+	 * By void we mean ZK Loader shall stop evaluation of a ZUML document,
+	 * since the request will be taken charged by other servlet
+	 * or redirect to another page.
 	 *
 	 * <p>If you invoke {@link #forward}, this method is called automatically
 	 * with true. Thus, you rarely need to invoke this method, unless
 	 * you forward to other servlet by use javax.servlet.RequestDispatcher
 	 * directly.
+	 *
+	 * <p>The other case to invoke this method is if you'd likd to redirect
+	 * to another (by specifying the refresh header).
 	 *
 	 * @since 2.4.1
 	 */
@@ -865,8 +894,16 @@ public interface Execution extends Scope {
 	 * @since 3.5.1
 	 */
 	public boolean isOpera();
+	/** @deprecated As of release 5.0.0, MIL is no longer supported.
+	 */
+	public boolean isMilDevice();
 	/** Returns whether the client is a mobile device supporting HIL
 	 * (Handset Interactive Language).
+	 *
+	 * <p>Note: ZK Mobile for Android supports both MIL and HIL.
+	 * That is, both {@link #isHilDevice} and {@link #isMilDevice}
+	 * return true.
+	 *
 	 * @since 3.0.2
 	 */
 	public boolean isHilDevice();

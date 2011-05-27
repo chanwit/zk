@@ -37,7 +37,7 @@ Copyright (C) 2008 Potix Corporation. All Rights Reserved.
 		if (spacing0 || !child.isVisible()) s = 'display:none;' + s;
 		if (s) oo.push(' style="', s, '"');
 
-		oo.push('>', vert?'<td>':'', zUtl.i0, vert?'</td></tr>':'</td>');
+		oo.push('>', vert?'<td>':'', zUtl.img0, vert?'</td></tr>':'</td>');
 		return oo.join('');
 	}
 
@@ -52,8 +52,9 @@ Copyright (C) 2008 Potix Corporation. All Rights Reserved.
 					if (vert) {
 						if (child._nhflex)
 							child.setFlexSize_({width:'auto'});
-						else if (c) {//release width of children might cause wider box
+						else if (c && this._isStretchAlign()) {//release width of children might cause wider box
 									 //bug 2951825, widget not necessary with HTML dom element(<script>)
+									 //add StretchAlign checking, see revision: 13172
 							var oldwidth= c.style.width;
 							if (oldwidth) {
 								var oldoffwidth= c.offsetWidth;
@@ -69,8 +70,9 @@ Copyright (C) 2008 Potix Corporation. All Rights Reserved.
 					} else {
 						if (child._nvflex)
 							child.setFlexSize_({height:'auto'});
-						else if (c) {//release height of children might cause higher box
+						else if (c && this._isStretchAlign()) {//release height of children might cause higher box
 									 //bug 2951825, widget not necessary with HTML dom element(<script>)
+									 //add StretchAlign checking, see revision: 13172
 							var oldheight= c.style.height;
 							if (oldheight) {
 								var oldoffheight = c.offsetHeight;
@@ -107,6 +109,7 @@ zul.box.Box = zk.$extends(zul.Widget, {
 	_mold: 'vertical',
 	_align: 'start',
 	_pack: 'start',
+	_sizedByContent: true,
 
 	$define: {
 		/** Sets the alignment of cells of this box in the 'opposite' direction
@@ -224,6 +227,22 @@ zul.box.Box = zk.$extends(zul.Widget, {
 	 	 * @return String
 	 	 */
 		spacing: _zkf,
+		/**
+		 * Sets whether sizing the cell's size by its content.
+		 * <p>Default: true. It means the cell's size is depended on its content.
+		 * 
+		 * <p> With {@link Splitter}, you can specify the sizedByContent to be false
+		 * for resizing smoothly
+		 * @param boolean byContent 
+		 * @since 5.0.4
+		 */
+		/**
+		 * Returns whether sizing the cell's size by its content.
+		 * <p>Default: true.
+		 * @since 5.0.4
+		 * @return boolean
+		 */
+		sizedByContent: _zkf,
 		widths: _zkf = function (val) {
 		    this._sizes = val;
 		    this.rerender();
@@ -261,6 +280,14 @@ zul.box.Box = zk.$extends(zul.Widget, {
 	replaceChildHTML_: function (child) {
 		this.$supers('replaceChildHTML_', arguments);
 		this._fixChildDomVisible(child, child._visible);
+		if (child.$instanceof(zul.box.Splitter)) {
+			var n = this._chdextr(child);
+			if (n) {
+				n.style.height = "";
+				n.style.width = "";
+			}
+			zWatch.fireDown('onSize', this);
+		}
 	},
 	_fixChildDomVisible: function (child, visible) {
 		var n = this._chdextr(child);
@@ -291,12 +318,13 @@ zul.box.Box = zk.$extends(zul.Widget, {
 		}
 		child.bind(desktop);
 	},
-	removeChildHTML_: function (child, prevsib) {
+	removeChildHTML_: function (child) {
 		this.$supers('removeChildHTML_', arguments);
 		jq(child.uuid + '-chdex', zk).remove();
 		jq(child.uuid + '-chdex2', zk).remove();
-		if (prevsib && this.lastChild == prevsib) //child is last
-			jq(prevsib.uuid + '-chdex2', zk).remove();
+		var sib;
+		if (this.lastChild == child && (sib = child.previousSibling)) //child is last
+			jq(sib.uuid + '-chdex2', zk).remove();
 	},
 	/** Enclose child with HTML tag such as TR or TD, 
 	 * and return a HTML code or add HTML fragments in out array.
@@ -359,7 +387,7 @@ zul.box.Box = zk.$extends(zul.Widget, {
 			for (var kid = this.firstChild; kid; kid = kid.nextSibling) {
 				if (szes && !kid.$instanceof(zul.box.Splitter) && !kid.$instanceof(zul.wgt.Cell))
 					++k;
-				if (kid._nvflex) {
+				if (kid._nvflex && kid.getVflex() != 'min') {
 					kid.setFlexSize_({height:'', width:''});
 					var chdex = kid.$n('chdex');
 					if (chdex) {
@@ -372,7 +400,7 @@ zul.box.Box = zk.$extends(zul.Widget, {
 			for (var kid = this.firstChild; kid; kid = kid.nextSibling) {
 				if (szes && !kid.$instanceof(zul.box.Splitter) && !kid.$instanceof(zul.wgt.Cell))
 					++k;
-				if (kid._nhflex) {
+				if (kid._nhflex && kid.getHflex() != 'min') {
 					kid.setFlexSize_({height:'', width:''});
 					var chdex = kid.$n('chdex');
 					if (chdex) {
@@ -382,7 +410,7 @@ zul.box.Box = zk.$extends(zul.Widget, {
 				}
 			}
 		}
-		//bug 3010663, boxes do not resize when browser window is resized
+		//bug 3010663: boxes do not resize when browser window is resized
 		var p = this.$n(),
 			zkp = zk(p),
 			offhgh = p.offsetHeight,
@@ -392,6 +420,42 @@ zul.box.Box = zk.$extends(zul.Widget, {
 			hgh = zkp.revisedHeight(curhgh < offhgh ? curhgh : offhgh),
 			wdh = zkp.revisedWidth(curwdh < offwdh ? curwdh : offwdh);
 		return zkp ? {height: hgh, width: wdh} : {};
+	},
+	//bug#3042306
+	resetSize_: function (orient) { //@Overrid zk.Widget#resetSize_, called when beforeSize
+		this.$supers(zul.Widget, 'resetSize_', arguments);
+		var	vert = this.isVertical(),
+		k = -1,
+		szes = this._sizes;
+		if (vert) {
+			for (var kid = this.firstChild; kid; kid = kid.nextSibling) {
+				if (szes && !kid.$instanceof(zul.box.Splitter) && !kid.$instanceof(zul.wgt.Cell))
+					++k;
+				if (kid._nvflex && kid.getVflex() != 'min') {
+					var chdex = kid.$n('chdex');
+					if (chdex) {
+						if (orient == 'h')
+							chdex.style.height = szes && k < szes.length ? szes[k] : '';
+						if (orient == 'w')
+							chdex.style.width = '';
+					}
+				}
+			}
+		} else {
+			for (var kid = this.firstChild; kid; kid = kid.nextSibling) {
+				if (szes && !kid.$instanceof(zul.box.Splitter) && !kid.$instanceof(zul.wgt.Cell))
+					++k;
+				if (kid._nhflex && kid.getHflex() != 'min') {
+					var chdex = kid.$n('chdex');
+					if (chdex) {
+						if (orient == 'w')
+							chdex.style.width = szes && k < szes.length ? szes[k] : '';
+						if (orient == 'h')
+							chdex.style.height = '';
+					}
+				}
+			}
+		}
 	},
 	beforeChildrenFlex_: function(child) {
 		if (child._flexFixed || (!child._nvflex && !child._nhflex)) { //other vflex/hflex sibliing has done it!
@@ -406,7 +470,8 @@ zul.box.Box = zk.$extends(zul.Widget, {
 			vflexsz = vert ? 0 : 1,
 			hflexs = [],
 			hflexsz = !vert ? 0 : 1,
-			p = child.$n('chdex').parentNode,
+			chdex = child.$n('chdex'), 
+			p = chdex ? chdex.parentNode : child.$n().parentNode,
 			zkp = zk(p),
 			psz = this._resetBoxSize(),
 			hgh = psz.height,
@@ -623,9 +688,8 @@ zul.box.Box = zk.$extends(zul.Widget, {
 				zktd = zk(td),
 				tdsz = vert ? zktd.revisedWidth(td.offsetWidth) : zktd.revisedHeight(td.offsetHeight);
 			
-			for(var child = this.firstChild; child; child = child.nextSibling) {
-				if (child.isVisible()) {
-					var c = child.$n();
+			for(var child = this.firstChild, c; child; child = child.nextSibling) {
+				if (child.isVisible() && (c = child.$n())) {
 					//20100120, Henri Chen: Strange! After set c.style.height/width, the margin is gone in safari/chrome
 					if (vert)
 						c.style.width = zk(c).revisedWidth(tdsz, !zk.safari) + 'px';

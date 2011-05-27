@@ -16,7 +16,6 @@ Copyright (C) 2003 Potix Corporation. All Rights Reserved.
 */
 package org.zkoss.lang;
 
-import org.zkoss.mesg.MCommon;
 import org.zkoss.util.logging.Log;
 
 /**
@@ -37,6 +36,12 @@ public class Threads {
 		} catch (InterruptedException ex) {
 			throw SystemException.Aide.wrap(ex);
 		}
+	}
+	/** Put the current thread to sleep for a while.
+	 * @deprecated As of release 3.0.0, replaced by {@link #sleep}
+	 */
+	public static final void pause(int millisecs) {
+		sleep(millisecs);
 	}
 
 	/** Sets the priority without throwing any exception but log warning.

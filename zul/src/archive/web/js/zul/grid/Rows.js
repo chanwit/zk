@@ -17,6 +17,10 @@ it will be useful, but WITHOUT ANY WARRANTY.
 	function _isPE() {
 		return zk.feature.pe && zk.isLoaded('zkex.grid');
 	}
+	function _syncFrozen(wgt) {
+		if ((wgt = wgt.getGrid()) && (wgt = wgt.frozen))
+			wgt._syncFrozen();
+	}
 
 var Rows =
 /**
@@ -67,20 +71,35 @@ zul.grid.Rows = zk.$extends(zul.Widget, {
 	bind_: function (desktop, skipper, after) {
 		this.$supers(Rows, 'bind_', arguments);
 		zWatch.listen({onResponse: this});
-		after.push(this.proxy(zk.booted ? this.onResponse: this.stripe));
+		var w = this;
+		after.push(zk.booted ? function(){setTimeout( function(){w.onResponse();},0)}: this.proxy(this.stripe));
+
+		//bug# 3092890: Rows.invalidate() does not respect frozen state
+		after.push(function () {
+			_syncFrozen(w);
+		});
 	},
 	unbind_: function () {
 		zWatch.unlisten({onResponse: this});
 		this.$supers(Rows, 'unbind_', arguments);
 	},
 	onResponse: function () {
-		if (this.desktop && this._shallStripe) { //since bind_(...after)
-			this.stripe();
-			this.getGrid().onSize();
+		if (this.desktop){
+			if (this._shallStripe) { //since bind_(...after)
+				this.stripe();
+				this.getGrid().onSize();
+			}
+			if(this._shallFixEmpty)
+				this.getGrid().fixForEmpty_();			
 		}
 	},
 	_syncStripe: function () {
 		this._shallStripe = true;
+		if (!this.inServer && this.desktop)
+			this.onResponse();
+	},
+	_syncEmptyState: function () {
+		this._shallFixEmpty = true;
 		if (!this.inServer && this.desktop)
 			this.onResponse();
 	},
@@ -110,7 +129,12 @@ zul.grid.Rows = zk.$extends(zul.Widget, {
 		this.$supers('onChildAdded_', arguments);
 		if (_isPE() && child.$instanceof(zkex.grid.Group))
 			this._groupsInfo.push(child);
+		if(this.getGrid() && this.getGrid().fixForRowAdd_) 
+			this.getGrid().fixForRowAdd_();
 		this._syncStripe();
+		this._syncEmptyState();
+		if (this.desktop)
+			_syncFrozen(this);
 	},
 	onChildRemoved_: function (child) {
 		this.$supers('onChildRemoved_', arguments);
@@ -118,6 +142,10 @@ zul.grid.Rows = zk.$extends(zul.Widget, {
 			this._groupsInfo.$remove(child);
 		if (!this.childReplacing_)
 			this._syncStripe();
+		this._syncEmptyState();
+	},
+	deferRedrawHTML_: function (out) {
+		out.push('<tbody', this.domAttrs_({domClass:1}), ' class="z-renderdefer"></tbody>');
 	}
 });
 })();

@@ -15,7 +15,7 @@ it will be useful, but WITHOUT ANY WARRANTY.
 zjq = function (jq) { //ZK extension
 	this.jq = jq;
 };
-(function () {
+(function (document, window) {
 	var _jq = {}, //original jQuery
 		//refer to http://www.w3schools.com/css/css_text.asp
 		_txtStyles = [
@@ -50,28 +50,27 @@ zjq = function (jq) { //ZK extension
 				_zsyncs[j].zsync(org);
 	}
 	function _focus(n) {
-		var w = zk.Widget.$(n);
-		if (w) zk.currentFocus = w;
-		try {
-			n.focus();
-		} catch (e) {
-			setTimeout(function() {
-				try {
-					n.focus();
-				} catch (e) {
-					setTimeout(function() {try {n.focus();} catch (e) {}}, 100);
-				}
-			}, 0);
-		} //IE throws exception if failed to focus in some cases
+		zk.afterAnimate(function () {
+			try {
+				n.focus();
+				var w = zk.Widget.$(n);
+				if (w) zk.currentFocus = w;
+			} catch (e) {
+			}
+		}, -1); //FF cannot change focus to a DOM element being animated
 	}
 	function _select(n) {
 		try {
 			n.select();
 		} catch (e) {
-			setTimeout(function() {
-				try {n.select();} catch (e) {}
-			}, 0);
-		} //IE throws exception when select() in some cases
+		}
+	}
+
+	function _submit() {
+		if (this.submit) {
+			jq.Event.fire(this, 'submit');
+			this.submit();
+		}
 	}
 
 	function _dissel() {
@@ -118,7 +117,7 @@ zjq = function (jq) { //ZK extension
 		//Fix gecko difference, the offset of gecko excludes its border-width when its CSS position is relative or absolute
 		if (zk.gecko) {
 			var p = el.parentNode;
-			while (p && p != document.body) {
+			while (p && p != document.body && p.nodeType === 1) {
 				var $p = jq(p),
 					style = $p.css("position");
 				if (style == "relative" || style == "absolute") {
@@ -140,10 +139,9 @@ zjq = function (jq) { //ZK extension
 				//Fix opera bug. If the parent of "input" or "span" is "div"
 				// and the scrollTop of "div" is more than 0, the offsetTop of "input" or "span" always is wrong.
 				if (zk.opera) {
-					var nodenm = jq.nodeName(el);
-					if (operaBug && nodenm == "div" && el.scrollTop != 0)
+					if (operaBug && jq.nodeName(el, 'div') && el.scrollTop != 0)
 						t += el.scrollTop || 0;
-					operaBug = nodenm == "span" || nodenm == "input";
+					operaBug = jq.nodeName(el, 'span', 'input');
 				}
 				t += el.offsetTop || 0;
 				l += el.offsetLeft || 0;
@@ -201,7 +199,7 @@ zjq = function (jq) { //ZK extension
 	}
 
 zk.copy(zjq, {
-	_fixCSS: function (el) { //overriden in domie.js
+	_fixCSS: function (el) { //overriden in domie.js , domsafari.js , domopera.js
 		el.className += ' ';
 		if (el.offsetHeight)
 			;
@@ -211,24 +209,22 @@ zk.copy(zjq, {
 		n.style.visibility = "inherit";
 	},
 	_fixClick: zk.$void, //overriden in domie.js
+	_fixedVParent: zk.$void,
+	_fixIframe: zk.$void,
+	_useQS: zk.$void, //overriden in domie.js (used in zAU)
 
-	/* Replaces the specified element with the given HTML content.
-	 * It is the same as {@link _global_.jq#replaceWith}, except
-	 * it has less memory leak running on IE.
-	 * <p>Currently, {@link zk.Widget} uses it to minimize the memory leak.
-	 * However, we don't make it to jQuery since this method assumes all
-	 * event listeners are unbound before calling this method.
-	 * @param DOMElement n the element to replace its content
-	 * @param String html the HTML content to show
-	 * @since 5.0.2
-	 */
-	_setOuter: function (n, html) { //overriden in domie.js
-		jq(n).replaceWith(html);
-	},
-
-	_src0: "" //an empty src; overriden in domie.js
+	//The source URI used for iframe (to avoid HTTPS's displaying nonsecure issue)
+	src0: "", //an empty src; overriden in domie.js
+	eventTypes: {
+		zmousedown: 'mousedown',
+		zmouseup: 'mouseup',
+		zmousemove: 'mousemove',
+		zdblclick: 'dblclick',
+		zcontextmenu: 'contextmenu'
+	}
 });
-
+jq.fn.zbind = jq.fn.bind;
+jq.fn.zunbind = jq.fn.unbind;
 /** @class jq
  * @import jq.Event
  * @import zk.Widget
@@ -398,8 +394,13 @@ zk.override(jq.fn, _jq, /*prototype*/ {
 		var n = this[0];
 		if (n) w.replaceHTML(n, desktop, skipper);
 		return this;
+	},
+	bind: function(type, data, fn) {
+		return this.zbind(zjq.eventTypes[type] || type, data, fn);
+	},
+	unbind: function(type, fn){
+		return this.zunbind(zjq.eventTypes[type] || type, fn);
 	}
-
 	/** Removes all matched elements from the DOM.
 	 * <p>Unlike <a href="http://docs.jquery.com/Manipulation/remove">jQuery</a>,
 	 * it does nothing if nothing is matched.
@@ -547,7 +548,10 @@ zjq.prototype = {
 	 */
 	isRealVisible: function (strict) {
 		var n = this.jq[0];
-		return n && this.isVisible(strict) && (n.offsetWidth > 0 || n.offsetHeight > 0);
+		return n && this.isVisible(strict) && (n.offsetWidth > 0 || n.offsetHeight > 0
+		|| (!n.firstChild 
+			&& (!(n=n.parentNode) || n==document.body || zk(n).isRealVisible(strict))));
+			//Bug 3141549: look up parent if !firstChild (no check if firstChild for better performance)
 	},
 
 	/** Scrolls the browser window to make the first matched element visible.
@@ -575,6 +579,22 @@ zjq.prototype = {
 		}
 		return this;
 	},
+	/** Tests if the first matched DOM element has the vertical scrollbar
+	 * @return boolean true if the element has the vertical scrollbar
+	 * @since 5.0.8
+	 */
+	hasVScroll: function () {
+		var n;
+		return (n = this.jq[0]) && n.offsetWidth - n.clientWidth > 11;
+	},
+	/** Tests if the first matched DOM element has the horizontal scrollbar
+	 * @return boolean true if the element has the horizontal scrollbar
+	 * @since 5.0.8
+	 */
+	hasHScroll: function () {
+		var n;
+		return (n = this.jq[0]) && n.offsetHeight - n.clientHeight > 11;
+	},
 
 	/** Tests if the first matched element is overlapped with the specified
 	 * element.
@@ -582,8 +602,8 @@ zjq.prototype = {
 	 * @return boolean true if they are overlapped.
 	 */
 	isOverlapped: function (el) {
-		var n = this.jq[0];
-		if (n)
+		var n;
+		if (n = this.jq[0])
 			return jq.isOverlapped(
 				this.cmOffset(), [n.offsetWidth, n.offsetHeight],
 				zk(el).cmOffset(), [el.offsetWidth, el.offsetHeight]);
@@ -603,7 +623,7 @@ jq(el).zk.sumStyles("lr", jq.paddings);
 	sumStyles: function (areas, styles) {
 		var val = 0;
 		for (var i = 0, len = areas.length, $jq = this.jq; i < len; i++){
-			 var w = zk.parseInt($jq.css(styles[areas.charAt(i)]));
+			 var w = Math.round(zk.parseFloat($jq.css(styles[areas.charAt(i)])));
 			 if (!isNaN(w)) val += w;
 		}
 		return val;
@@ -642,9 +662,23 @@ jq(el).zk.sumStyles("lr", jq.paddings);
 		var el = this.jq[0];
 		if(!ofs) {
 			if (el.getBoundingClientRect){ // IE and FF3
+				var elst, oldvisi;
+				if (zk.ie && !zk.ie8 && el.style.display == "none") {
+				//When popup a window in an iframe, getBoundingClientRect not correct (test case: B36-2851102.zul within iframe)
+					oldvisi = (elst = el.style).visibility;
+					elst.visibility = "hidden";
+					elst.display = "";
+				}
+
 				var b = el.getBoundingClientRect();
-				return [b.left + jq.innerX() - el.ownerDocument.documentElement.clientLeft,
+				b = [b.left + jq.innerX() - el.ownerDocument.documentElement.clientLeft,
 					b.top + jq.innerY() - el.ownerDocument.documentElement.clientTop];
+
+				if (elst) {
+					elst.display = "none";
+					elst.visibility = oldvisi;
+				}
+				return b;
 				// IE adds the HTML element's border, by default it is medium which is 2px
 				// IE 6 and 7 quirks mode the border width is overwritable by the following css html { border: 0; }
 				// IE 7 standards mode, the border is always 2px
@@ -900,7 +934,13 @@ jq(el).zk.center(); //same as 'center'
 		var x = dim.left, y = dim.top,
 			wd = this.dimension(), hgh = wd.height; //only width and height
 		wd = wd.width;
-
+		
+		/*Fixed since ios safari 5.0.2(webkit 533.17.9)
+		if (zk.ios) { // Bug 3042165(iphone/ipad)
+			x -= jq.innerX();
+			y -= jq.innerY();
+		}
+		*/
 		switch(where) {
 		case "before_start":
 			y -= hgh;
@@ -953,17 +993,42 @@ jq(el).zk.center(); //same as 'center'
 		default: // overlap is assumed
 			// nothing to do.
 		}
-
+		
 		if (!opts || !opts.overflow) {
 			var scX = jq.innerX(),
 				scY = jq.innerY(),
 				scMaxX = scX + jq.innerWidth(),
 				scMaxY = scY + jq.innerHeight();
-
+			
 			if (x + wd > scMaxX) x = scMaxX - wd;
 			if (x < scX) x = scX;
 			if (y + hgh > scMaxY) y = scMaxY - hgh;
 			if (y < scY) y = scY;
+		}
+		
+		// Bug 3251564
+		// dodge reference element (i.e. not to cover the reference textbox, etc)
+		if (opts && opts.dodgeRef) {
+			var dl = dim.left, dt = dim.top,
+				dr = dl + dim.width, db = dt + dim.height;
+			// overlap test
+			if (x + wd > dl && x < dr && y + hgh > dt && y < db) {
+				if (opts.overflow) {
+					// overflow allowed: try to dodge to the right
+					x = dr;
+				} else {
+					var scX = jq.innerX(),
+						scMaxX = scX + jq.innerWidth(),
+						spr = scMaxX - dr,
+						spl = dl - scX;
+					// no overflow: dodge to the larger space
+					// try right side first
+					if (spr >= wd || spr >= spl)
+						x = Math.min(dr, scMaxX - wd);
+					else
+						x = Math.max(dl - wd, scX);
+				}
+			}
 		}
 
 		var el = this.jq[0],
@@ -1169,31 +1234,35 @@ jq(el).zk.center(); //same as 'center'
 	// All *Width and *Height properties give 0 on elements with display none,
 	// so enable the element temporarily
 		var st = this.jq[0].style,
-			originalVisibility = st.visibility,
-			originalPosition = st.position,
-			originalDisplay = st.display;
-		st.visibility = 'hidden';
-		st.position = 'absolute';
-		st.display = 'block';
+			backup = {};
+		zk.copy(st, {
+			visibility: 'hidden',
+			position: 'absolute',
+			display: 'block'
+			}, backup);
 		try {
 			return _addOfsToDim(this,
 				{width: this.offsetWidth(), height: this.offsetHeight()}, revised);
 		} finally {
-			st.display = originalDisplay;
-			st.position = originalPosition;
-			st.visibility = originalVisibility;
+			zk.copy(st, backup);
 		}
 	},
 
 	/** Forces the browser to redo (re-apply) CSS of all matched elements. 
 	 * <p>Notice that calling this method might introduce some performance penality.
-	 * @param int timeout number of milliseconds to wait before really re-applying CSS
+	 * @param int timeout number of milliseconds to wait before really re-applying CSS.
+	 * 100 is assumed if not specified , -1 means re-applying css right now.
 	 * @return jqzk this object
 	 */
 	redoCSS: function (timeout) {
-		for (var j = this.jq.length; j--;)
-			_rdcss.push(this.jq[j]);
-		setTimeout(_redoCSS0, timeout >= 0 ? timeout : 100);
+		if (timeout == -1){ //timeout -1 means immediately
+			for (var j = this.jq.length; j--;)
+				zjq._fixCSS(this.jq[j]);	
+		} else {
+			for (var j = this.jq.length; j--;)
+				_rdcss.push(this.jq[j]);
+			setTimeout(_redoCSS0, timeout >= 0 ? timeout : 100);
+		}
 		return this;
 	},
 	/** Forces the browser to re-load the resource specified in the <code>src</code>
@@ -1204,18 +1273,20 @@ jq(el).zk.center(); //same as 'center'
 		for (var j = this.jq.length; j--;) {
 			var el = this.jq[j],
 				src = el.src;
-			el.src = zjq._src0;
+			el.src = zjq.src0;
 			el.src = src;
 		}
 		return this;
 	},
 
-	/** Returns the parent element, including the virtual parent,
-	 * of the first matched element.
+	/** Returns the virtual parent of the first matched element.
 	 * <p>Refer to {@link #makeVParent} for more information.
+	 * @param boolean real whether to return DOM element's parentNode if
+	 * no virtual parent. In other words, <code>zk(n).vparentNode(true)</code>
+	 * is the same as <code>zk(n).vparentNode()||n.parentNode</code>.
 	 * @return DOMElement
 	 */
-	vparentNode: function () {
+	vparentNode: function (real) {
 		var el = this.jq[0];
 		if (el) {
 			var v = el.z_vp; //might be empty
@@ -1223,6 +1294,8 @@ jq(el).zk.center(); //same as 'center'
 			v = el.z_vpagt;
 			if (v && (v = jq('#' +v)[0]))
 				return v.parentNode;
+			if (real)
+				return el.parentNode;
 		}
 	},
 	/** Creates a virtual parent for the specified element. Creating a virtual parent makes the specified element able to appear above any other element (such as a menu popup). By default, the Z order of an element is decided by its parent and ancestors (if any of them has the relative or absolute position). If you want to resolve this limitation, you can create a virtual parent for it with this method.
@@ -1246,10 +1319,19 @@ jq(el).zk.center(); //same as 'center'
 			agt = document.createElement("span");
 		agt.id = el.z_vpagt = '_z_vpagt' + _vpId ++;
 		agt.style.display = "none";
+		
+		// Bug 3049181 and 3092040
+		zjq._fixedVParent(el, true);
+		
 		if (sib) p.insertBefore(agt, sib);
 		else p.appendChild(agt);
 
 		el.z_vp = p.id; //might be empty
+		var st = el.style;
+		if (!st.top) st.top = "0";
+			//B3178359: if no top and parent is relative+absolute, the following
+			//line causes browser crazy
+			//Strange: all browsers have the same behavior
 		document.body.appendChild(el);
 		return this;
 	},
@@ -1267,18 +1349,43 @@ jq(el).zk.center(); //same as 'center'
 			agt = $agt[0];
 
 			p = p ? jq('#' + p)[0]: agt ? agt.parentNode: null;
-			if (p)
+			if (p) {
+				
+				// Bug 3049181
+				zjq._fixedVParent(el);
+				
 				if (agt) {
 					p.insertBefore(el, agt);
 					$agt.remove();
 				} else
 					p.appendChild(el);
+				
+				var cf, p;
+				if ((zk.ff == 3.6 || zk.ff == 4) && (cf = zk._prevFocus) && 
+					(p = zk.Widget.$(el)) && zUtl.isAncestor(p, cf) && 
+					cf.getInputNode)
+					jq(cf.getInputNode()).trigger('blur');
+			}
 		}
 		return this;
 	},
 
+	/** Fixes DOM elements when a widget's unbind_ is called
+	 * and it will hide the DOM element (display="none" or visibility="hidden").
+	 * <p>For firefox, it has to reset the src attribute of iframe (Bug 3076384)
+	 */
+	beforeHideOnUnbind: zk.$void,
+
 	//focus/select//
-	/** Sets the focus to the first matched element. It is the same as DOMElement.focus, except it doesn't throw any exception (rather, returns false), and it can set the focus later (by use of timeout). 
+	/** Sets the focus to the first matched element.
+	 * It is the same as jq(n).focus() and n.focus, except
+	 * <ul>
+	 * <li>it doesn't throw any exception (rather, returns false).</li>
+	 * <li>it can set the focus later (by use of timeout). </li>
+	 * <li>it maintains {@link zk#currentFocus}.</li>
+	 * </ul>
+	 * <p>In general, it is suggested to use zk(n).focus(), unless
+	 * n does not belong to any widget.
 	 * @param int timeout the number of milliseconds to delay before setting the focus. If omitted or negative, the focus is set immediately. 
 	 * @return boolean whether the focus is allowed to set to the element. Currently, only SELECT, BUTTON, INPUT and IFRAME is allowed. 
 	 * @see #select
@@ -1355,7 +1462,6 @@ jq(el).zk.center(); //same as 'center'
 
 		if (inp.setSelectionRange) {
 			inp.setSelectionRange(start, end);
-			inp.focus();
 		} else if (inp.createTextRange) {
 			var range = inp.createTextRange();
 			if(start != end){
@@ -1366,6 +1472,15 @@ jq(el).zk.center(); //same as 'center'
 			}
 			range.select();
 		}
+		return this;
+	},
+
+	/** Submit the selected form.
+	 * @return jqzk this object
+	 * @since 5.0.4
+	 */
+	submit: function () {
+		this.jq.each(_submit);
 		return this;
 	},
 
@@ -1444,6 +1559,7 @@ zk.copy(jq, {
 		while (--j)
 			if (tag == arguments[j].toLowerCase())
 				return true;
+		return false;// don't remove this line, texts are highlighted when SHIFT-click listitems (because of IE's onselect depends on it)
 	},
 
 	/** Converting an integer to a string ending with "px".
@@ -1481,13 +1597,17 @@ zk.copy(jq, {
 	},
 
 	/** Tests if one element (p) is an ancestor of another (c). 
+	 * <p>Notice that, if you want to test widgets, please use
+	 * {@link zUtl#isAncestor} instead.
+	 *
 	 * @param DOMElement p the parent element to test
 	 * @param DOMElement c the child element to test
 	 * @return boolean if p is an ancesotor of c.
+	 * @see zUtl#isAncestor
 	 */
 	isAncestor: function (p, c) {
 		if (!p) return true;
-		for (; c; c = zk(c).vparentNode()||c.parentNode)
+		for (; c; c = zk(c).vparentNode(true))
 			if (p == c)
 				return true;
 		return false;
@@ -1508,35 +1628,35 @@ zk.copy(jq, {
 			|| document.documentElement.scrollTop
 			|| document.body.scrollTop || 0;
 	},
-	/** Returns the height of the visible part of the browser window. 
+	/** Returns the height of the viewport (visible part) of the browser window. 
+	 * It is the same as jq(window).width().
 	 * @return int
 	 */
 	innerWidth: function () {
-		return typeof window.innerWidth == "number" ? window.innerWidth:
-			document.compatMode == "CSS1Compat" ?
-				document.documentElement.clientWidth: document.body.clientWidth;
+		return jq(window).width();
 	},
-	/** Returns the width of the visible part of the browser window. 
+	/** Returns the width of the viewport (visible part) of the browser window. 
+	 * It is the same as jq(window).height().
 	 * @return int
 	 */
 	innerHeight: function () {
-		return typeof window.innerHeight == "number" ? window.innerHeight:
-			document.compatMode == "CSS1Compat" ?
-				document.documentElement.clientHeight: document.body.clientHeight;
+		return jq(window).height();
 	},
-	/** Returns the pae total width.
+	/** Returns the width of HTML document.
+	 * It is the same as jq(document).width().
 	 * @return int
+	 * @deprecated As of release 5.0.6, use jq(document).width() directly.
 	 */
 	pageWidth: function () {
-		var a = document.body.scrollWidth, b = document.body.offsetWidth;
-		return a > b ? a: b;
+		return jq(document).width();
 	},
-	/** Returns the pae total height. 
+	/** Returns the height of HTML document.
+	 * It is the same as jq(document).height().
 	 * @return int
+	 * @deprecated As of release 5.0.6, use jq(document).height() directly.
 	 */
 	pageHeight: function () {
-		var a = document.body.scrollHeight, b = document.body.offsetHeight;
-		return a > b ? a: b;
+		return jq(document).height();
 	},
 
 	/** A map of the margin style names: {l: 'margin-left', t: 'margin-top'...}. 
@@ -1688,7 +1808,7 @@ jq.filterTextStyle({width:"100px", fontSize: "10pt"});
 	 * @return DOMElement
 	 */
 	newFrame: function (id, src, style) {
-		if (!src) src = zjq._src0;
+		if (!src) src = zjq.src0;
 			//IE: prevent secure/nonsecure warning with HTTPS
 
 		var html = '<iframe id="'+id+'" name="'+id+'" src="'+src+'"';
@@ -1721,12 +1841,13 @@ jq.filterTextStyle({width:"100px", fontSize: "10pt"});
 		ifr.style.cssText = "position:absolute;overflow:hidden;filter:alpha(opacity=0)";
 		ifr.frameBorder = "no";
 		ifr.tabIndex = -1;
-		ifr.src = zjq._src0;
+		ifr.src = zjq.src0;
 		if (el) {
 			ifr.style.width = el.offsetWidth + "px";
 			ifr.style.height = el.offsetHeight + "px";
 			ifr.style.top = el.style.top;
 			ifr.style.left = el.style.left;
+			ifr.style.zIndex = el.style.zIndex;
 			el.parentNode.insertBefore(ifr, anchor || el);
 		}
 		return ifr;
@@ -1891,6 +2012,7 @@ this._syncShadow(); //synchronize shadow
 
 	/** Move the focus out of any element.
 	 * <p>Notice that you cannot simply use <code>jq(window).focus()</code>
+	 * or <code>zk(window).focus()</code>,
 	 * because it has no effect for browsers other than IE.
 	 * @since 5.0.1
 	 */
@@ -1908,7 +2030,24 @@ this._syncShadow(); //synchronize shadow
 		a.focus();
 		setTimeout(function () {jq(a).remove();}, 500);
 	}
-
+	/**
+	 * An override function that provide a way to get the style value where is
+	 * defined in the CSS file or the style object, rather than the computed value.
+	 * <p> Note that the function is only applied to the width or height property,
+	 *  and the third argument must be 'styleonly'.
+	 * <p> For example,
+<pre><code>
+jq.css(elem, 'height', 'styleonly');
+or
+jq.css(elem, 'width', 'styleonly');
+</code></pre>
+	 * @since 5.0.6 
+	 * @param DOMElement elem a Dom element
+	 * @param String name the style name
+	 * @param String extra an option in this case, it must be 'styleonly'
+	 * @return String the style value.
+	 */
+	//css: function () {},
 	/** Decodes a JSON string to a JavaScript object. 
 	 * <p>It is similar to jq.parseJSON (jQuery's default function), except
 	 * 1) it doesn't check if the string is a valid JSON
@@ -1939,7 +2078,25 @@ text = jq.toJSON([new Date()], function (key, value) {
 	 * @param Object obj any JavaScript object
 	 * @param Object replace an optional parameter that determines how object values are stringified for objects. It can be a function. 
 	 */
-	//toJSON: function () {}
+	//toJSON: function () {},
+	/**
+	 * Marshalls the Date object into a string such that it can be sent
+	 * back to the server.
+	 * <p>It works with org.zkoss.json.JSONs.d2j() to transfer data from client
+	 * to server.
+	 * @param Date d the date object to marshall. If null, null is returned
+	 * @return String a string
+	 * @since 5.0.5
+	 */
+	//d2j: function () {},
+	/** Unmarshalls the string back to a Date object.
+	 * <p>It works with org.zkoss.json.JSONs.j2d() to transfer data from server
+	 * to client.
+	 * @param String s the string that is marshalled at the server
+	 * @return Date the date object after unmarshalled back
+	 * @since 5.0.5
+	 */
+	//j2d: function () {}
 });
 
 /** @class jq.Event
@@ -1953,7 +2110,8 @@ zk.copy(jq.Event.prototype, {
 		this.stopPropagation();
 	},
 	/** Retrieve the mouse information of a DOM event. The properties of the returned object include pageX, pageY and the meta information 
-	 * @return Map a map of data. Refer to <a href="http://docs.zkoss.org/wiki/CDG5:_Event_Data">Event Data</a>
+	 * @return Map a map of data.
+	 * @see zk.Event#data
 	 */
 	mouseData: function () {
 		return zk.copy({
@@ -1961,7 +2119,8 @@ zk.copy(jq.Event.prototype, {
 		}, this.metaData());
 	},
 	/** Retrieve the mouse information of a DOM event. The properties of the returned object include pageX, pageY and the meta information ({@link #metaData}). 
-	 * @return Map a map of data. Refer to <a href="http://docs.zkoss.org/wiki/CDG5:_Event_Data">Event Data</a>
+	 * @return Map a map of data.
+	 * @see zk.Event#data
 	 */
 	keyData: function () {
 		return zk.copy({
@@ -1970,13 +2129,15 @@ zk.copy(jq.Event.prototype, {
 			}, this.metaData());
 	},
 	/** Retrieve the meta-information of a DOM event. The properties of the returned object include altKey, shiftKey, ctrlKey, leftClick, rightClick and which. 
-	 * @return Map a map of data. Refer to <a href="http://docs.zkoss.org/wiki/CDG5:_Event_Data">Event Data</a>
+	 * @return Map a map of data.
+	 * @see zk.Event#data
 	 */
 	metaData: function () {
 		var inf = {};
 		if (this.altKey) inf.altKey = true;
 		if (this.ctrlKey) inf.ctrlKey = true;
 		if (this.shiftKey) inf.shiftKey = true;
+		if (this.metaKey) inf.metaKey = true;
 		inf.which = this.which || 0;
 		return inf;
 	}
@@ -2016,6 +2177,7 @@ zk.copy(jq.Event, {
 		if (data.altKey) inf.altKey = true;
 		if (data.ctrlKey) inf.ctrlKey = true;
 		if (data.shiftKey) inf.shiftKey = true;
+		if (data.metaKey) inf.metaKey = true;
 		inf.which = data.which || 0;
 		return inf;
 	},
@@ -2052,4 +2214,4 @@ zk.copy(jq.Event, {
 		return new zk.Event(target, 'on' + type, data, opts, evt);
 	}
 });
-})();
+})(document, window);

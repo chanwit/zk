@@ -68,6 +68,10 @@ public class Paging extends XulElement implements org.zkoss.zul.api.Paging, Pagi
 	public int getPageSize() {
 		return _pgsz;
 	}
+	
+	/**Sets the items to show in each page
+	 * 
+	 */
 	public void setPageSize(int size) throws WrongValueException {
 		if (size <= 0)
 			throw new WrongValueException("positive only");
@@ -83,6 +87,10 @@ public class Paging extends XulElement implements org.zkoss.zul.api.Paging, Pagi
 	public int getTotalSize() {
 		return _ttsz;
 	}
+	
+	/**Sets total size of items
+	 * 
+	 */
 	public void setTotalSize(int size) throws WrongValueException {
 		if (size < 0)
 			throw new WrongValueException("non-negative only");
@@ -98,8 +106,11 @@ public class Paging extends XulElement implements org.zkoss.zul.api.Paging, Pagi
 		if (v == 0) v = 1;
 		if (v != _npg) {
 			_npg = v;
-			if (_actpg >= _npg)
+			smartUpdate("pageCount", _npg);
+			if (_actpg >= _npg) {
 				_actpg = _npg - 1;
+				smartUpdate("activePage", _actpg);
+			}
 		}
 	}
 
@@ -109,6 +120,10 @@ public class Paging extends XulElement implements org.zkoss.zul.api.Paging, Pagi
 	public int getActivePage() {
 		return _actpg;
 	}
+	/**
+	 * Set the active page
+	 * <p>Note: In server side, active page starts from 0. But in browser UI, it starts from 1
+	 */
 	public void setActivePage(int pg) throws WrongValueException {
 		if (pg >= _npg || pg < 0)
 			throw new WrongValueException("Unable to set active page to "+pg+" since only "+_npg+" pages");
@@ -123,6 +138,10 @@ public class Paging extends XulElement implements org.zkoss.zul.api.Paging, Pagi
 	public int getPageIncrement() {
 		return _pginc;
 	}
+	
+	/**
+	 * Sets the number of page list icon when mold is "os"
+	 */
 	public void setPageIncrement(int pginc) throws WrongValueException {
 		if (pginc <= 0)
 			throw new WrongValueException("Nonpositive is not allowed: "+pginc);
@@ -135,6 +154,10 @@ public class Paging extends XulElement implements org.zkoss.zul.api.Paging, Pagi
 	public boolean isDetailed() {
 		return _detailed;
 	}
+	
+	/** Sets whether to show total size and index of items in current page
+	 * 
+	 */
 	public void setDetailed(boolean detailed) {
 		if (_detailed != detailed) {
 			_detailed = detailed;
@@ -197,7 +220,7 @@ public class Paging extends XulElement implements org.zkoss.zul.api.Paging, Pagi
 		if (name.equals(ZulEvents.ON_PAGING)) {
 			PagingEvent evt = PagingEvent.getPagingEvent(request);
 			setActivePage(evt.getActivePage());
-			Events.postEvent(PagingEvent.getPagingEvent(request));
+			Events.postEvent(evt);
 		} else
 			super.service(request, everError);
 	}

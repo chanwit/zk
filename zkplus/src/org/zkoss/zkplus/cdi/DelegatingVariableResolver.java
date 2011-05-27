@@ -27,7 +27,8 @@ import org.zkoss.xel.XelContext;
 import org.zkoss.xel.XelException;
 
 /**
- * Generic CDI EL named managed bean resolver. 
+ * Generic CDI EL named managed bean resolver.
+ * <p>Applicable to CDI version 1.0 or later</p>
  * @author henrichen
  *
  */
@@ -38,7 +39,7 @@ public class DelegatingVariableResolver implements VariableResolverX {
 		_cdiResolver = CDIUtil.getBeanManager().getELResolver();
 	}
 	public Object resolveVariable(String name) throws XelException {
-		throw new XelException("Need ZK 5.0+ ...");
+		throw new UnsupportedOperationException("Use resolveVariable(XelContext,Object,Object) instead");
 	}
 
 	public Object resolveVariable(XelContext ctx, Object base, Object name)

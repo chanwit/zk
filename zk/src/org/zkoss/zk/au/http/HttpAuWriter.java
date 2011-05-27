@@ -42,6 +42,8 @@ public class HttpAuWriter implements AuWriter{
 	 */
 	private JSONObject _out;
 	private JSONArray _rs;
+	/** The result that shall be sent instead of _rs. */
+	private byte[] _result;
 	private boolean _compress = true;
 
 	public HttpAuWriter() {
@@ -70,55 +72,85 @@ public class HttpAuWriter implements AuWriter{
 			//Bug 1907640: with Glassfish v1, we cannot change content type
 			//in another thread, so we have to do it here
 
-		_out = new JSONObject();
-		_out.put("rs", _rs = new JSONArray());
+		_out = AuWriters.getJSONOutput(_rs = new JSONArray());
 		return this;
 	}
-	/** Closes the connection.
-	 */
-	public void close(Object request, Object response)
-	throws IOException {
-		final HttpServletRequest hreq = (HttpServletRequest)request;
-		final HttpServletResponse hres = (HttpServletResponse)response;
+	public void close(Object request, Object response) throws IOException {
+		flush(request, response, _compress);
+	}
+	public void resend(Object prevContent) throws IOException {
+		if (prevContent == null)
+			throw new IllegalArgumentException();
+		if (_result != null || !_rs.isEmpty())
+			throw new IllegalStateException(_rs.isEmpty() ? "resend twice or complete?": "write called");
+		_result = restore(prevContent);
+		_out = null;
+		_rs = null;
+	}
 
-		//Use OutputStream due to Bug 1528592 (Jetty 6)
-		byte[] data = getResult().getBytes("UTF-8");
-		if (_compress && data.length > 200) {
-			byte[] bs = Https.gzip(hreq, hres, null, data);
-			if (bs != null) data = bs; //yes, browser support compress
+	public Object complete() throws IOException {
+		if (_result != null)
+			throw new IllegalStateException();
+		_result = _out.toString().getBytes("UTF-8");
+		_out = null;
+		_rs = null;
+		return save(_result);
+	}
+	/** Flush the result of responses to client.
+	 * @param bCompress whether to compress (if allowed).
+	 * @since 5.0.4
+	 */
+	protected void flush(Object request, Object response, boolean bCompress)
+	throws IOException {
+		if (_result == null) {
+			_result = _out.toString().getBytes("UTF-8");
+			_out = null;
+			_rs = null;
 		}
 
+		final HttpServletRequest hreq = (HttpServletRequest)request;
+		final HttpServletResponse hres = (HttpServletResponse)response;
+		if (bCompress && _result.length > 200) {
+			final byte[] bs = Https.gzip(hreq, hres, null, _result);
+			if (bs != null)
+				 _result = bs; //yes, browser support compress
+		}
 		hres.setContentType(AuWriters.CONTENT_TYPE);
 			//we have to set content-type again. otherwise, tomcat might
 			//fail to preserve what is set in open()
-		hres.setContentLength(data.length);
-		hres.getOutputStream().write(data);
+		hres.setContentLength(_result.length);
+		hres.getOutputStream().write(_result);
+			//Use OutputStream due to Bug 1528592 (Jetty 6)
 		hres.flushBuffer();
 	}
-	/** Returns the result of responses that will be sent to client
-	 * (never null).
-	 * It is called by {@link #close} to retrieve the output.
-	 * After invocation, the writer is reset.
-	 * @since 5.0.0
+	/** Called to encode the last response for repeated request before storing.
+	 * <p>Default: does nothing but return the input argument, data.
+	 *  The derived class might override this method to compress it.
+	 * @see #restore
+	 * @since 5.0.4
 	 */
-	protected String getResult() {
-		final String data = _out.toString();
-		_out = null;
-		_rs = null;
+	protected Object save(byte[] data) {
 		return data;
 	}
+	/** Called to decode the last response for repeated request before retrieving.
+	 * <p>Default: does nothing but return the input argument, data.
+	 *  The derived class might override this method to uncompress it.
+	 * @param data the data returned by {@link #save}
+	 * @return the byte array that is passed to {@link #save}.
+	 * @since 5.0.4
+	 */
+	protected byte[] restore(Object data) {
+		return (byte[])data;
+	}
+
 	public void writeResponseId(int resId) throws IOException {
 		_out.put("rid", new Integer(resId));
 	}
 	public void write(AuResponse response) throws IOException {
-		final JSONArray r = new JSONArray();
-		r.add(response.getCommand());
-		r.add(response.getEncodedData());
-		_rs.add(r);
+		_rs.add(AuWriters.toJSON(response));
 	}
 	public void write(Collection responses) throws IOException {
 		for (Iterator it = responses.iterator(); it.hasNext();)
 			write((AuResponse)it.next());
 	}
-
 }

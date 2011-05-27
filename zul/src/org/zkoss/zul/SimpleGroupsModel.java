@@ -23,10 +23,16 @@ import org.zkoss.zul.event.GroupsDataEvent;
 
 /**
  * A simple implementation of {@link GroupsModel}.
- * Note: It assumes the content is immutable.
+ * This implementation assumes the data is grouped, and the grouping structure
+ * is immutable.
+ * If you allow the user to re-group the content, use {@link GroupsModelArray}
+ * instead.
+ * <p>For more information, please refer to
+ * <a href="http://books.zkoss.org/wiki/ZK_Developer%27s_Reference/MVC/Model/Groups_Model">ZK Developer's Reference: Groups Model</a>
  * @author Dennis.Chen
  * @since 3.5.0
  * @see GroupsModel
+ * @see GroupsModelArray
  */
 public class SimpleGroupsModel extends AbstractGroupsModel implements GroupsModelExt{
 	
@@ -180,7 +186,7 @@ public class SimpleGroupsModel extends AbstractGroupsModel implements GroupsMode
 		for(int i=0;i<_data.length;i++){
 			sortGroupData(_heads==null?_data[i]:_heads[i],_data[i],cmpr,ascending,colIndex);
 		}
-		fireEvent(GroupsDataEvent.GROUPS_CHANGED,-1,-1,-1);
+		fireEvent(GroupsDataEvent.STRUCTURE_CHANGED,-1,-1,-1);
 	}
 
 	protected void sortGroupData(Object group,Object[] groupdata,Comparator cmpr,boolean ascending, int colIndex){

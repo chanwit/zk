@@ -12,20 +12,43 @@ Copyright (C) 2009 Potix Corporation. All Rights Reserved.
 This program is distributed under LGPL Version 3.0 in the hope that
 it will be useful, but WITHOUT ANY WARRANTY.
 */
+(function () {
+	function _toggleEffect(wgt, undo) {
+		var self = wgt;
+		setTimeout(function () {
+			var $n = jq(self.$n()),
+				zcls = self.getZclass();
+			if (undo) {
+   				$n.removeClass(zcls + "-over-seld").removeClass(zcls + "-over");
+   					//we have to remove both since _setSelectedDirectly doesn't
+   					//remove -over-seld
+			} else if (self._musin) {
+				$n.addClass(self.isSelected() ? zcls + "-over-seld" : zcls + "-over");
+				
+				var musout = self.getMeshWidget()._musout;
+				// fixed mouse-over issue for datebox 
+				if (musout && $n[0] != musout.$n()) {
+					jq(musout.$n()).removeClass(zcls + "-over-seld").removeClass(zcls + "-over");
+					musout._musin = false;
+					self.parent._musout = null;
+				}
+			}
+		});
+	}
 /**
  * The item widget for {@link Treeitem} and {@link Listitem}
  */
 zul.sel.ItemWidget = zk.$extends(zul.Widget, {
 	_checkable: true,
 	$define: {
-    	/** Returns whether it is checkable.
-    	 * <p>Default: true.
-    	 * @return boolean
-    	 */
-    	/** Sets whether it is checkable.
-    	 * <p>Default: true.
-    	 * @param boolean checkable
-    	 */
+		/** Returns whether it is checkable.
+		 * <p>Default: true.
+		 * @return boolean
+		 */
+		/** Sets whether it is checkable.
+		 * <p>Default: true.
+		 * @param boolean checkable
+		 */
 		checkable: function () {
 			if (this.desktop)
 				this.rerender();
@@ -65,9 +88,9 @@ zul.sel.ItemWidget = zk.$extends(zul.Widget, {
 	 */
 	setSelected: function (selected) {
 		if (this._selected != selected) {
-			var mesh = this.getMeshWidget();
-			if (mesh)
-				mesh.toggleItemSelection(this);
+			var box = this.getMeshWidget();
+			if (box)
+				box.toggleItemSelection(this);
 				
 			this._setSelectedDirectly(selected);
 		}
@@ -76,8 +99,7 @@ zul.sel.ItemWidget = zk.$extends(zul.Widget, {
 		var n = this.$n();
 		if (n) {
 			jq(n)[selected ? 'addClass' : 'removeClass'](this.getZclass() + '-seld');
-			if (this.$n('cm'))
-				this._checkClick();				
+			this._updHeaderCM();
 		}
 		this._selected = selected;
 	},
@@ -117,7 +139,7 @@ zul.sel.ItemWidget = zk.$extends(zul.Widget, {
 	},
 	//super//
 	setVisible: function (visible) {
-		if (this.isVisible() != visible) {
+		if (this._visible != visible) { // not to use isVisible()
 			this.$supers('setVisible', arguments);
 			if (this.isStripeable_()) {
 				var p = this.getMeshWidget();
@@ -134,26 +156,16 @@ zul.sel.ItemWidget = zk.$extends(zul.Widget, {
 		}
 		return scls;
 	},
+	// SelectWidget count on this function
 	_toggleEffect: function (undo) {
-		var n = this.$n(),
-			zcls = this.getZclass();
-		if (undo) {
-			jq(n).removeClass(zcls + "-over-seld")
-				.removeClass(zcls + "-over");
-		} else {
-			var $n = jq(n);
-			$n.addClass($n.hasClass(zcls + "-seld") ? zcls + "-over-seld" : zcls + "-over");
-		}
+		_toggleEffect(this, undo);
 	},
-	focus: function (timeout) {
+	focus_: function (timeout) {
 		var mesh = this.getMeshWidget();
 			mesh._focusItem = this;
-		if (this.isVisible() && this.canActivate({checkOnly: true})) {
-			this._doFocusIn();
-			if (zk.currentFocus != mesh.$n('a'))
-				zk(mesh.$n('a')).focus(timeout);
-		}
-		return false;
+		this._doFocusIn();
+		mesh.focusA_(mesh.$n('a'), timeout);
+		return true;
 	},
 	_doFocusIn: function () {
 		var n = this.$n();
@@ -171,34 +183,36 @@ zul.sel.ItemWidget = zk.$extends(zul.Widget, {
 			jq(n.cells).removeClass(zcls + "-focus");
 		}
 	},
-	_checkAll: function () {
-		var box = this.getMeshWidget();		
-		if (!box || !box._headercm) return;
-		var cm = this.$n('cm');
-		if (cm && !this.isSelected()) {
-			var header = zk.Widget.$(box._headercm),
-				zcls = header.getZclass();
-			jq(box._headercm).removeClass(zcls + '-img-seld');
-			return;
-		}
-		var checked;
-		for (var it = box.getBodyWidgetIterator(), w; (w = it.next());) 
-			if (w.isVisible() && !w.isDisabled() && !w.isSelected()) {
-				checked = false;
-				break;
-			} else
-				checked = true;
-		
-		if (checked) {
-			var header = zk.Widget.$(box._headercm),
-				zcls = header.getZclass();
-			jq(box._headercm).addClass(zcls + '-img-seld');
+	_updHeaderCM: function (bRemove) { //update header's checkmark
+		var box = this.getMeshWidget();
+		if (box && box._headercm && box._multiple) {
+			if (bRemove) {
+				box._updHeaderCM();
+				return;
+			}
+
+			var zcls = zk.Widget.$(box._headercm).getZclass() + '-img-seld',
+				$headercm = jq(box._headercm);
+
+			if (!this.isSelected())
+				$headercm.removeClass(zcls);
+			else if (!$headercm.hasClass(zcls))
+				box._updHeaderCM(); //update in batch since we have to examine one-by-one
 		}
 	},
-	_checkClick: function (evt) {
-		if (this.getMeshWidget().isMultiple())
-			this._checkAll();
+	//@Override
+	beforeParentChanged_: function (newp) {
+		if (!newp) //remove
+			this._updHeaderCM(true);
+		this.$supers("beforeParentChanged_", arguments);
 	},
+	//@Override
+	afterParentChanged_: function () {
+		if (this.parent) //add
+			this._updHeaderCM();
+		this.$supers("afterParentChanged_", arguments);
+	},
+
 	// event
 	doSelect_: function(evt) {
 		if (this.isDisabled()) return;
@@ -209,16 +223,21 @@ zul.sel.ItemWidget = zk.$extends(zul.Widget, {
 		this.$supers('doSelect_', arguments);
 	},
 	doMouseOver_: function(evt) {
-		if (this.isDisabled()) return;
+		if (this._musin || this.isDisabled()) return;
+		this._musin = true;
 		this._toggleEffect();
 		evt.stop();
 		this.$supers('doMouseOver_', arguments);
 	},
 	doMouseOut_: function(evt) {
-		if (this.isDisabled() || (zk.ie &&
-				jq.isAncestor(this.$n(), evt.domEvent.relatedTarget || evt.domEvent.toElement)))
+		if (this.isDisabled() || (this._musin &&
+					jq.isAncestor(this.$n(), evt.domEvent.relatedTarget ||
+								evt.domEvent.toElement))) {
+			// fixed mouse-over issue for datebox 
+			this.getMeshWidget()._musout = this;
 			return;
-			
+		}
+		this._musin = false;
 		this._toggleEffect(true);
 		evt.stop({propagation: true});
 		this.$supers('doMouseOut_', arguments);
@@ -235,5 +254,9 @@ zul.sel.ItemWidget = zk.$extends(zul.Widget, {
 		zk(mate.$n()).enableSelection();
 		mate._doKeyUp(evt);
 		this.$supers('doKeyUp_', arguments);
+	},
+	deferRedrawHTML_: function (out) {
+		out.push('<tr', this.domAttrs_({domClass:1}), ' class="z-renderdefer"></tr>');
 	}
 });
+})();

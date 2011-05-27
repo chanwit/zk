@@ -24,6 +24,7 @@ import org.zkoss.lang.Strings;
 import org.zkoss.lang.Objects;
 import org.zkoss.util.CacheMap;
 import org.zkoss.util.Locales;
+import org.zkoss.web.Attributes;
 
 import org.zkoss.zk.ui.metainfo.LanguageDefinition;
 import org.zkoss.zk.ui.metainfo.ComponentDefinition;
@@ -35,24 +36,6 @@ import org.zkoss.zk.ui.metainfo.ComponentDefinition;
  * @since 5.0.0
  */
 public class Wpds {
-	/** Generates the deferred JavaScript packages in JavaScript syntax.
-	 */
-	public static String outDeferJavaScriptPackages(String deviceType) {
-		final StringBuffer sb = new StringBuffer(128)
-			.append("zk.load('");
-		boolean first = true;
-		for (Iterator it = LanguageDefinition.getByDeviceType(deviceType).iterator();
-		it.hasNext();) {
-			for (Iterator it2 = ((LanguageDefinition)it.next())
-			.getDeferJavaScriptPackages().iterator(); it2.hasNext();) {
-				if (first) first = false;
-				else sb.append(',');
-				sb.append(it2.next());
-			}
-		}
-		return first ? "": sb.append("');").toString();
-	}
-
 	/** Generates all widgets in the specified language.
 	 * @param lang the language to look at
 	 */
@@ -66,7 +49,7 @@ public class Wpds {
 			final ComponentDefinition compdef = (ComponentDefinition)it.next();
 			for (Iterator e = compdef.getMoldNames().iterator(); e.hasNext();) {
 				final String mold = (String)e.next();
-				final String wgtcls = compdef.getWidgetClass(mold);
+				final String wgtcls = compdef.getWidgetClass(null, mold);
 				if (wgtcls != null) {
 					if (first) first = false;
 					else sb.append(',');
@@ -109,12 +92,14 @@ public class Wpds {
 	/** Output date/calendar relevant labels.
 	 */
 	private final static String outDateJavaScript(Locale locale) {
+		final int firstDayOfWeek = Utils.getFirstDayOfWeek();
+		final String djkey = locale + ":" + firstDayOfWeek;
 		synchronized (_datejs) {
-			final String djs = (String)_datejs.get(locale);
+			final String djs = (String)_datejs.get(djkey);
 			if (djs != null) return djs;
 		}
 
-		String djs = getDateJavaScript(locale);
+		String djs = getDateJavaScript(locale, firstDayOfWeek);
 		synchronized (_datejs) { //OK to race
 			//To minimize memory use, reuse the string if they are the same
 			//which is common
@@ -123,20 +108,23 @@ public class Wpds {
 				if (val.equals(djs))
 					djs = val; 
 			}
-			_datejs.put(locale, djs);
+			_datejs.put(djkey, djs);
 		}
 		return djs;
 	}
-	private final static String getDateJavaScript(Locale locale) {
+	private final static String getDateJavaScript(Locale locale, int firstDayOfWeek) {
 		final StringBuffer sb = new StringBuffer(512);
-
 		final Calendar cal = Calendar.getInstance(locale);
 		cal.clear();
 
-		final int firstDayOfWeek = cal.getFirstDayOfWeek();
+		if (firstDayOfWeek < 0)
+			firstDayOfWeek = cal.getFirstDayOfWeek();
 		sb.append("zk.DOW_1ST=")
 			.append(firstDayOfWeek - Calendar.SUNDAY)
 			.append(";\n");
+
+		//Note: no need to df.setTimeZone(TimeZones.getCurrent()) since
+		//it is used to generate locale-dependent labels
 
 		final boolean zhlang = locale.getLanguage().equals("zh");
 		SimpleDateFormat df = new SimpleDateFormat("E", locale);

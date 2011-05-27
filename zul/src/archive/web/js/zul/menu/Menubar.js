@@ -16,6 +16,28 @@ it will be useful, but WITHOUT ANY WARRANTY.
  */
 //zk.$package('zul.menu');
 
+(function () {
+	function _closeOnOut(menubar) {
+		//1) _noFloatUp: Bug 1852304: Safari/Chrome unable to popup with menuitem
+		//   because popup causes mouseout, and mouseout casues onfloatup
+		//2) _bOver: indicates whether it is over some part of menubar
+		//3) Test also Bug 3052208
+		if (!menubar._noFloatUp && !menubar._bOver && zul.menu._nOpen)
+			zWatch.fire('onFloatUp', menubar); //notify all
+	}
+/** @class zul.menu.Renderer
+ * The renderer used to render a menu.
+ * It is designed to be overriden
+ * @since 5.0.5
+ */
+zul.menu.Renderer = {
+	/** render the spinner's(timebox) button
+	* @param Array out an array of HTML fragments.
+	* @param zul.inp.ComboWidget wgt the combowidget
+	*/
+	renderSpinnerButton: function (out, wgt) {
+	}
+};
 /**
  * A container that usually contains menu elements.
  *
@@ -58,6 +80,12 @@ zul.menu.Menubar = zk.$extends(zul.Widget, {
 		 */
 		autodrop: null
 	},
+	
+	setWidth: function () {
+		this.$supers('setWidth', arguments);
+		this._checkScrolling();
+	},
+	
 	getZclass: function () {
 		return this._zclass == null ? "z-menubar" +
 				("vertical" == this.getOrient() ? "-ver" : "-hor") : this._zclass;
@@ -67,16 +95,16 @@ zul.menu.Menubar = zk.$extends(zul.Widget, {
 			var left = this.$n('left'),
 				right = this.$n('right');
 			if (left && right) {
-				this.domUnlisten_(left, 'onClick', '_doScroll');
-				this.domUnlisten_(left, 'onMouseover', '_onOver');
-				this.domUnlisten_(left, 'onMouseout', '_onOut');
-				this.domUnlisten_(right, 'onClick', '_doScroll');
-				this.domUnlisten_(right, 'onMouseover', '_onOver');
-				this.domUnlisten_(right, 'onMouseout', '_onOut');
+				this.domUnlisten_(left, 'onClick', '_doScroll')
+					.domUnlisten_(left, 'onMouseover', '_onOver')
+					.domUnlisten_(left, 'onMouseout', '_onOut')
+					.domUnlisten_(right, 'onClick', '_doScroll')
+					.domUnlisten_(right, 'onMouseover', '_onOver')
+					.domUnlisten_(right, 'onMouseout', '_onOut');
 			}
 			zWatch.unlisten({onSize: this, onShow: this});
 		}
-		
+
 		this._lastTarget = null;
 		this.$supers(zul.menu.Menubar, 'unbind_', arguments);
 	},
@@ -86,15 +114,16 @@ zul.menu.Menubar = zk.$extends(zul.Widget, {
 			var left = this.$n('left'),
 				right = this.$n('right');
 			if (left && right) {
-				this.domListen_(left, 'onClick', '_doScroll');
-				this.domListen_(left, 'onMouseover', '_onOver');
-				this.domListen_(left, 'onMouseout', '_onOut');
-				this.domListen_(right, 'onClick', '_doScroll');
-				this.domListen_(right, 'onMouseover', '_onOver');
-				this.domListen_(right, 'onMouseout', '_onOut');
+				this.domListen_(left, 'onClick', '_doScroll')
+					.domListen_(left, 'onMouseover', '_onOver')
+					.domListen_(left, 'onMouseout', '_onOut')
+					.domListen_(right, 'onClick', '_doScroll')
+					.domListen_(right, 'onMouseover', '_onOver')
+					.domListen_(right, 'onMouseout', '_onOut');
 			}
 			zWatch.listen({onSize: this, onShow: this});
 		}
+		this._syncChdWidth(); //Merge breeze
 	},
 	/** Returns whether the menubar scrolling is enabled in horizontal orient.
 	 * @return boolean
@@ -109,13 +138,16 @@ zul.menu.Menubar = zk.$extends(zul.Widget, {
 	onChildAdded_: function (child) {
 		this.$supers('onChildAdded_', arguments);
 		this._checkScrolling();
+		this._syncChdWidth();	//Merge breeze
 	},
 	onChildRemoved_: function (child) {
 		this.$supers('onChildRemoved_', arguments);
 		if (!this.childReplacing_)
 			this._checkScrolling();
+		this._syncChdWidth(); //Merge breeze
 	},
-	_checkScrolling: function () {	
+	
+	_checkScrolling: function () {
 		if (!this.checkScrollable()) return;
 		
 		var node = this.$n();
@@ -153,6 +185,11 @@ zul.menu.Menubar = zk.$extends(zul.Widget, {
 			}
 		}
 	},
+	/**
+	 * Sync each menu's width
+	 */
+	_syncChdWidth: function () {	
+	},
 	_fixScrollPos: function () {
 		var body = this.$n('body'),
 			childs = jq(this.$n('cave')).children();
@@ -185,7 +222,18 @@ zul.menu.Menubar = zk.$extends(zul.Widget, {
 		node.style.width = zk.ie6_ ? "0px" : "";
 		node.style.width = value;
 	},
+	doMouseOver_: function (evt) {
+		this._bOver = true;
+		this._noFloatUp = false;
+		this.$supers('doMouseOver_', arguments);
+	},
+	doMouseOut_: function (evt) {
+		this._bOver = false;
+		this._closeOnOut();
+		this.$supers('doMouseOut_', arguments);
+	},
 	_onOver: function (evt) {
+		this._bOver = true;
 		if (!this.checkScrollable()) return;
 		var evtNode = evt.domTarget,
 			node = this.$n(),
@@ -200,6 +248,7 @@ zul.menu.Menubar = zk.$extends(zul.Widget, {
 		}
 	},
 	_onOut: function (evt) {
+		this._bOver = false;
 		if (!this.checkScrollable()) return;
 		var evtNode = evt.domTarget,
 			node = this.$n(),
@@ -290,7 +339,7 @@ zul.menu.Menubar = zk.$extends(zul.Widget, {
 
 		child.bind(desktop);
 	},
-	removeChildHTML_: function (child, prevsib) {
+	removeChildHTML_: function (child) {
 		this.$supers('removeChildHTML_', arguments);
 		jq(child.uuid + '-chdextr', zk).remove();
 	},
@@ -308,5 +357,14 @@ zul.menu.Menubar = zk.$extends(zul.Widget, {
 		if (isVert)
 			out.push('</tr>');
 		if (!opts.out) return out.join('');
+	},
+
+	//Closes all menupopup when mouse is moved out
+	_closeOnOut: function () {
+		var self = this;
+		if (self._autodrop && !zul.Widget.getOpenTooltip()) //dirty fix: don't auto close if tooltip shown
+			setTimeout(function () {_closeOnOut(self);}, 200);
 	}
 });
+
+})();

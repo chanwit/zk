@@ -12,6 +12,52 @@ Copyright (C) 2009 Potix Corporation. All Rights Reserved.
 This program is distributed under LGPL Version 2.0 in the hope that
 it will be useful, but WITHOUT ANY WARRANTY.
 */
+(function () {
+	//test if a treexxx is closed or any parent treeitem is closed
+	function _closed(ti) {
+		for (; ti && !ti.$instanceof(zul.sel.Tree); ti = ti.parent)
+			if (ti.isOpen && !ti.isOpen())
+				return true;
+	}
+
+	function _rmSelItemsDown(items, wgt) {
+		if (wgt.isSelected())
+			items.$remove(wgt);
+
+		var w;
+		if (w = wgt.treechildren)
+			for (w = w.firstChild; w && items.length; w = w.nextSibling)
+				_rmSelItemsDown(items, w);
+	}
+	function _addSelItemsDown(items, wgt) {
+		if (wgt.isSelected())
+			items.push(wgt);
+
+		var w;
+		if (w = wgt.treechildren)
+			for (w = w.firstChild; w; w = w.nextSibling)
+				_addSelItemsDown(items, w);
+	}
+
+	function _sizeOnOpen(tree) {
+		var w, wd;
+		if ((w = tree.treecols) && w.nChildren > 1)
+			for (w = w.firstChild; w; w = w.nextSibling)
+				if (!(wd = w._width) || wd == "auto")
+					return tree.onSize();
+	}
+
+	function _showDOM(wgt, visible) {
+		var n = wgt.$n();
+		if (n)
+			n.style.display = visible ? "" : "none";
+		var chld;
+		if (chld = wgt.treechildren)
+			for (var w = chld.firstChild; w; w = w.nextSibling)
+				if (w._visible && w._open) // optimized, need to recurse only if open and visible
+					_showDOM(w, visible);
+	}
+	
 /**
  * A treeitem.
  *
@@ -36,28 +82,44 @@ zul.sel.Treeitem = zk.$extends(zul.sel.ItemWidget, {
     	 */
 		open: function (open, fromServer) {
 			var img = this.$n('open');
-			if (!img) return;
-			var cn = img.className;
+			if (!img || _closed(this.parent))
+				return;
+
+			var cn = img.className,
+				tree = this.getTree(),
+				ebodytbl = tree ? tree.ebodytbl: null,
+				oldwd = ebodytbl ? ebodytbl.clientWidth: 0; //ebodytbl shall not be null (just in case)
 			img.className = open ? cn.replace('-close', '-open') : cn.replace('-open', '-close');
+			if (!open) zWatch.fireDown('onHide', this);
 			this._showKids(open);
-			zWatch.fireDown(open ? 'onShow': 'onHide', this);
-			this.getMeshWidget().onSize();
-			if (!fromServer) {
-				var tree = this.getTree(),
-					indemand = tree.inPagingMold() || tree.isModel();
-				this.fire('onOpen', {open: open}, {toServer: indemand});
-			}
-			var tree = this.getTree();
+			if (open) zWatch.fireDown('onShow', this);
 			if (tree) {
+				_sizeOnOpen(tree);
+
+				if (!fromServer)
+					this.fire('onOpen', {open: open},
+						{toServer: tree.inPagingMold() || tree.isModel()});
+
 				tree._syncFocus(this);
 				tree.focus();
+
+				if (ebodytbl) {
+					tree._fixhdwcnt = tree._fixhdwcnt || 0;
+					if (!tree._fixhdwcnt++)
+						tree._fixhdoldwd = oldwd;
+					setTimeout(function () {
+						if (!--tree._fixhdwcnt && tree.$n() && tree._fixhdoldwd != ebodytbl.clientWidth)
+							tree._calcSize();
+					}, 250);
+				}
 			}
 		}
 	},
 	_showKids: function (open) {
-		if (this.treechildren)
-			for (var w = this.treechildren.firstChild; w; w = w.nextSibling) {
-				w.$n().style.display = open ? '' : 'none';
+		var tc = this.treechildren;
+		if (tc)
+			for (var w = tc.firstChild, vi = tc._isRealVisible(); w; w = w.nextSibling) {
+				w.$n().style.display = vi && w.isVisible() && open ? '' : 'none';
 				if (w.isOpen())
 					w._showKids(open);
 			}
@@ -70,9 +132,7 @@ zul.sel.Treeitem = zk.$extends(zul.sel.ItemWidget, {
 	 * @return Tree
 	 */
 	getMeshWidget: _zkf = function () {
-		for (var wgt = this.parent; wgt; wgt = wgt.parent)
-			if (wgt.$instanceof(zul.sel.Tree)) return wgt;
-		return null;		
+		return this.parent ? this.parent.getTree() : null;
 	},
 	/**
 	 * Returns the {@link Tree}.
@@ -144,7 +204,7 @@ zul.sel.Treeitem = zk.$extends(zul.sel.ItemWidget, {
 		if (!this.treerow)
 			this.appendChild(new zul.sel.Treerow());
 
-		var cell = this.treerow.getFirstChild();
+		var cell = this.treerow.firstChild;
 		if (!cell) {
 			cell = new zul.sel.Treecell();
 			this.treerow.appendChild(cell);
@@ -177,12 +237,36 @@ zul.sel.Treeitem = zk.$extends(zul.sel.ItemWidget, {
 		var p = this.parent && this.parent.parent ? this.parent.parent : null;
 		return p && p.$instanceof(zul.sel.Treeitem) ? p : null;
 	},
+	/*
+	isVisible: function () {
+		var p;
+		return this.$supers('isVisible', arguments) && (p = this.parent) && p.isVisible();
+	},
+	*/
+	_isRealVisible: function () {
+		var p;
+		return this.isVisible() && (p = this.parent) && p._isRealVisible();
+	},
 	setVisible: function (visible) {
-		if (this._visible != visible) {
+		if (this.isVisible() != visible) {
 			this.$supers('setVisible', arguments);
 			if (this.treerow) this.treerow.setVisible(visible);
+			// Bug: B50-3293724
+			_showDOM(this, this._isRealVisible());
 		}
 		return this;
+	},
+	doMouseOver_: function (evt) {
+		var ico = this.$n('open');
+		if (evt.domTarget == ico)
+			jq(this.$n()).addClass(this.getZclass() + '-ico-over');
+		this.$supers('doMouseOver_', arguments);
+	},
+	doMouseOut_: function (evt) {
+		var ico = this.$n('open');	
+		if (evt.domTarget == ico)
+			jq(this.$n()).removeClass(this.getZclass() + '-ico-over');
+		this.$supers('doMouseOut_', arguments);
 	},
 	
 	beforeParentChanged_: function(newParent) {
@@ -195,17 +279,20 @@ zul.sel.Treeitem = zk.$extends(zul.sel.ItemWidget, {
 			if (tree) 
 				tree._onTreeitemAdded(this);
 		}
+		this.$supers("beforeParentChanged_", arguments);
 	},
 	//@Override
 	insertBefore: function (child, sibling, ignoreDom) {
-		if (this.$super('insertBefore', child, sibling, ignoreDom || child.$instanceof(zul.sel.Treechildren))) {
+		if (this.$super('insertBefore', child, sibling,
+		ignoreDom || (!this.z_rod && child.$instanceof(zul.sel.Treechildren)))) {
 			this._fixOnAdd(child, ignoreDom);
 			return true;
 		}
 	},
 	//@Override
 	appendChild: function (child, ignoreDom) {
-		if (this.$super('appendChild', child, ignoreDom || child.$instanceof(zul.sel.Treechildren))) {
+		if (this.$super('appendChild', child,
+		ignoreDom || (!this.z_rod && child.$instanceof(zul.sel.Treechildren)))) {
 			if (!this.insertingBefore_)
 				this._fixOnAdd(child, ignoreDom);
 			return true;
@@ -220,56 +307,74 @@ zul.sel.Treeitem = zk.$extends(zul.sel.ItemWidget, {
 				this.rerender();
 		}
 	},
-	onChildReplaced_: function (oldc, newc) {
-		this.onChildRemoved_(oldc, true);
-		this._fixOnAdd(newc, true);
-	},
-	onChildRemoved_: function(child, _noSync) {
+	onChildRemoved_: function(child) {
 		this.$supers('onChildRemoved_', arguments);
 		if (child == this.treerow) 
 			this.treerow = null;
 		else if (child == this.treechildren) {
 			this.treechildren = null;
-			if (!_noSync) this._syncIcon(); // remove the icon
+			if (!this.childReplacing_) //NOT called by onChildReplaced_
+				this._syncIcon(); // remove the icon
 		}
+	},
+	onChildAdded_: function(child) {
+		this.$supers('onChildAdded_', arguments);
+		if (this.childReplacing_) //called by onChildReplaced_
+			this._fixOnAdd(child, true);
+		//else was handled by insertBefore/appendChild
 	},
 	removeHTML_: function (n) {
 		for (var cn, w = this.firstChild; w; w = w.nextSibling) {
 			cn = w.$n();
-			if (cn) {
+			if (cn)
 				w.removeHTML_(cn);
-				w.clearCache();
-			}
 		}
 		this.$supers('removeHTML_', arguments);
 	},
 	replaceWidget: function (newwgt) {
-		this._syncSelectedItem(newwgt);
+		zul.sel.Treeitem._syncSelItems(this, newwgt);
 		if (this.treechildren)
 			this.treechildren.detach();
 		this.$supers('replaceWidget', arguments);
 	},
-	_syncSelectedItem: function (newwgt) {
-		var tree = this.getTree();
-		if (tree && this.isSelected()) {
-			var items = tree._selItems;
-			if (items && items.$remove(this))
-				items.push(newwgt);
+	_removeChildHTML: function (n) {
+		for(var cn, w = this.firstChild; w; w = w.nextSibling) {
+			if (w != this.treerow && (cn = w.$n()))
+				w.removeHTML_(cn);
 		}
 	},
-	_removeChildHTML: function (n) {
-		for(var cn, w = this.firstChild; (w = w.nextSibling);) {
-			if ((cn = w.$n()))
-				w.removeHTML_(cn);
+	_renderChildHTML: function (childHTML) {
+		var w = this.previousSibling;
+		for (;w; w = this.previousSibling)
+			if (w.treerow) break;
+		
+		if (w) {
+			jq(w.treerow.$n()).after(childHTML);
+		} else if (w = this.nextSibling) {
+			for (;w; w = this.nextSibling)
+				if (w.treerow) break;
+				
+			if (w)
+				jq(w.treerow.$n()).before(childHTML);
+		} else if (w = this.getParentItem()) {
+			w._renderChildHTML(childHTML);
+		} else if ((w = this.getTree())) {
+			jq(w.$n('rows')).append(childHTML);
 		}
 	},
 	insertChildHTML_: function (child, before, desktop) {
 		if (before = before ? before.getFirstNode_(): null)
 			jq(before).before(child.redrawHTML_());
 		else
-			jq(this.getCaveNode()).after(child.redrawHTML_());
+			this._renderChildHTML(child.redrawHTML_());
 				//treechild is a DOM sibling (so use after)
 		child.bind(desktop);
+	},
+	getOldWidget_: function (n) {
+		var old = this.$supers('getOldWidget_', arguments);
+		if (old && old.$instanceof(zul.sel.Treerow))
+			return old.parent;
+		return old;
 	},
 	replaceHTML: function (n, desktop, skipper) {
 		this._removeChildHTML(n);
@@ -285,4 +390,20 @@ zul.sel.Treeitem = zk.$extends(zul.sel.ItemWidget, {
 					i._syncIcon();
 		}
 	}
+},{
+	//package utiltiy: sync selected items for replaceWidget
+	_syncSelItems: function (oldwgt, newwgt) {
+		var items;
+		if ((items = oldwgt.getTree()) && (items = items._selItems))
+			if (oldwgt.$instanceof(zul.sel.Treechildren)) {
+				for (var item = oldwgt.firstChild; item; item = item.nextSibling)
+					_rmSelItemsDown(items, item)
+				for (var item = newwgt.firstChild; item; item = item.nextSibling)
+					_addSelItemsDown(items, item);
+			} else { //Treeitem
+				_rmSelItemsDown(items, oldwgt)
+				_addSelItemsDown(items, newwgt);
+			}
+	}
 });
+})();

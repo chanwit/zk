@@ -26,7 +26,7 @@ zul.layout.LayoutRegion = zk.$extends(zul.Widget, {
 	$init: function () {
 		this.$supers('$init', arguments);
 		this._margins = [0, 0, 0, 0];
-		this._cmargins = [5, 5, 5, 5];
+		this._cmargins = [3, 3, 3, 3]; //center
 	},
 
 	$define: {
@@ -212,8 +212,9 @@ zul.layout.LayoutRegion = zk.$extends(zul.Widget, {
 						});
 					else {
 						jq(real)[open ? 'show' : 'hide']();
+						if (!open) zWatch.fireDown('onHide', this);
 						jq(colled)[!open ? 'show' : 'hide']();
-						zWatch.fireDown(open ? 'onShow' : 'onHide', this);
+						if (open) zWatch.fireDown('onShow', this);
 					}
 				}
 			} else {
@@ -232,6 +233,16 @@ zul.layout.LayoutRegion = zk.$extends(zul.Widget, {
 			if (nonAnima) this.parent.resize();
 			if (!fromServer) this.fire('onOpen', {open:open});
 		}
+	},
+	//bug #3014664
+	setVflex: function (v) { //vflex ignored for LayoutRegion
+		if (v != 'min') v = false;
+		this.$super(zul.layout.LayoutRegion, 'setVflex', v);
+	},
+	//bug #3014664
+	setHflex: function (v) { //hflex ignored for LayoutRigion
+		if (v != 'min') v = false;
+		this.$super(zul.layout.LayoutRegion, 'setHflex', v);
 	},
 	/**
 	 * Returns the collapsed margins, which is a list of numbers separated by comma.
@@ -419,6 +430,7 @@ zul.layout.LayoutRegion = zk.$extends(zul.Widget, {
 					snap: LR._snap,
 					zIndex: 12000,
 					overlay: true,
+					initSensitivity: 0,
 					ignoredrag: LR._ignoredrag,
 					endeffect: LR._endeffect
 				});
@@ -815,8 +827,8 @@ zul.layout.LayoutRegion = zk.$extends(zul.Widget, {
 				dg._rootoffs = {
 					maxs: maxs,
 					mins: mins,
-					top: ofs[1],
-					left : ofs[0],
+					top: ofs[1] + tb,
+					left : ofs[0] + lr,
 					right : real.offsetWidth,
 					bottom: real.offsetHeight
 				};

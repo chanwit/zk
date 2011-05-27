@@ -37,13 +37,13 @@ zul.sel.Tree = zk.$extends(zul.sel.SelectWidget, {
 		return this._zclass == null ? "z-tree" : this._zclass;
 	},
 	insertBefore: function (child, sibling, ignoreDom) {
-		if (this.$super('insertBefore', child, sibling, true)) {
+		if (this.$super('insertBefore', child, sibling, !this.z_rod)) {
 			this._fixOnAdd(child, ignoreDom, ignoreDom);
 			return true;
 		}
 	},
 	appendChild: function (child, ignoreDom) {
-		if (this.$super('appendChild', child, true)) {
+		if (this.$super('appendChild', child, !this.z_rod)) {
 			if (!this.insertingBefore_)
 				this._fixOnAdd(child, ignoreDom, ignoreDom);
 			return true;
@@ -52,24 +52,21 @@ zul.sel.Tree = zk.$extends(zul.sel.SelectWidget, {
 	_fixOnAdd: function (child, ignoreDom, _noSync) {
 		if (child.$instanceof(zul.sel.Treecols))
 			this.treecols = child;
-		else if (child.$instanceof(zul.sel.Treefoot))
-			this.treefoot = child;
 		else if (child.$instanceof(zul.sel.Treechildren)) {
 			this.treechildren = child;
 			this._fixSelectedSet();
 		} else if (child.$instanceof(zul.mesh.Paging))
 			this.paging = child;
+		else if (child.$instanceof(zul.sel.Treefoot))
+			this.treefoot = child;
 		if (!ignoreDom)
 			this.rerender();
 		if (!_noSync)
 			this._syncSize();
 	},
-	onChildReplaced_: function (oldc, newc) {
-		this.onChildRemoved_(oldc, true);
-		this._fixOnAdd(newc, true);
-	},
-	onChildRemoved_: function (child, _noSync) {
+	onChildRemoved_: function (child) {
 		this.$supers('onChildRemoved_', arguments);
+
 		if (child == this.treecols)
 			this.treecols = null;
 		else if (child == this.treefoot)
@@ -81,15 +78,21 @@ zul.sel.Tree = zk.$extends(zul.sel.SelectWidget, {
 		} else if (child == this.paging)
 			this.paging = null;
 
-		if (!_noSync)
+		if (!this.childReplacing_) //NOT called by onChildReplaced_
 			this._syncSize();
+	},
+	onChildAdded_: function(child) {
+		this.$supers('onChildAdded_', arguments);
+		if (this.childReplacing_) //called by onChildReplaced_
+			this._fixOnAdd(child, true);
+		//else handled by insertBefore/appendChild
 	},
 	_onTreeitemAdded: function (item) {
 		this._fixNewChild(item);
 		this._onTreechildrenAdded(item.treechildren);
 	},
 	_onTreeitemRemoved: function (item) {
-		var fixSel;
+		var fixSel, upperItem;
 		if (item.isSelected()) {
 			this._selItems.$remove(item);
 			fixSel = this._sel == item;
@@ -99,6 +102,8 @@ zul.sel.Tree = zk.$extends(zul.sel.SelectWidget, {
 		}
 		this._onTreechildrenRemoved(item.treechildren);
 		if (fixSel) this._fixSelected();
+		if (upperItem = item.previousSibling || item.getParentItem()) this._syncFocus(upperItem);
+		else jq(this.$n('a')).offset({top: 0, left: 0});
 	},
 	_onTreechildrenAdded: function (tchs) {
 		if (!tchs || tchs.parent == this)
@@ -190,8 +195,8 @@ zul.sel.Tree = zk.$extends(zul.sel.SelectWidget, {
 	 * @return zul.sel.TreeItemIter
 	 * @disable(zkgwt)
 	 */
-	itemIterator: _zkf = function () {
-		return new zul.sel.TreeItemIter(this);
+	itemIterator: _zkf = function (opts) {
+		return new zul.sel.TreeItemIter(this, opts);
 	},
 	/**
 	 * Returns the tree item iterator.
@@ -208,8 +213,8 @@ zul.sel.Tree = zk.$extends(zul.sel.SelectWidget, {
 	 * is no good.
 	 * @return Array
 	 */
-	getItems: function () {
-		return this.treechildren ? this.treechildren.getItems(): [];
+	getItems: function (opts) {
+		return this.treechildren ? this.treechildren.getItems(null, opts): [];
 	},
 	/** Returns the number of child {@link Treeitem}.
 	 * The same as {@link #getItems}.size().
@@ -232,13 +237,14 @@ zul.sel.Tree = zk.$extends(zul.sel.SelectWidget, {
 
 	/** Returns whether to ignore the selection.
 	 * It is called when selecting an item ({@link ItemWidget#doSelect_}).
-	 * <p>Default: ignore the selection if it is clicked on the open icon
+	 * <p>Default: ignore the selection if it is clicked on the open icon or {@link #rightSelect} is true and event is onRightClick.
 	 * @param zk.Event evt the event
+	 * @param ItemWidget row the row about to be selected
 	 * @return boolean whether to ignore the selection
 	 */
-	shallIgnoreSelect_: function (evt) {
+	shallIgnoreSelect_: function (evt/*, row*/) {
 		var n = evt.domTarget;
-		return n && n.id && n.id.endsWith('-open');
+		return n && n.id && n.id.endsWith('-open') || (evt.name == 'onRightClick' && !this.rightSelect);
 	}
 });
 /**
@@ -248,13 +254,14 @@ zul.sel.TreeItemIter = zk.$extends(zk.Object, {
 	/** Constructor
 	 * @param Tree tree the widget that the iterator belongs to
 	 */
-	$init: function (tree) {
+	$init: function (tree, opts) {
 		this.tree = tree;
+		this.opts = opts;
 	},
 	_init: function () {
 		if (!this._isInit) {
 			this._isInit = true;
-			this.items = this.tree.getItems();
+			this.items = this.tree.getItems(this.opts);
 			this.length = this.items.length;
 			this.cur = 0;
 		}

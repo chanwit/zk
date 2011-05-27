@@ -31,7 +31,13 @@ zul.inp.Errorbox = zk.$extends(zul.wgt.Popup, {
 		this.parent.__ebox = this;
 		this.msg = msg;
 		jq(document.body).append(this);
-		this.open(owner, null, "end_before", {overflow:true});
+
+		// Fixed IE6/7 issue in B50-2941554.zul
+		var self = this;
+		setTimeout(function() {
+			if (self.parent) //Bug #3067998: if 
+				self.open(owner, null, "end_before", {dodgeRef:true});
+		}, 0);
 		zWatch.listen({onHide: [this.parent, this.onParentHide]});
 	},
 	/** 
@@ -111,9 +117,10 @@ zul.inp.Errorbox = zk.$extends(zul.wgt.Popup, {
 	doClick_: function (evt) {
 		var p = evt.domTarget;
 		if (p == this.$n('c')) {
-			if ((p = this.parent) && p.clearErrorMessage)
+			if ((p = this.parent) && p.clearErrorMessage) {
 				p.clearErrorMessage(true, true);
-			else
+				p.focus(0); // Bug #3159848
+			} else
 				zAu.wrongValue_(p, false);
 		} else {
 			this.$supers('doClick_', arguments);
@@ -145,7 +152,8 @@ zul.inp.Errorbox = zk.$extends(zul.wgt.Popup, {
 
 		var top1 = this, top2 = wgt;
 		while ((top1 = top1.parent) && !top1.isFloating_())
-			;
+			if (top1 == wgt) //wgt is parent
+				return;
 		for (; top2 && !top2.isFloating_(); top2 = top2.parent)
 			;
 		if (top1 == top2) { //uncover if sibling

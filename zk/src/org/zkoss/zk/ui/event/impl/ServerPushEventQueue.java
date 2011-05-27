@@ -29,6 +29,9 @@ import org.zkoss.zk.ui.event.Events;
 import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.EventQueue;
+import org.zkoss.zk.ui.util.DesktopCleanup;
+import org.zkoss.zk.au.AuService;
+import org.zkoss.zk.au.AuRequest;
 
 /**
  * The default implementation of the server-push based event queue
@@ -37,10 +40,12 @@ import org.zkoss.zk.ui.event.EventQueue;
  * @author tomyeh
  * @since 5.0.0
  */
-public class ServerPushEventQueue implements EventQueue {
+public class ServerPushEventQueue implements EventQueue, java.io.Serializable {
 	private static final Log log = Log.lookup(ServerPushEventQueue.class);
-	/** A map of (Desktop, DesktopThread). */
-	private final Map _dts = new HashMap();
+
+	/** Map(desktop, DesktopInfo). */
+	private final Map _dtInfos = new HashMap();
+	private boolean _closed;
 
 	/** Publishes an event.
 	 * Unlike {@link DesktopEventQueue}, an event can be published
@@ -50,9 +55,9 @@ public class ServerPushEventQueue implements EventQueue {
 		if (event == null)
 			throw new IllegalArgumentException();
 
-		synchronized (_dts) {
-			for (Iterator it = _dts.values().iterator(); it.hasNext();)
-				((DesktopThread)it.next()).publish(event);
+		synchronized (_dtInfos) {
+			for (Iterator it = _dtInfos.values().iterator(); it.hasNext();)
+				((DesktopInfo)it.next()).publish(event);
 		}
 	}
 	public void subscribe(EventListener listener) {
@@ -72,24 +77,14 @@ public class ServerPushEventQueue implements EventQueue {
 			throw new IllegalStateException("execution required");
 
 		final Desktop desktop = exec.getDesktop();
-		synchronized (_dts) {
-			boolean startRequired = false;
-			DesktopThread dtthd = (DesktopThread)_dts.get(desktop);
-			if (dtthd == null) {
-				_dts.put(desktop, dtthd = new DesktopThread(desktop));
-				startRequired = true;
-			}
-
-			dtthd.subscribe(listener, callback, async);
-
-			if (startRequired) {
-				if (!desktop.isServerPushEnabled()) {
-					dtthd.serverPushEnabled = true;
-					desktop.enableServerPush(true);
-				}
-				dtthd.start();
-			}
+		DesktopInfo di;
+		synchronized (_dtInfos) {
+			di = (DesktopInfo)_dtInfos.get(desktop);
+			if (di == null)
+				_dtInfos.put(desktop,
+					di = new DesktopInfo(desktop, new EQService(), new EQCleanup()));
 		}
+		di.subscribe(listener, callback, async);
 	}
 	public boolean isSubscribed(EventListener listener) {
 		if (listener == null)
@@ -100,10 +95,11 @@ public class ServerPushEventQueue implements EventQueue {
 			throw new IllegalStateException("execution required");
 
 		final Desktop desktop = exec.getDesktop();
-		synchronized (_dts) {
-			DesktopThread dtthd = (DesktopThread)_dts.get(desktop);
-			return dtthd != null && dtthd.isSubscribed(listener);
+		final DesktopInfo di;
+		synchronized (_dtInfos) {
+			di = (DesktopInfo)_dtInfos.get(desktop);
 		}
+		return di != null && di.isSubscribed(listener);
 	}
 	public boolean unsubscribe(EventListener listener) {
 		if (listener == null)
@@ -114,81 +110,58 @@ public class ServerPushEventQueue implements EventQueue {
 			throw new IllegalStateException("execution required");
 
 		final Desktop desktop = exec.getDesktop();
-		synchronized (_dts) {
-			final DesktopThread dtthd = (DesktopThread)_dts.get(desktop);
-			if (dtthd != null && dtthd.unsubscribe(listener)) {
-				if (dtthd.isIdle()) {
-					dtthd.cease();
-					_dts.remove(desktop);
-
-					if (dtthd.serverPushEnabled)
-						desktop.enableServerPush(false);
+		synchronized (_dtInfos) {
+			final DesktopInfo di = (DesktopInfo)_dtInfos.get(desktop);
+			if (di != null && di.unsubscribe(listener)) {
+				if (di.isIdle()) {
+					_dtInfos.remove(desktop);
+					di.close();
 				}
 				return true;
 			}
 		}
 		return false;
 	}
-	/** Called by DesktopThread when it is dying. */
-	private void cleanup(Desktop desktop) {
-		synchronized (_dts) {
-			final DesktopThread dtthd = (DesktopThread)_dts.remove(desktop);
-			if (dtthd != null && dtthd.serverPushEnabled)
-				desktop.enableServerPush(false);
-		}	
-	}
 	public void close() {
-		synchronized (_dts) {
-			for (Iterator it = _dts.entrySet().iterator(); it.hasNext();) {
-				final Map.Entry me = (Map.Entry)it.next();
-				final Desktop desktop = (Desktop)me.getKey();
-				final DesktopThread dtthd = (DesktopThread)me.getValue();
-				dtthd.cease();
-
-				if (dtthd.serverPushEnabled) {
-					try {
-						desktop.enableServerPush(false);
-					} catch (Throwable ex) {
-						log.warningBriefly("Ingored: unable to stop server push", ex);
-					}
-				}
-			}
+		_closed = true;
+		final Execution exec = Executions.getCurrent();
+		if (exec != null)
+			close(exec.getDesktop());
+			//queues of other desktops will be closed in EQService
+	}
+	private void close(Desktop desktop) {
+		final DesktopInfo di;
+		synchronized (_dtInfos) {
+			di = (DesktopInfo)_dtInfos.remove(desktop);
 		}
-		_dts.clear();
+		if (di != null)
+			di.close();
+	}
+	public boolean isClose() {
+		return _closed;
 	}
 
-	private class DesktopThread extends Thread {
+	private static class DesktopInfo implements java.io.Serializable {
 		private final Desktop _desktop;
-		private final DesktopEventQueue _que = new DesktopEventQueue();
-		private final List _evts = new LinkedList();
-		private final Object _mutex = new Object();
-		private transient boolean _ceased;
+		private final DesktopEventQueue _que;
+		private final EQService _service;
+		private final EQCleanup _cleanup;
 		/** Indicates whether the server push is enabled by the event queue. */
-		private boolean serverPushEnabled;
+		private boolean _spEnabled;
 
-		private DesktopThread(Desktop desktop) {
-			Threads.setDaemon(this, true);
+		private DesktopInfo(Desktop desktop, EQService service, EQCleanup cleanup) {
 			_desktop = desktop;
+			_que = new DesktopEventQueue();
+			_spEnabled = !desktop.isServerPushEnabled();
+			if (_spEnabled)
+				desktop.enableServerPush(true);
+			desktop.addListener(_service = service);
+			desktop.addListener(_cleanup = cleanup);
+				//OK to call addListener since it is the current desktop
 		}
+
 		private void publish(Event event) {
-			if (!_ceased) {
-				final Execution exec = Executions.getCurrent();
-				if (exec != null && exec.getDesktop() == _desktop) {
-					//same desktop no need of working thread
-					List evts = new LinkedList();
-					synchronized (_mutex) {
-						evts.addAll(_evts);
-						_evts.clear(); 
-					}
-					evts.add(event);
-					process(evts);
-				} else {
-					synchronized (_mutex) {
-						_evts.add(event);
-						_mutex.notify();
-					}
-				}
-			}
+			Executions.schedule(_desktop, new ScheduleListener(_que), event);
 		}
 		private void subscribe(EventListener listener, EventListener callback, boolean async) {
 			if (callback != null)
@@ -202,78 +175,54 @@ public class ServerPushEventQueue implements EventQueue {
 		private boolean unsubscribe(EventListener listener) {
 			return _que.unsubscribe(listener);
 		}
-		private void cease() {
-			synchronized (_mutex) {
-				_evts.clear();
-				_ceased = true;
-				_mutex.notify();
-			}
-		}
 		private boolean isIdle() {
 			return _que.isIdle();
 		}
+		private void close() {
+			_que.close();
+			_desktop.removeListener(_cleanup);
+			_desktop.removeListener(_service);
+			if (_spEnabled) {
+				final Execution exec = Executions.getCurrent();
+				if (exec != null && exec.getDesktop() == _desktop) {
+					_spEnabled = false;
 
-		private void process(List evts) {
-			Throwable ex = null;
-			do {
-				for (Iterator it = evts.iterator(); !_ceased && it.hasNext();) {
-					final Event evt = (Event)it.next();
-					try {
-						_que.publish(evt);
-					} catch (Throwable t) {
-						if (ex == null) ex = t;
-					}
-				}
-
-				//To process as many as events, check _evts again
-				evts.clear();
-				synchronized (_mutex) {
-					evts.addAll(_evts);
-					_evts.clear();
-				}
-			} while (!_ceased && !evts.isEmpty());
-
-			if (!_ceased && ex != null)
-				log.realCauseBriefly("Unable to process events", ex);
-		}
-		public void run() {
-			l_out:
-			while (!_ceased) {
-				try {
-					List evts = new LinkedList();
-					synchronized (_mutex) {
-						while (_evts.isEmpty()) {
-							_mutex.wait(30*60*1000); //30 mins
-							if (_ceased)
-								break l_out;
+					if (_desktop.isAlive())
+						try {
+							_desktop.enableServerPush(false);
+						} catch (Throwable ex) {
+							log.warningBriefly("Ingored: unable to stop server push", ex);
 						}
-						evts.addAll(_evts);
-						_evts.clear(); 
-					}
-
-					Executions.activate(_desktop);
-					try {
-						process(evts);
-					} finally { //just in case
-						Executions.deactivate(_desktop);
-					}
-				} catch (DesktopUnavailableException ex) {
-					break;
-				} catch (Throwable ex) {
-					if (!_ceased) log.realCauseBriefly(ex);
 				}
+				//if not current desktop, it is handled by EQService
 			}
-			try {
-				_evts.clear();
-				_que.close();
-			} catch (Throwable ex) {
-				log.realCauseBriefly("Failed to clean up", ex);
+		}
+	}
+	private static class ScheduleListener implements EventListener, java.io.Serializable {
+		private final DesktopEventQueue _que;
+		private ScheduleListener(DesktopEventQueue queue) {
+			_que = queue;
+		}
+		public void onEvent(Event event) {
+			if (!_que.isClose()) //just in case
+				_que.publish(event);
+		}
+	}
+	private class EQService implements AuService, java.io.Serializable {
+		public boolean service(AuRequest request, boolean everError) {
+			if (_closed)
+				close(request.getDesktop());
+			return false;
+		}
+	}
+	private class EQCleanup implements DesktopCleanup, java.io.Serializable {
+		public void cleanup(Desktop desktop) throws Exception {
+			final DesktopInfo di;
+			synchronized (_dtInfos) {
+				di = (DesktopInfo)_dtInfos.remove(desktop);
 			}
-			try {
-				cleanup(_desktop);
-			} catch (Throwable ex) {
-				log.realCauseBriefly("Failed to clean up", ex);
-			}
+			if (di != null)
+				di.close();
 		}
 	}
 }

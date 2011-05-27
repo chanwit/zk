@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -336,6 +337,23 @@ public class Binding implements java.io.Serializable {
 		myLoadAttribute(comp, bean);
 	}
 
+	/** Returns the associated bean of this binding; e.g., for a binding to the bean "a.b.c", this will return the bean associated to "a.b" 
+	 * (and c is the property name).
+	 * <p>Note if the expression is associated to a single variable; e.g. "a" only, this method returns null. 
+	 * @param comp
+	 * @return the associated bean of this binding.
+	 * @since 5.0.7
+	 */
+	public Object getBean(Component comp) {
+		if (_expression != null) {
+			int j = _expression.lastIndexOf('.');
+			if (j >= 0) {
+				return _binder.getBeanWithExpression(comp, _expression.substring(0, j));
+			}
+		}
+		return null;
+	}
+	
 	/** load bean value into the attribute of the specified component.
 	 * @param comp the component.
 	 * @param bean the bean value.
@@ -380,9 +398,9 @@ public class Binding implements java.io.Serializable {
 					value = Classes.coerce(m.getReturnType(), bean);
 				} catch (NoSuchMethodException ex) { //ignore it
 				}
-				if (!Objects.equals(oldv, value)) { //Bug 2874098 (avoid LoadOnSave to close errorbox in setRawValue())
-					Fields.set(comp, "rawValue", value, _converter == null);
-				}
+
+				//See both Bug 3000305 and 2874098
+				Fields.set(comp, "rawValue", value, _converter == null);
 			} else {
 				Fields.set(comp, _attr, bean, _converter == null);
 			}
@@ -697,6 +715,9 @@ public class Binding implements java.io.Serializable {
 			final Component target = event.getTarget();
 			final String triggerEventName = event.getName();
 			final List tmplist = new ArrayList(_dataTargets.size());
+			final List values = new LinkedList();
+			final List refs = new LinkedList();
+			final List bindings = new LinkedList();
 			
 			//fire onSave for each binding
 			for(final Iterator it = _dataTargets.iterator();it.hasNext();) {
@@ -713,6 +734,9 @@ public class Binding implements java.io.Serializable {
 					final Object[] vals = binding.getAttributeValues(dataTarget);
 					if (vals != null) {
 						tmplist.add(new BindingInfo(binding, dataTarget, vals));
+						values.add(vals[0]);
+						refs.add(dataTarget);
+						bindings.add(binding);
 						Events.sendEvent(new BindingSaveEvent("onBindingSave", dataTarget, target, binding, vals[0]));
 					}
 				} else {
@@ -724,6 +748,9 @@ public class Binding implements java.io.Serializable {
 						final Object[] vals = binding.getAttributeValues(dataTarget1);
 						if (vals != null) {
 							tmplist.add(new BindingInfo(binding, dataTarget1, vals));
+							values.add(vals[0]);
+							refs.add(dataTarget1);
+							bindings.add(binding);
 							Events.sendEvent(new BindingSaveEvent("onBindingSave", dataTarget1, target, binding, vals[0]));
 						}
 					}
@@ -732,16 +759,20 @@ public class Binding implements java.io.Serializable {
 			}
 			
 			//fire onValidate for target component
-			Events.sendEvent(new Event("onBindingValidate", target));
+			Events.sendEvent(new BindingValidateEvent("onBindingValidate", target, refs, bindings, values));
 			
 			//saveAttribute for each binding
 			Component loadOnSaveProxy = null;
 			Component dataTarget = null;
+			DataBinder binder = null;
 			final List loadOnSaveInfos = new ArrayList(tmplist.size());
 			for(final Iterator it = tmplist.iterator();it.hasNext();) {
 				final BindingInfo bi = (BindingInfo) it.next();
 				dataTarget = bi.getComponent();
 				final Binding binding = bi.getBinding();
+				if (binder == null) {
+					binder = binding.getBinder();
+				}
 				final Object[] vals = bi.getAttributeValues();
 				binding.saveAttributeValue(dataTarget, vals, loadOnSaveInfos, triggerEventName);
 				if (loadOnSaveProxy == null && dataTarget.isListenerAvailable("onLoadOnSave", true)) {
@@ -756,7 +787,8 @@ public class Binding implements java.io.Serializable {
 			//	}
 			
 			// (use first working dataTarget as proxy)
-			if (loadOnSaveProxy != null) {
+			//feature#2990932, allow disable load-on-save mechanism
+			if (loadOnSaveProxy != null && binder.isLoadOnSave()) {
 				Events.postEvent(new Event("onLoadOnSave", loadOnSaveProxy, loadOnSaveInfos));
 			}
 			

@@ -14,6 +14,22 @@ Copyright (C) 2008 Potix Corporation. All Rights Reserved.
 {{IS_RIGHT
 }}IS_RIGHT
 */
+
+(function () {
+	function _syncSelectedPanels(panels) {
+		//Note: _selTab is in tabbox, while _selPnl is in tabpanels
+		var box;
+		if (panels.desktop && (box = panels.getTabbox())) {
+			var oldSel = panels._selPnl,
+				sel = box._selTab;
+			if (oldSel != (sel && (sel = sel.getLinkedPanel()))) {
+				if (oldSel && oldSel.desktop) oldSel._sel(false, true);
+				if (sel) sel._sel(true, true);
+				panels._selPnl = sel;
+			}
+		}
+	}
+
 /**
  * A collection of tab panels.
  *
@@ -70,6 +86,16 @@ zul.tab.Tabpanels = zk.$extends(zul.Widget, {
 			zWatch.fireDown('onSize', this);
 		}
 	},
+	//bug #3014664
+	setVflex: function (v) { //vflex ignored for Tabpanels
+		if (v != 'min') v = false;
+		this.$super(zul.tab.Tabpanels, 'setVflex', v);
+	},
+	//bug #3014664
+	setHflex: function (v) { //hflex ignored for Tabpanels
+		if (v != 'min') v = false;
+		this.$super(zul.tab.Tabpanels, 'setHflex', v);
+	},
 	bind_: function () {
 		this.$supers(zul.tab.Tabpanels, 'bind_', arguments);
 		if (this.getTabbox().isVertical()) {
@@ -103,5 +129,14 @@ zul.tab.Tabpanels = zk.$extends(zul.Widget, {
 	onShow: _zkf,
 	beforeSize: function () {
 		this.$n().style.width = this.__width || '';
+	},
+	onChildRemoved_: function (child) {
+		this.$supers("onChildRemoved_", arguments);
+		_syncSelectedPanels(this);
+	},
+	onChildAdded_: function (child) {
+		this.$supers("onChildAdded_", arguments);
+		_syncSelectedPanels(this);
 	}
 });
+})();

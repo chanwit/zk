@@ -12,6 +12,11 @@ Copyright (C) 2008 Potix Corporation. All Rights Reserved.
 This program is distributed under LGPL Version 3.0 in the hope that
 it will be useful, but WITHOUT ANY WARRANTY.
 */
+(function () {
+	function _getMenu(wgt) {
+		var p = wgt.parent;
+		return p.$instanceof(zul.menu.Menu) ? p: null;
+	}
 /**
  * A container used to display menus. It should be placed inside a
  * {@link Menu}.
@@ -74,11 +79,14 @@ zul.menu.Menupopup = zk.$extends(zul.wgt.Popup, {
 		if (this._shadow) this._shadow.hide();
 	},
 	close: function () {
+		if (this.isOpen())
+			zul.menu._nOpen--;
+
 		this.$supers('close', arguments);
 		jq(this.$n()).hide(); // force to hide the element
 		this._hideShadow();
-		var menu = this.parent;
-		if (menu.$instanceof(zul.menu.Menu) && menu.isTopmost())
+		var menu;
+		if ((menu = _getMenu(this)) && menu.isTopmost())
 			jq(menu.$n('a')).removeClass(menu.getZclass() + "-body-seld");
 
 		var item = this._currentChild();
@@ -87,18 +95,28 @@ zul.menu.Menupopup = zk.$extends(zul.wgt.Popup, {
 		this.$class._rmActive(this);
 	},
 	open: function (ref, offset, position, opts) {
-		if (this.parent.$instanceof(zul.menu.Menu)) {
+		if (!this.isOpen())
+			zul.menu._nOpen++;
+		var menu;
+		if (menu = _getMenu(this)) {
 			if (!offset) {
-				ref = this.parent.$n('a');
+				ref = menu.$n('a');
 				if (!position)
-					if (this.parent.isTopmost())
-						position = this.parent.parent.getOrient() == 'vertical'
+					if (menu.isTopmost())
+						position = menu.parent.getOrient() == 'vertical'
 							? 'end_before' : 'after_start';
 					else position = 'end_before';
 			}
 		}
 		this.$super('open', ref, offset, position, opts || {sendOnOpen: true, disableMask: true});
 			//open will fire onShow which invoke this.zsync()
+
+		if (menu) {
+			var n;
+			if (n = this.$n())
+				n.style.top = jq.px0(zk.parseInt(n.style.top) + 
+					zk.parseInt(jq(this.getMenubar()).css('paddingBottom')));
+		}
 	},
 	shallStackup_: function () {
 		return false;
@@ -108,17 +126,17 @@ zul.menu.Menupopup = zk.$extends(zul.wgt.Popup, {
 		this.zsync();
 	},
 	onFloatUp: function(ctl) {
-		var wgt = ctl.origin;
 		if (!this.isVisible())
 			return;
-		var org = wgt;
+
+		var org = ctl.origin;
 		if (this.parent.menupopup == this && !this.parent.isTopmost() && !this.parent.$class._isActive(this.parent)) {
 			this.close({sendOnOpen:true});
 			return;
 		}
 
-		// check if the wgt belongs to the popup
-		for (var floatFound; wgt; wgt = wgt.parent) {
+		// check if org belongs to the popup
+		for (var floatFound, wgt = org; wgt; wgt = wgt.parent) {
 			if (wgt == this || (wgt.menupopup == this && !this._shallClose)) {
 				if (!floatFound)
 					this.setTopmost();
@@ -127,24 +145,20 @@ zul.menu.Menupopup = zk.$extends(zul.wgt.Popup, {
 			floatFound = floatFound || wgt.isFloating_();
 		}
 
-		// check if the popup is one of the wgt's children
+		// check if the popup is one of org's children
 		if (org && org.$instanceof(zul.menu.Menu)) {
-			for (var floatFound, wgt = this.parent; wgt; wgt = wgt.parent) {
+			for (var floatFound, wgt = this; wgt = wgt.parent;) {
 				if (wgt == org) {
-					if (this._shallClose) break;
+					if (this._shallClose)
+						break; //close it
 					if (!floatFound)
 						this.setTopmost();
 					return;
 				}
 				floatFound = floatFound || wgt.isFloating_();
 			}
-			
-			// check if the popup is an active menu
-			if (!this._shallClose && this.parent.$instanceof(zul.menu.Menu)) {
-				var menubar = this.parent.getMenubar();
-				if (menubar && menubar._lastTarget == this.parent) 
-					return;
-			}
+
+			//No need to check _lastTarget since we have to close any other open menupopup
 		}
 		this.close({sendOnOpen:true});
 	},
@@ -160,8 +174,10 @@ zul.menu.Menupopup = zk.$extends(zul.wgt.Popup, {
 		this.zsync();
 		var anc = this.$n('a');
 		if (anc) {
-			if(zk(anc).isRealVisible())
+			if(zk(anc).isRealVisible()) {
 				anc.focus();
+				zk.currentFocus = this; // IE's Bug in B36-2807475.zul
+			}
 		}
 	},
 	onHide: function () {
@@ -204,6 +220,7 @@ zul.menu.Menupopup = zk.$extends(zul.wgt.Popup, {
 	},
 	doKeyDown_: function (evt) {
 		var w = this._currentChild(),
+			menu,
 			keyCode = evt.keyCode;
 		switch (keyCode) {
 		case 38: //UP
@@ -215,8 +232,8 @@ zul.menu.Menupopup = zk.$extends(zul.wgt.Popup, {
 		case 37: //LEFT
 			this.close();
 
-			if (this.parent.$instanceof(zul.menu.Menu) && !this.parent.isTopmost()) {
-				var pp = this.parent.parent;
+			if (((menu = _getMenu(this))) && !menu.isTopmost()) {
+				var pp = menu.parent;
 				if (pp) {
 					var anc = pp.$n('a');
 					if (anc) anc.focus();
@@ -239,20 +256,28 @@ zul.menu.Menupopup = zk.$extends(zul.wgt.Popup, {
 		evt.stop();
 		this.$supers('doKeyDown_', arguments);
 	},
+	/** Returns the {@link Menubar} that contains this menuitem, or null if not available.
+	 * @return zul.menu.Menubar
+	 * @since 5.0.5
+	 */
+	getMenubar: zul.menu.Menu.prototype.getMenubar,
 	doMouseOver_: function (evt) {
+		var menubar = this.getMenubar();
+		if (menubar) menubar._bOver = true;
 		this._shallClose = false;
 		this.$supers('doMouseOver_', arguments);
 	},
 	doMouseOut_: function (evt) {
-		this._shallClose = true;
+		var menubar = this.getMenubar();
+		if (menubar) menubar._bOver = false;
 		this.$supers('doMouseOut_', arguments);
 	}
 }, {
 	_rmActive: function (wgt) {
 		if (wgt.parent.$instanceof(zul.menu.Menu)) {
 			wgt.parent.$class._rmActive(wgt.parent);
-			if (!wgt.parent.isTopmost())
-				this._rmActive(wgt.parent.parent);
 		}
 	}
 });
+zul.menu._nOpen = 0;
+})();
