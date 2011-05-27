@@ -554,11 +554,9 @@ implements Component, ComponentCtrl, java.io.Serializable {
 	public void setId(String id) {
 		if (id == null) id = "";
 		if (!id.equals(_id)) {
-			boolean rawId = this instanceof RawId;
-			String newUuid;
+			final boolean rawId = this instanceof RawId;
+			String newUuid = null;
 			if (rawId) newUuid = id;
-			else if ((newUuid = id2Uuid(id)) != null)
-				rawId = true;
 
 			if (id.length() > 0) {
 				if (Names.isReserved(id))
@@ -939,23 +937,6 @@ implements Component, ComponentCtrl, java.io.Serializable {
 	}
 	public boolean removeScopeListener(ScopeListener listener) {
 		return attrs().removeScopeListener(listener);
-	}
-
-	/** @deprecated As of release 5.0.0, replaced with {@link #setAttribute}. */
-	public void setVariable(String name, Object val, boolean local) {
-		getNamespace().setVariable(name, val, local);
-	}
-	/** @deprecated As of release 5.0.0, replaced with {@link #hasAttribute}. */
-	public boolean containsVariable(String name, boolean local) {
-		return getNamespace().containsVariable(name, local);
-	}
-	/** @deprecated As of release 5.0.0, replaced with {@link #getAttribute}. */
-	public Object getVariable(String name, boolean local) {
-		return getNamespace().getVariable(name, local);
-	}
-	/** @deprecated As of release 5.0.0, replaced with {@link #removeAttribute}. */
-	public void unsetVariable(String name, boolean local) {
-		getNamespace().unsetVariable(name, local);
 	}
 
 	public Component getParent() {
@@ -1858,7 +1839,7 @@ w:use="foo.MyWindow"&gt;
 				(o instanceof Boolean && ((Boolean)o).booleanValue())
 				|| !"false".equals(o));
 	}
-	/** @deprecated As of release 5.1.0, no longer used.
+	/** @deprecated As of release 5.0.8, no longer used.
 	 */
 	protected void renderIdSpace(ContentRenderer renderer) throws IOException {
 	}
@@ -2156,17 +2137,6 @@ w:use="foo.MyWindow"&gt;
 		}
 		return false;
 	}
-	/** @deprecated As of release 5.0.0, use {@link #getAttribute},
-	 * {@link #setAttribute} instead.
-	 */
-	public Namespace getNamespace() {
-		if (this instanceof IdSpace)
-			return _auxinf.spaceInfo.ns;
-
-		final IdSpace idspace = getSpaceOwner();
-		return idspace instanceof Page ? ((Page)idspace).getNamespace():
-			idspace == null ? null: ((Component)idspace).getNamespace();
-	}
 
 	public boolean isListenerAvailable(String evtnm, boolean asap) {
 		if (_auxinf != null && _auxinf.listeners != null) {
@@ -2354,16 +2324,6 @@ w:use="foo.MyWindow"&gt;
 		if (_auxinf != null && _auxinf.attrs != null) {
 			willPassivate(_auxinf.attrs.getAttributes().values());
 			willPassivate(_auxinf.attrs.getListeners());
-
-			if (this instanceof IdSpace) {
-			//backward compatible (we store variables in attributes)
-				for (Iterator it = _auxinf.attrs.getAttributes().values().iterator();
-				it.hasNext();) {
-					final Object val = it.next();
-					if (val instanceof NamespaceActivationListener) //backward compatible
-						((NamespaceActivationListener)val).willPassivate(_auxinf.spaceInfo.ns);
-				}
-			}
 		}
 
 		if (_auxinf != null && _auxinf.listeners != null)
@@ -2383,16 +2343,6 @@ w:use="foo.MyWindow"&gt;
 			didActivate(_auxinf.attrs.getListeners());
 			if (_parent == null)
 				_auxinf.attrs.notifyParentChanged(_page);
-
-			if (this instanceof IdSpace) {
-			//backward compatible (we store variables in attributes)
-				for (Iterator it = _auxinf.attrs.getAttributes().values().iterator();
-				it.hasNext();) {
-					final Object val = it.next();
-					if (val instanceof NamespaceActivationListener) //backward compatible
-						((NamespaceActivationListener)val).didActivate(_auxinf.spaceInfo.ns);
-				}
-			}
 		}
 
 		if (_auxinf != null && _auxinf.listeners != null)
@@ -2604,61 +2554,9 @@ w:use="foo.MyWindow"&gt;
 
 	/** Holds info shared of the same ID space. */
 	private class SpaceInfo {
-		private NS ns = new NS();
 		/** A map of ((String id, Component fellow). */
 		private Map fellows = new HashMap(32);
 	}
-	/** @deprecated */
-	private class NS implements Namespace {
-		//Namespace//
-		public Component getOwner() {
-			return AbstractComponent.this;
-		}
-		public Page getOwnerPage() {
-			return AbstractComponent.this._page;
-		}
-		public Set getVariableNames() {
-			return AbstractComponent.this.getAttributes().keySet();
-		}
-		public boolean containsVariable(String name, boolean local) {
-			return hasAttributeOrFellow(name, !local)
-				|| (!local && getXelVariable(name) != null);
-		}
-		public Object getVariable(String name, boolean local) {
-			Object o = getAttributeOrFellow(name, !local);
-			return o != null || local ? o: getXelVariable(name);
-		}
-		private Object getXelVariable(String name) {
-			Page page = getOwnerPage();
-			return page != null ? page.getXelVariable(null, null, name, true): null;
-		}
-		public void setVariable(String name, Object value, boolean local) {
-			setAttribute(name, value, !local);
-		}
-		public void unsetVariable(String name, boolean local) {
-			removeAttribute(name, !local);
-		}
-
-		/** @deprecated */
-		public Namespace getParent() {
-			final IdSpace owner = getSpaceOwnerOfParent(AbstractComponent.this);
-			return owner instanceof Component ? ((Component)owner).getNamespace():
-				owner instanceof Page ? ((Page)owner).getNamespace(): null;
-		}
-		/** @deprecated */
-		public void setParent(Namespace parent) {
-			throw new UnsupportedOperationException();
-		}
-		/** @deprecated */
-		public boolean addChangeListener(NamespaceChangeListener listener) {
-			return false;
-		}
-		/** @deprecated */
-		public boolean removeChangeListener(NamespaceChangeListener listener) {
-			return false;
-		}
-	}
-
 	private class ChildIter implements ListIterator  {
 		private AbstractComponent _p, _lastRet;
 		private int _j;
@@ -3048,38 +2946,6 @@ w:use="foo.MyWindow"&gt;
 	private Component resolveForwardTarget(Object fwd) {
 		return fwd instanceof String ?
 			Components.pathToComponent((String)fwd, this): (Component)fwd;
-	}
-
-	private static final String NONE = "";
-	private static String _id2uuidPrefix = NONE, _id2uuidPrefix2;
-	private static int _id2uuidPageOfs;
-	private static String id2Uuid(String id) {
-		if (id.length() > 0) {
-			if (_id2uuidPrefix == NONE) {
-				_id2uuidPrefix = Library.getProperty(Attributes.ID_TO_UUID_PREFIX);
-				if (_id2uuidPrefix != null) {
-					Library.setProperty(Attributes.UUID_RECYCLE_DISABLED, "true"); //disable it
-
-					_id2uuidPageOfs = _id2uuidPrefix.indexOf("${page}");
-					if (_id2uuidPageOfs >= 0) {
-						_id2uuidPrefix2 = _id2uuidPrefix.substring(_id2uuidPageOfs + 7);
-						_id2uuidPrefix = _id2uuidPrefix.substring(0, _id2uuidPageOfs);
-					}
-				}
-			}
-			if (_id2uuidPrefix != null) {
-				if (_id2uuidPageOfs >= 0) {
-					final ExecutionCtrl execCtrl = (ExecutionCtrl)Executions.getCurrent();
-					if (execCtrl != null) {
-						final Page page = execCtrl.getCurrentPage();
-						if (page != null)
-							return _id2uuidPrefix + page.getId() + _id2uuidPrefix2 + id;
-					}
-				}
-				return _id2uuidPrefix + id;
-			}
-		}
-		return null;
 	}
 
 	/** Returns the default mold for the given class.

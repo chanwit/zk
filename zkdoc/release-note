@@ -45,6 +45,7 @@ ZK 5.0.8
 	overflow: hidden;
 }
   + iDOM is simplified and the concept of readonly and modification is removed.
+  + The id-to-uuid-prefix configuration is removed
 
 	--------
 ZK 5.0.7.1

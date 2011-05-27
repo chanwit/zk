@@ -43,9 +43,6 @@ public interface WidgetDefinition {
 	 * @since 5.0.4
 	 */
 	public void addMold(String name, String moldURI);
-	/** @deprecated As of release 5.0.4, replaced with {@link #addMold(String, String)}.
-	 */
-	public void addMold(String name, String moldURI, String cssURI, String z2cURI);
 	/** Returns the URI (String) of the template to generate the mold,
 	 * or null if not available.
 	 * For Ajax clients, the template is a JavaScript method.
@@ -55,13 +52,6 @@ public interface WidgetDefinition {
 	 * @see org.zkoss.zk.ui.AbstractComponent#redraw
 	 */
 	public String getMoldURI(String name);
-	/** @deprecated As of release 5.0.4, always return null.
-	 * The URIs of CSS are part of {@link LanguageDefinition#getCSSURIs}.
-	 */
-	public String getCSSURI(String name);
-	/** @deprecated As of release 5.0.4, always return null.
-	 */
-	public String getZ2CURI(String name);
 
 	/** Returns whether to preserve the blank text.
 	 * If false, the blank text (a non-empty string consisting of whitespaces)

@@ -104,20 +104,4 @@ implements Composer, ComposerExt, java.io.Serializable {
 	public void doFinally() throws Exception {
 		//do nothing
 	}
-
-	//ScopeActivationListener//
-	/** @deprecated As of release 5.0.0, it is meaningless for
-	 * GenericComposer to implement ComponentActivationListener.
-	 * <p>Default: do nothing
-	 */
-	public void willPassivate(Component comp) {
-		//do nothing
-	}
-	
-	/** @deprecated As of release 5.0.0, it is meaningless for
-	 * GenericComposer to implement ComponentActivationListener.
-	 * <p>Default: do nothing
-	 */
-	public void didActivate(Component comp) {
-	}
 }

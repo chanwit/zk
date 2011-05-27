@@ -149,7 +149,6 @@ public class PageImpl extends AbstractPage implements java.io.Serializable {
 	private Class _expfcls;
 	/** A map of interpreters Map(String zslang, Interpreter ip). */
 	private transient Map _ips;
-	private transient NS _ns;
 	/** A list of {@link VariableResolver}. */
 	private transient List _resolvers;
 	private boolean _complete;
@@ -216,7 +215,6 @@ public class PageImpl extends AbstractPage implements java.io.Serializable {
 	 */
 	protected void init() {
 		_ips = new LinkedHashMap(4);
-		_ns = new NS(); //backwad compatible
 		_attrs = new SimpleScope(this);
 	}
 
@@ -415,22 +413,6 @@ public class PageImpl extends AbstractPage implements java.io.Serializable {
 			throw ex;
 		}
 	}
-	/** @deprecated As of release 5.0.0, replaced with {@link #setAttribute}. */
-	public void setVariable(String name, Object val) {
-		_ns.setVariable(name, val, true);
-	}
-	/** @deprecated As of release 5.0.0, replaced with {@link #hasAttribute}. */
-	public boolean containsVariable(String name) {
-		return _ns.containsVariable(name, true);
-	}
-	/** @deprecated As of release 5.0.0, replaced with {@link #getAttribute}. */
-	public Object getVariable(String name) {
-		return _ns.getVariable(name, true);
-	}
-	/** @deprecated As of release 5.0.0, replaced with {@link #removeAttribute}. */
-	public void unsetVariable(String name) {
-		_ns.unsetVariable(name, true);
-	}
 	public Class getZScriptClass(String clsnm) {
 		for (Iterator it = getLoadedInterpreters().iterator();
 		it.hasNext();) {
@@ -469,12 +451,6 @@ public class PageImpl extends AbstractPage implements java.io.Serializable {
 		}
 		return null;
 	}
-	/** @deprecated As of release 5.0.0, replaced with
-	 * {@link #getZScriptFunction(Component,String,Class[])}.
-	 */
-	public Function getZScriptFunction(Namespace ns, String name, Class[] argTypes) {
-		return getZScriptFunction(ns != null ? ns.getOwner(): null, name, argTypes);
-	}
 
 	public Object getZScriptVariable(String name) {
 		for (Iterator it = getLoadedInterpreters().iterator();
@@ -496,12 +472,6 @@ public class PageImpl extends AbstractPage implements java.io.Serializable {
 				return val;
 		}
 		return null;
-	}
-	/** @deprecated As of release 5.0.0, replaced with
-	 * {@link #getZScriptVariable(Component,String)}.
-	 */
-	public Object getZScriptVariable(Namespace ns, String name) {
-		return getZScriptVariable(ns != null ? ns.getOwner(): null, name);
 	}
 
 	public Object getXelVariable(String name) {
@@ -682,7 +652,6 @@ public class PageImpl extends AbstractPage implements java.io.Serializable {
 		_desktop = null;
 		_owner = null;
 		_listeners = null;
-		_ns = null;
 		_resolvers = null;
 		_attrs.getAttributes().clear();
 	}
@@ -845,30 +814,11 @@ public class PageImpl extends AbstractPage implements java.io.Serializable {
 	}
 	private static Boolean _ie7compat;
 
-	/** @deprecated As of release 5.0.0, the concept of namespace is
-	 * deprecated and replaced with the attributes of a scope (such as
-	 * a page and a component).
-	 */
-	public final Namespace getNamespace() {
-		return _ns;
-	}
 	public void interpret(String zslang, String script, Scope scope) {
 		if (script != null && script.length() > 0) //optimize for better performance
 			getInterpreter(zslang).interpret(script, scope);
 	}
-	/** @deprecated As of release 5.0.0, replaced with
-	 * {@link #interpret(String,String,Scope)}.
-	 */
-	public void interpret(String zslang, String script, Namespace ns) {
-		interpret(zslang, script, getScope(ns));
-	}
-	/** @deprecated
-	 */
-	private static Scope getScope(Namespace ns) {
-		if (ns == null) return null;
-		Scope s = ns.getOwner();
-		return s != null ? s: ns.getOwnerPage();
-	}
+
 	public Interpreter getInterpreter(String zslang) {
 		zslang = (zslang != null ? zslang: _zslang).toLowerCase();
 		Interpreter ip = (Interpreter)_ips.get(zslang);
@@ -993,14 +943,6 @@ public class PageImpl extends AbstractPage implements java.io.Serializable {
 				willPassivate((Collection)it.next());
 
 		willPassivate(_resolvers);
-
-		//backward compatible (we store variables in attributes)
-		for (Iterator it = CollectionsX.comodifiableIterator(_attrs.getAttributes().values());
-		it.hasNext();) {
-			final Object val = it.next();
-			if (val instanceof NamespaceActivationListener) //backward compatible
-				((NamespaceActivationListener)val).willPassivate(_ns);
-		}
 	}
 	public void sessionDidActivate(Desktop desktop) {
 		_desktop = desktop;
@@ -1022,14 +964,6 @@ public class PageImpl extends AbstractPage implements java.io.Serializable {
 				didActivate((Collection)it.next());
 
 		didActivate(_resolvers);
-
-		//backward compatible (we store variables in attributes)
-		for (Iterator it = CollectionsX.comodifiableIterator(_attrs.getAttributes().values());
-		it.hasNext();) {
-			final Object val = it.next();
-			if (val instanceof NamespaceActivationListener) //backward compatible
-				((NamespaceActivationListener)val).didActivate(_ns);
-		}
 	}
 	private void willPassivate(Collection c) {
 		if (c != null)
@@ -1196,50 +1130,5 @@ public class PageImpl extends AbstractPage implements java.io.Serializable {
 	//-- Object --//
 	public String toString() {
 		return "[Page "+(_id.length() > 0 ? _id: _uuid)+']';
-	}
-
-	/** @deprecated */
-	private class NS implements Namespace {
-		//Namespace//
-		public Component getOwner() {
-			return null;
-		}
-		public Page getOwnerPage() {
-			return PageImpl.this;
-		}
-		public Set getVariableNames() {
-			return _attrs.getAttributes().keySet();
-		}
-		public boolean containsVariable(String name, boolean local) {
-			return hasAttributeOrFellow(name, !local)
-				|| getXelVariable(null, null, name, true) != null;
-		}
-		public Object getVariable(String name, boolean local) {
-			final Object o = getAttributeOrFellow(name, !local);
-			return o != null ? o: getXelVariable(null, null, name, true);
-		}
-		public void setVariable(String name, Object value, boolean local) {
-			setAttribute(name, value);
-		}
-		public void unsetVariable(String name, boolean local) {
-			removeAttribute(name);
-		}
-
-		/** @deprecated */
-		public Namespace getParent() {
-			return null;
-		}
-		/** @deprecated */
-		public void setParent(Namespace parent) {
-			throw new UnsupportedOperationException();
-		}
-		/** @deprecated */
-		public boolean addChangeListener(NamespaceChangeListener listener) {
-			return false;
-		}
-		/** @deprecated */
-		public boolean removeChangeListener(NamespaceChangeListener listener) {
-			return false;
-		}
 	}
 }

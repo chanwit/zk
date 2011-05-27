@@ -448,13 +448,6 @@ implements ComponentDefinition, java.io.Serializable {
 			_molds = new HashMap(2);
 		_molds.put(name, new ExValue(widgetClass, String.class));
 	}
-	/** @deprecated As of release 5.0.0, replaced with {@link #addMold(String,String)}
-	 * and {@link WidgetDefinition#addMold}.
-	 * <p>It always throws UnsupportedOperationException.
-	 */
-	public void addMold(String name, String moldURI, String z2cURI) {
-		throw new UnsupportedOperationException();
-	}
 
 	public boolean hasMold(String name) {
 		return _molds != null && _molds.containsKey(name);
@@ -477,12 +470,6 @@ implements ComponentDefinition, java.io.Serializable {
 	public String getDefaultWidgetClass(Component comp) {
 		return _defWgtClass != null ?
 			(String)_defWgtClass.getValue(_evalr, comp): null;
-	}
-	public String getWidgetClass(String moldName) {
-		return getWidgetClass(null, moldName);
-	}
-	public String getDefaultWidgetClass() {
-		return getDefaultWidgetClass(null);
 	}
 	public void setDefaultWidgetClass(String widgetClass) {
 		final ExValue oldwc = _defWgtClass;

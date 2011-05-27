@@ -75,11 +75,6 @@ public interface ServerPush {
 	 */
 	public void stop();
 
-	/** @deprecated As of release 5.0.0, use the preferences instead.
-	 * Refer to {@link org.zkoss.zk.ui.impl.PollingServerPush}
-	 */
-	public void setDelay(int min, int max, int factor);
-
 	/** Called by the associated desktop to schedule a task to execute
 	 * asynchronously.
 	 * <p>The implementation usually delegates the scheduling to

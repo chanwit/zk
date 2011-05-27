@@ -251,10 +251,6 @@ public interface Desktop extends Scope {
 	 * @since 3.0.0
 	 */
 	public boolean enableServerPush(boolean enable);
-
-	/** @deprecated As of release 5.0.2
-	 */
-	public void setServerPushDelay(int min, int max, int factor);
 	/** Returns whether the server-push feature is enabled for this
 	 * desktop.
 	 *

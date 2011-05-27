@@ -557,6 +557,9 @@ public class DesktopImpl implements Desktop, DesktopCtrl, java.io.Serializable {
 		ri.uuids.add(uuid);
 		return true; //recycled
 	}
+	/** @deprecated As of release 5.0.4, replaced with
+	 * {@link #removeComponent(Component, boolean)}.
+	 */
 	public void removeComponent(Component comp) {
 		removeComponent(comp, false);
 	}
@@ -1404,11 +1407,6 @@ public class DesktopImpl implements Desktop, DesktopCtrl, java.io.Serializable {
 				_spushShallStop = false;
 				_spush = null;
 			}
-	}
-	public void setServerPushDelay(int min, int max, int factor) {
-		if (_spush == null)
-			throw new IllegalStateException("Not started");
-		_spush.setDelay(min, max, factor);
 	}
 
 	public void onPiggybackListened(Component comp, boolean listen) {
