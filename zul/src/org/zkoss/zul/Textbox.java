@@ -28,7 +28,7 @@ import org.zkoss.zul.impl.InputElement;
  * <p>When multiline is true, only default mold is available.<p>
  * @author tomyeh
  */
-public class Textbox extends InputElement implements org.zkoss.zul.api.Textbox {
+public class Textbox extends InputElement {
 	private AuxInfo _auxinf;
 
 	public Textbox() {

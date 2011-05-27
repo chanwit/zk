@@ -53,7 +53,7 @@ import org.zkoss.zul.ext.Constrainted;
  * @author tomyeh
  */
 abstract public class InputElement extends XulElement
-implements Constrainted, Readonly, Disable, org.zkoss.zul.impl.api.InputElement {
+implements Constrainted, Readonly, Disable {
 	private static final Log log = Log.lookup(InputElement.class);
 
 	static {

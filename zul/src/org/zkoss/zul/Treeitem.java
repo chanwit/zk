@@ -43,7 +43,7 @@ import org.zkoss.zul.impl.XulElement;
  * @author tomyeh
  */
 public class Treeitem extends XulElement
-implements org.zkoss.zul.api.Treeitem, org.zkoss.zk.ui.ext.Disable {
+implements org.zkoss.zk.ui.ext.Disable {
 	private transient Treerow _treerow;
 	private transient Treechildren _treechildren;
 	private Object _value;
@@ -166,24 +166,11 @@ implements org.zkoss.zul.api.Treeitem, org.zkoss.zk.ui.ext.Disable {
 	public Treerow getTreerow() {
 		return _treerow;
 	}
-	/** Returns the treerow that this tree item owns (might null).
-	 * Each tree items has exactly one tree row.
-	 * @since 3.5.2
-	 */
-	public org.zkoss.zul.api.Treerow getTreerowApi() {
-		return getTreerow();
-	}
 	/** Returns the treechildren that this tree item owns, or null if
 	 * doesn't have any child.
 	 */
 	public Treechildren getTreechildren() {
 		return _treechildren;
-	}
-	/** Returns the treechildren that this tree item owns, or null if
-	 * @since 3.5.2
-	 */
-	public org.zkoss.zul.api.Treechildren getTreechildrenApi() {
-		return getTreechildren();
 	}
 
 	/** Returns whether the element is to act as a container
@@ -375,15 +362,6 @@ implements org.zkoss.zul.api.Treeitem, org.zkoss.zk.ui.ext.Disable {
 		final Component gp = p != null ? p.getParent(): null;
 		return gp instanceof Treeitem ? (Treeitem)gp: null;
 	}
-	/** Returns the parent tree item,
-	 * or null if this item is already the top level of the tree.
-	 * The parent tree item is actually the grandparent if any.
-	 *
-	 * @since 3.5.2
-	 */
-	public org.zkoss.zul.api.Treeitem getParentItemApi() {
-		return getParentItem();
-	}
 	/** Returns the tree owning this item.
 	 */
 	public Tree getTree() {
@@ -391,12 +369,6 @@ implements org.zkoss.zul.api.Treeitem, org.zkoss.zk.ui.ext.Disable {
 			if (p instanceof Tree)
 				return (Tree)p;
 		return null;
-	}
-	/** Returns the tree owning this item.
-	 * @since 3.5.2
-	 */
-	public org.zkoss.zul.api.Tree getTreeApi() {
-		return getTree();
 	}
 	/*package*/ boolean isRealVisible() {
 		if(!isVisible())

@@ -37,7 +37,7 @@ import org.zkoss.zul.impl.HeaderElement;
  * <p>Default {@link #getZclass}: z-treecol (since 5.0.0)
  * @author tomyeh
  */
-public class Treecol extends HeaderElement implements org.zkoss.zul.api.Treecol {
+public class Treecol extends HeaderElement {
 	private static final long serialVersionUID = 20110131122933L;
 	
 	private String _sortDir = "natural";
@@ -83,12 +83,7 @@ public class Treecol extends HeaderElement implements org.zkoss.zul.api.Treecol 
 		final Component comp = getParent();
 		return comp != null ? (Tree)comp.getParent(): null;
 	}
-	/** Returns the tree that it belongs to.
-	 * @since 3.5.2
-	 */
-	public org.zkoss.zul.api.Tree getTreeApi() {
-		return getTree();
-	}
+
 
 	/** Returns the sort direction.
 	 * @since 5.0.6

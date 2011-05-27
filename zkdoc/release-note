@@ -5,6 +5,8 @@ ZK 5.1.0
 * Bugs
 
 * Upgrade Notes
+  + org.zkoss.zk.ui.api.*, org.zkoss.zul.api.* and all component related interfaces
+    are removed.
   + No longer support ZKuery
 
 	--------

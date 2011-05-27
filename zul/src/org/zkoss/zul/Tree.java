@@ -92,7 +92,7 @@ import org.zkoss.zul.impl.Utils;
  * </dl>
  * @author tomyeh
  */
-public class Tree extends MeshElement implements Paginated, org.zkoss.zul.api.Tree {
+public class Tree extends MeshElement implements Paginated {
 	private static final Log log = Log.lookup(Tree.class);
 
 	private transient Treecols _treecols;
@@ -367,14 +367,6 @@ public class Tree extends MeshElement implements Paginated, org.zkoss.zul.api.Tr
 	public Paging getPagingChild() {
 		return _paging;
 	}
-	/** Returns the child paging controller that is created automatically,
-	 * or null if mold is not "paging", or the controller is specified externally
-	 * by {@link #setPaginal}.
-	 * @since 3.5.2
-	 */
-	public org.zkoss.zul.api.Paging getPagingChildApi() {
-		return getPagingChild();
-	}
 	/** Returns the page size, aka., the number items per page.
 	 * @exception IllegalStateException if {@link #getPaginal} returns null,
 	 * i.e., mold is not "paging" and no external controller is specified.
@@ -447,33 +439,15 @@ public class Tree extends MeshElement implements Paginated, org.zkoss.zul.api.Tr
 	public Treecols getTreecols() {
 		return _treecols;
 	}
-	/** Returns the treecols that this tree owns (might null).
-	 * @since 3.5.2
-	 */
-	public org.zkoss.zul.api.Treecols getTreecolsApi() {
-		return getTreecols();
-	}
 	/** Returns the treefoot that this tree owns (might null).
 	 */
 	public Treefoot getTreefoot() {
 		return _treefoot;
 	}
-	/** Returns the treefoot that this tree owns (might null).
-	 * @since 3.5.2
-	 */
-	public org.zkoss.zul.api.Treefoot getTreefootApi() {
-		return getTreefoot();
-	}
 	/** Returns the treechildren that this tree owns (might null).
 	 */
 	public Treechildren getTreechildren() {
 		return _treechildren;
-	}
-	/** Returns the treechildren that this tree owns (might null).
-	 * @since 3.5.2
-	 */
-	public org.zkoss.zul.api.Treechildren getTreechildrenApi() {
-		return getTreechildren();
 	}
 	/** Returns a collection of heads, including {@link #getTreecols}
 	 * and auxiliary heads ({@link Auxhead}) (never null).
@@ -693,16 +667,6 @@ public class Tree extends MeshElement implements Paginated, org.zkoss.zul.api.Tr
 
 		}
 	}
-	/** Sets the active page in which the specified item is.
-	 * The active page will become the page that contains the specified item.
-	 *
-	 * @param itemApi assume as a {@link org.zkoss.zul.Treeitem}
- 	 * @since 3.5.2
-	 */
-	public void setActivePageApi(org.zkoss.zul.api.Treeitem itemApi) {
-		Treeitem item = (Treeitem) itemApi;
-		setActivePage(item);
-	}
 	/**
 	 * Returns the index of the specified item in which it should be shown on the
 	 * paging mold recursively in breadth-first order.
@@ -801,16 +765,6 @@ public class Tree extends MeshElement implements Paginated, org.zkoss.zul.api.Tr
 				setActivePage(item);
 		}
 	}
-	/**  Deselects all of the currently selected items and selects
-	 * the given item.
-	 * <p>It is the same as {@link #setSelectedItem}.
-	 * @param itemApi assume as a {@link org.zkoss.zul.Treeitem}
-	 * @since 3.5.2
-	 */
-	public void selectItemApi(org.zkoss.zul.api.Treeitem itemApi) {
-		Treeitem item = (Treeitem) itemApi;
-		selectItem(item);
-	}
 	/** Selects the given item, without deselecting any other items
 	 * that are already selected..
 	 */
@@ -832,17 +786,6 @@ public class Tree extends MeshElement implements Paginated, org.zkoss.zul.api.Tr
 			}
 		}
 	}
-	/** Selects the given item, without deselecting any other items
-	 * that are already selected..
-	 * @param itemApi
-	 * 				assume as a {@link org.zkoss.zul.Treeitem}
-	 * @since 3.5.2
-	 */
-	public void addItemToSelectionApi(org.zkoss.zul.api.Treeitem itemApi) {
-		Treeitem item = (Treeitem) itemApi;
-		addItemToSelection(item);
-
-	}
 	/**  Deselects the given item without deselecting other items.
 	 */
 	public void removeItemFromSelection(Treeitem item) {
@@ -863,15 +806,6 @@ public class Tree extends MeshElement implements Paginated, org.zkoss.zul.api.Tr
 			}
 		}
 	}
-	/**  Deselects the given item without deselecting other items.
-	 * @param itemApi
-	 * 			assume as a {@link org.zkoss.zul.Treeitem}
-	 * @since 3.5.2
-	 */
-	public void removeItemFromSelectionApi(org.zkoss.zul.api.Treeitem itemApi) {
-		Treeitem item = (Treeitem) itemApi;
-		removeItemFromSelection(item);
-	}
 	/** Note: we have to update all selection at once, since addItemToSelection
 	 * and removeItemFromSelection might be called interchangeably.
 	 */
@@ -891,17 +825,6 @@ public class Tree extends MeshElement implements Paginated, org.zkoss.zul.api.Tr
 	public void toggleItemSelection(Treeitem item) {
 		if (item.isSelected()) removeItemFromSelection(item);
 		else addItemToSelection(item);
-	}
-	/** If the specified item is selected, it is deselected.
-	 * If it is not selected, it is selected. Other items in the tree
-	 * that are selected are not affected, and retain their selected state.
-	 *
-	 * @param itemApi assume as a {@link org.zkoss.zul.Treeitem}
-	 * @since 3.5.2
-	 */
-	public void toggleItemSelectionApi(org.zkoss.zul.api.Treeitem itemApi) {
-		Treeitem item = (Treeitem) itemApi;
-		toggleItemSelection(item);
 	}
 	/** Clears the selection.
 	 */
@@ -950,28 +873,12 @@ public class Tree extends MeshElement implements Paginated, org.zkoss.zul.api.Tr
 	public Treeitem getSelectedItem() {
 		return _sel;
 	}
-	/** Returns the selected item.
-	 * @since 3.5.2
-	 */
-	public org.zkoss.zul.api.Treeitem getSelectedItemApi() {
-		return getSelectedItem();
-	}
 	/**  Deselects all of the currently selected items and selects
 	 * the given item.
 	 * <p>It is the same as {@link #selectItem}.
 	 */
 	public void setSelectedItem(Treeitem item) {
 		selectItem(item);
-	}
-	/**  Deselects all of the currently selected items and selects
-	 * the given item.
-	 * <p>It is the same as {@link #selectItem}.
-	 * @param itemApi assume as a {@link org.zkoss.zul.Treeitem}
-	 * @since 3.5.2
-	 */
-	public void setSelectedItemApi(org.zkoss.zul.api.Treeitem itemApi) {
-		Treeitem item = (Treeitem) itemApi;
-		setSelectedItem(item);
 	}
 
 	/** Returns all selected items.
@@ -1711,19 +1618,6 @@ public class Tree extends MeshElement implements Paginated, org.zkoss.zul.api.Tr
 			}
 		}
 	}
-	/** Renders the specified {@link Treeitem}, if not loaded yet,
-	 * with {@link #getItemRenderer}.
-	 *
-	 * <p>It does nothing if {@link #getModel} returns null.
-	 * <p>To unload treeitem, use {@link Treeitem#unload()}.
-	 * @param itemApi assume as a {@link org.zkoss.zul.Treeitem}
-	 * @see #renderItems
-	 * @since 3.5.2
-	 */
-	public void renderItemApi(org.zkoss.zul.api.Treeitem itemApi) {
-		Treeitem item = (Treeitem) itemApi;
-		renderItem(item);
-	}
 
 	/** Renders the specified {@link Treeitem}, if not loaded yet,
 	 * with {@link #getItemRenderer}.
@@ -1750,24 +1644,7 @@ public class Tree extends MeshElement implements Paginated, org.zkoss.zul.api.Tr
 			}
 		}
 	}
-	/** Renders the specified {@link Treeitem}, if not loaded yet,
-	 * with {@link #getItemRenderer}.
-	 *
-	 * <p>It does nothing if {@link #getModel} returns null.
-	 *
-	 *<p>Note: Since the corresponding node is given,
-	 * This method has better performance than
-	 * renderItem(Treeitem item) due to not searching for its
-	 * corresponding node.
-	 * <p>To unload treeitem, use {@link Treeitem#unload()}.
-	 * @param itemApi assume as a {@link org.zkoss.zul.Treeitem}
-	 * @see #renderItems
-	 * @since 3.5.2
-	 */
-	public void renderItemApi(org.zkoss.zul.api.Treeitem itemApi, Object node) {
-		Treeitem item = (Treeitem) itemApi;
-		renderItem(item, node);
-	}
+
 	/** Note: it doesn't call render doCatch/doFinally */
 	private void renderItem0(Renderer renderer, Treeitem item)
 	throws Throwable {
@@ -1909,10 +1786,6 @@ public class Tree extends MeshElement implements Paginated, org.zkoss.zul.api.Tr
 	public Treeitem renderItemByNode(Object node) {
 		return renderItemByPath(getPath(_model, _model.getRoot(), node));
 	}
-	//@Override
-	public org.zkoss.zul.api.Treeitem renderItemByNodeApi(Object node) {
-		return renderItemByNode(node);
-	}
 	/*package*/ static int[] getPath(TreeModel model, Object parent, Object lastNode){
 		final List l = new LinkedList();
 		dfSearch(model, l, parent, lastNode);
@@ -1977,10 +1850,6 @@ public class Tree extends MeshElement implements Paginated, org.zkoss.zul.api.Tr
 			}
 		}
 		return ti;
-	}
-	//@Override
-	public org.zkoss.zul.api.Treeitem renderItemByPathApi(int[] path) {
-		return renderItemByPath(path);
 	}
 
 	protected void redrawChildren(Writer out) throws IOException {

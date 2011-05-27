@@ -52,8 +52,7 @@ import org.zkoss.zul.mesg.MZul;
  * 
  * @author tomyeh
  */
-public class Datebox extends FormatInputElement implements
-		org.zkoss.zul.api.Datebox {
+public class Datebox extends FormatInputElement {
 	private static final String DEFAULT_FORMAT = "yyyy/MM/dd";
 
 	private TimeZone _tzone;

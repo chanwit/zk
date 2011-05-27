@@ -57,7 +57,7 @@ import org.zkoss.zul.mesg.MZul;
  * @author Dennis Chen
  * @since 3.0.0
  */
-public class Timebox extends FormatInputElement implements org.zkoss.zul.api.Timebox {
+public class Timebox extends FormatInputElement {
 	/*package*/ static final String DEFAULT_FORMAT = "HH:mm";
 	private TimeZone _tzone;
 	/** The locale assoicated with this timebox. */

@@ -34,7 +34,7 @@ import org.zkoss.zul.impl.LabelImageElement;
  * @author tomyeh
  */
 public class Menuitem extends LabelImageElement
-implements org.zkoss.zul.api.Menuitem, org.zkoss.zk.ui.ext.Disable {
+implements org.zkoss.zk.ui.ext.Disable {
 	private AuxInfo _auxinf;
 
 	static {

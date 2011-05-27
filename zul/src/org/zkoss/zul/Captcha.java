@@ -46,7 +46,7 @@ import java.util.ArrayList;
  * The default engine is based on JHLabs and available in ZK PE and ZK EE.
  * @author henrichen
  */
-public class Captcha extends org.zkoss.zul.Image implements org.zkoss.zul.api.Captcha {
+public class Captcha extends org.zkoss.zul.Image {
 	//control variable
 	private boolean _smartDrawCaptcha; //whether post the smartDraw event already?
 	private EventListener _smartDrawCaptchaListener; //the smartDrawListner

@@ -23,7 +23,7 @@ import org.zkoss.lang.Objects;
  * @author henrichen
  * @since 5.0.6
  */
-public class MeshElement extends XulElement implements org.zkoss.zul.impl.api.MeshElement {
+public class MeshElement extends XulElement {
 	private String _span;
 	private boolean _sizedByContent;
 	private boolean _autopaging;

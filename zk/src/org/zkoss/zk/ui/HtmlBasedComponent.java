@@ -52,7 +52,7 @@ import org.zkoss.zk.fn.ZkFns;
  * @since 5.0.0 supports onCancel event.
  * @since 5.0.0 supports onCtrlKey event.
  */
-abstract public class HtmlBasedComponent extends AbstractComponent implements org.zkoss.zk.ui.api.HtmlBasedComponent {
+abstract public class HtmlBasedComponent extends AbstractComponent {
 	/** The ZK CSS class. */
 	protected String _zclass;
 	/** The prolog content that shall be generated before real content. */

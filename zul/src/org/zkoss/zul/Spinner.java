@@ -17,6 +17,7 @@ Copyright (C) 2008 Potix Corporation. All Rights Reserved.
 package org.zkoss.zul;
 
 import java.io.IOException;
+
 import org.zkoss.zk.ui.WrongValueException;
 import org.zkoss.zul.impl.NumberInputElement;
 import org.zkoss.zul.mesg.MZul;
@@ -34,7 +35,7 @@ import org.zkoss.zul.mesg.MZul;
  * @author gracelin
  * @since 3.5.0
  */
-public class Spinner extends NumberInputElement implements org.zkoss.zul.api.Spinner {
+public class Spinner extends NumberInputElement {
 	private int _step = 1;
 	private boolean _btnVisible = true;
 

@@ -184,7 +184,7 @@ import org.zkoss.zul.mesg.MZul;
  * @see Iframe
  */
 public class Include extends XulElement
-implements org.zkoss.zul.api.Include, Includer, DynamicPropertied, AfterCompose, IdSpace {
+implements Includer, DynamicPropertied, AfterCompose, IdSpace {
 	private static final Log log = Log.lookup(Include.class);
 	private static final String ATTR_RENDERED =
 		"org.zkoss.zul.Include.rendered";

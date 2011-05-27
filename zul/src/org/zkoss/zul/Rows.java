@@ -41,7 +41,7 @@ import org.zkoss.zul.impl.XulElement;
  *
  * @author tomyeh
  */
-public class Rows extends XulElement implements org.zkoss.zul.api.Rows {
+public class Rows extends XulElement {
 	private int _visibleItemCount;
 	
 	private transient List _groupsInfo, _groups;
@@ -77,13 +77,6 @@ public class Rows extends XulElement implements org.zkoss.zul.api.Rows {
 	 */
 	public Grid getGrid() {
 		return (Grid)getParent();
-	}
-	/** Returns the grid that contains this rows.
-	 * <p>It is the same as {@link #getParent}.
-	 * @since 3.5.2
-	 */
-	public org.zkoss.zul.api.Grid getGridApi() {
-		return getGrid();
 	}
 	/**
 	 * Returns the number of groups.
