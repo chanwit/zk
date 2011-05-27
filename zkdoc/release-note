@@ -1,4 +1,13 @@
 	--------
+ZK 5.1.0
+* Features
+
+* Bugs
+
+* Upgrade Notes
+  + Not support zkuery any more
+
+	--------
 ZK 5.0.8
 * Features
   3306718: Treeitem allows draggable/droppable (in addion to treerow)
