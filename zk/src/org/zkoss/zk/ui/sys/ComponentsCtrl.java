@@ -65,11 +65,6 @@ import org.zkoss.zk.xel.ExValue;
  * @author tomyeh
  */
 public class ComponentsCtrl {
-	/** @deprecated
-	 * The anonymous UUID. Used only internally.
-	 */
-	public static final String ANONYMOUS_ID = "z__i";
-
 	private static final ThreadLocal _compdef = new ThreadLocal();
 
 	/** Returns the automatically generate component's UUID/ID.
@@ -473,18 +468,6 @@ public class ComponentsCtrl {
 		}
 		public void addMold(String name, String widgetClass) {
 			throw new UnsupportedOperationException();
-		}
-		/** @deprecated */
-		public void addMold(String name, String moldURI, String z2cURI) {
-			throw new UnsupportedOperationException();
-		}
-		/** @deprecated */
-		public String getWidgetClass(String moldName) {
-			return null;
-		}
-		/** @deprecated */
-		public String getDefaultWidgetClass() {
-			return null;
 		}
 		public String getWidgetClass(Component comp, String moldName) {
 			return null;

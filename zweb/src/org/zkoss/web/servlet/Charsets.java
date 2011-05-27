@@ -256,14 +256,4 @@ public class Charsets {
 			ctx.removeAttribute(PX_PREFERRED_LOCALE);
 		}
 	}
-	/** @deprecated As of release 3.6.3, replaced with
-	 * {@link #setPreferredLocale(HttpSession, Locale)}
-	 */
-	public static final
-	void setPreferredLocale(ServletRequest request, Locale locale) {
-		if (request instanceof HttpServletRequest)
-			setPreferredLocale(
-				((HttpServletRequest)request).getSession(), //auto-create
-				locale);
-	}
 }

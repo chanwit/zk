@@ -1800,30 +1800,6 @@ public class Configuration {
 		return connType != null && "server-push".equals(connType) ?
 			"s:" + deviceType: deviceType;
 	}
-	
-	/** @deprecated As of release 3.6.3, replaced with {@link #setClientErrorReload}.
-	 * It is equivalent to setClientErrorReload("ajax", errCode, uri, null).
-	 */
-	public String addClientErrorReload(int errCode, String uri) {
-		return setClientErrorReload("ajax", errCode, uri, null);
-	}
-	/** @deprecated As of release 3.6.3, replaced with {@link #removeClientErrorReload(String,int,String)}.
-	 * It is equivalent to removeClientErrorReload("ajax", errCode, null).
-	 */
-	public String removeClientErrorReload(int errCode) {
-		return removeClientErrorReload("ajax", errCode, null);
-	}
-	/** @deprecated As of release 3.6.3, replaced with {@link #getClientErrorReload(String,int,String)}.
-	 * It is equivalent to getClientErrorReload("ajax", errCode, null).
-	 */
-	public String getClientErrorReload(int errCode) {
-		return getClientErrorReload("ajax", errCode, null);
-	}
-	/** @deprecated As of release 3.6.3, replaced with {@link #getClientErrorReloads}.
-	 */
-	public int[] getClientErrorReloadCodes() {
-		throw new UnsupportedOperationException("use getClientErrorReloads(\"ajax\",null) instead");
-	}
 
 	/**  Specifies the time, in seconds, between client requests
 	 * before ZK will invalidate the session.
