@@ -10,7 +10,10 @@
 Copyright (C) 2010 Potix Corporation. All Rights Reserved.
 
 */
-package org.zkoss.zk.ui;
+package org.zkoss.zk.ui.sys;
+
+import org.zkoss.zk.ui.AbstractComponent;
+import org.zkoss.zk.ui.Component;
 
 /**
  * A stub component is a 'degenerated' component that does not maintain
@@ -21,19 +24,19 @@ package org.zkoss.zk.ui;
  * Rather, it is used by ZK Loader to minimize the footprint, if
  * it found a component doesn't have to maintain the states at the server
  * after renderred.
- * For example, {@link HtmlNativeComponent} and stub-only components
- * will degenerate to {@link StubComponent} after renderred.
+ * For example, {@link org.zkoss.zk.ui.HtmlNativeComponent} and stub-only components
+ * will degenerate to {@link StubComponent} or {@link StubsComponent} after renderred.
  * Refer {@link Component#setStubonly} for details about a stub-only component.
  *
  * <p>A component that wants to degenerate to a stub component usually
  * invoke {@link #replace} after {@link #redraw} is called.
  *
  * @author tomyeh
- * @since 5.0.4
+ * @since 5.1,0
  */
 public class StubComponent extends AbstractComponent {
 	public StubComponent() {
-		super(true);
+		super(true); //a dummy component definition (replace() will correct it)
 	}
 
 	/** Replace the specified component with this component in
@@ -57,15 +60,11 @@ public class StubComponent extends AbstractComponent {
 	 * However, it is a stub component, rather than the original one.
 	 * I means the event is the most generic format: an instance of
 	 * {@link org.zkoss.zk.ui.event.Event} (rather than MouseEvent or others).
-	 * @exception IllegalArgumentException if comp is already
-	 * {@link StubComponent}.
 	 * @exception IllegalStateException if this component has a parent,
 	 * sibling or child.
 	 */
 	public void replace(Component comp, boolean bFellow, boolean bListener) {
-		if (comp instanceof StubComponent)
-			throw new IllegalArgumentException();
-		((AbstractComponent)comp).replaceWith(this, bFellow, bListener);
+		replace(comp, bFellow, bListener, true);
 	}
 
 	/** Returns the widget class, "#stub".

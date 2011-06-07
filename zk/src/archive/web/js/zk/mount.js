@@ -320,7 +320,7 @@ function zkmprops(uuid, props) {
 
 	/* create the widget tree. */
 	function create(parent, wi, ignoreDom) {
-		var wgt,
+		var wgt, stub,
 			type = wi[0],
 			uuid = wi[1],
 			props = wi[2]||{};
@@ -330,12 +330,14 @@ function zkmprops(uuid, props) {
 			(wgt = new cls({uuid: uuid}, zk.cut(props, "ct"))).inServer = true;
 			if (parent) parent.appendChild(wgt, ignoreDom);
 		} else {
-			if (type == "#stub") {
+			if ((stub = type == "#stub") || type == "#stubs") {
 				if (!(wgt = _wgt_$(uuid) //use the original one since filter() might applied
 				|| zAu._wgt$(uuid))) //search detached (in prev cmd of same AU)
 					throw "Unknow stub "+uuid;
 				var w = new Widget();
-				zk._wgtutl.replace(wgt, w);
+				zk._wgtutl.replace(wgt, w, stub);
+					//to reuse wgt, we replace it with a dummy widget, w
+					//if #stubs, we have to reuse the whole subtree (not just wgt), so don't move children
 				wgt.unbind(); //reuse it as new widget
 			} else {
 				var cls = zk.$import(type), v;

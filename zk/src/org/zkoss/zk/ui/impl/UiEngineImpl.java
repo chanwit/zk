@@ -460,7 +460,7 @@ public class UiEngineImpl implements UiEngine {
 				abrn.execute(); //always execute even if !isAborting
 
 			//Cycle 3: Redraw the page (and responses)
-			List responses = getResponses(exec, uv, errs);
+			List responses = getResponses(exec, uv, errs, false);
 
 			if (olduv != null && olduv.addToFirstAsyncUpdate(responses))
 				responses = null;
@@ -471,7 +471,8 @@ public class UiEngineImpl implements UiEngine {
 			else
 				execCtrl.setResponses(responses);
 
-			redrawNewPage(page, out);
+			((PageCtrl)page).redraw(out);
+			afterRender(page.getRoots()); //Call back after redraw
 
 			desktopCtrl.invokeExecutionCleanups(exec, oldexec, errs);
 			config.invokeExecutionCleanups(exec, oldexec, errs);
@@ -533,7 +534,7 @@ public class UiEngineImpl implements UiEngine {
 				resumeAll(desktop, uv, null);
 			} while ((event = nextEvent(uv)) != null);
 
-			execCtrl.setResponses(getResponses(exec, uv, errs));
+			execCtrl.setResponses(getResponses(exec, uv, errs, false));
 
 			((PageCtrl)page).redraw(out);
 		} finally {
@@ -553,18 +554,14 @@ public class UiEngineImpl implements UiEngine {
 	 */
 	protected void afterCreate(Component[] comps) {
 	}
-	/** Called to render the result of a page to the (HTTP) output,
-	 * when a new page is created and processed.
-	 * <p>Default: it invokes {@link PageCtrl#redraw}.
-	 * <p>Notice that it is called in the rendering phase (the last phase),
-	 * so it is not allowed to post events or to invoke invalidate or smartUpdate
-	 * in this method.
-	 * <p>Notice that it is not called if an old page is redrawn.
-	 * @since 5.0.4
-	 * @see #execNewPage
+	/** Called when this engine renders the given components.
+	 * It is designed to be overriden if you'd like to alter the component
+	 * and its children.
+	 * <p>Default: does nothing.
+	 * @param comps the collection of components that have been redrawn.
+	 * @since 5.1.0
 	 */
-	protected void redrawNewPage(Page page, Writer out) throws IOException {
-		((PageCtrl)page).redraw(out);
+	protected void afterRender(Collection comps) {
 	}
 
 	private static final Event nextEvent(UiVisualizer uv) {
@@ -1018,7 +1015,7 @@ public class UiEngineImpl implements UiEngine {
 				resumeAll(desktop, uv, null);
 			} while ((event = nextEvent(uv)) != null);
 
-			desktopCtrl.piggyResponse(getResponses(exec, uv, errs), false);
+			desktopCtrl.piggyResponse(getResponses(exec, uv, errs, true), false);
 
 			desktopCtrl.invokeExecutionCleanups(exec, null, errs);
 			config.invokeExecutionCleanups(exec, null, errs);
@@ -1122,7 +1119,7 @@ public class UiEngineImpl implements UiEngine {
 				abrn.execute(); //always execute even if !isAborting
 
 			//Cycle 3: Generate output
-			final List responses = getResponses(exec, uv, errs);
+			final List responses = getResponses(exec, uv, errs, true);
 
 			doneReqIds = rque.clearPerfRequestIds();
 
@@ -1209,7 +1206,7 @@ public class UiEngineImpl implements UiEngine {
 			ui.abrn.execute(); //always execute even if !isAborting
 
 		//3. Retrieve responses
-		final List responses = getResponses(exec, ui.uv, errs);
+		final List responses = getResponses(exec, ui.uv, errs, false);
 
 		final JSONArray rs = new JSONArray();
 		for (Iterator it = responses.iterator(); it.hasNext();)
@@ -1295,8 +1292,12 @@ public class UiEngineImpl implements UiEngine {
 
 		errs.add(ex);
 	}
-	/** Returns the list of response of the given execution. */
-	private final List getResponses(Execution exec, UiVisualizer uv, List errs) {
+	/** Returns the list of response of the given execution.
+	 * @since bAfterRender whether to call back {@link #afterRender}
+	 * for the attached components (topmost only)
+	 */
+	private final List getResponses(Execution exec, UiVisualizer uv, List errs,
+	boolean bAfterRender) {
 		List responses;
 		try {
 			//Note: we have to call visualizeErrors before uv.getResponses,
@@ -1304,7 +1305,10 @@ public class UiEngineImpl implements UiEngine {
 			if (!errs.isEmpty())
 				visualizeErrors(exec, uv, errs);
 
-			responses = uv.getResponses();
+			final List renderedComps = bAfterRender ? new LinkedList(): null;
+			responses = uv.getResponses(renderedComps);
+			if (bAfterRender)
+				afterRender(renderedComps);
 		} catch (Throwable ex) {
 			responses = new LinkedList();
 			responses.add(new AuAlert(Exceptions.getMessage(ex)));

@@ -23,7 +23,7 @@ Copyright (C) 2008 Potix Corporation. All Rights Reserved.
 		doCmdFns = [],
 		idTimeout, //timer ID for automatica timeout
 		pfIndex = 0, //performance meter index
-		_detached = []; //used for resolving #stub in mount.js (it stores detached widgets in this AU)
+		_detached = []; //used for resolving #stub/#stubs in mount.js (it stores detached widgets in this AU)
 
 	// Checks whether to turn off the progress prompt
 	function checkProgressing() {

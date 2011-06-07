@@ -4849,13 +4849,19 @@ zk._wgtutl = { //internal utilities
 			wgt.uuid = uuid;
 		}
 	},
-	replace: function (from, to) { //called by mount.js
+	//kids: whehter to move children of from to to
+	replace: function (from, to, kids) { //called by mount.js
 		_replaceLink(from, to);
-		to.lastChild = from.lastChild;
-		for (var p = to.firstChild = from.firstChild; p; p = p.nextSibling)
-			p.parent = to;
-		from.parent = from.nextSibling = from.previousSibling =
-		from.firstChild = from.lastChild = null;
+		from.parent = from.nextSibling = from.previousSibling = null;
+
+		if (kids) {
+			to.lastChild = from.lastChild;
+			for (var p = to.firstChild = from.firstChild; p; p = p.nextSibling)
+				p.parent = to;
+			to.nChildren = from.nChildren;
+			from.firstChild = from.lastChild = null;
+			from.nChildren = 0;
+		}
 	},
 
 	autohide: function () { //called by effect.js

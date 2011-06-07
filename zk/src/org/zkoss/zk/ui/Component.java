@@ -540,6 +540,11 @@ w:use="foo.MyWindow"&gt;
 	 * @since 5.0.4
 	 */
 	public void setStubonly(String stubonly);
+	/** Sets whether this component is stub-only.
+	 * It is the same as <code>setStubonly(stubonly ? "true": "false")</code>.
+	 * @since 5.1.0
+	 */
+	public void setStubonly(boolean stubonly);
 
 	/** Returns the parent component, or null if this is the root component.
 	 */

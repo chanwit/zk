@@ -188,7 +188,7 @@ public class Attributes {
 	/** A component attribute used to indicate whether to enable the stubing of
 	 * the native components.
 	 * <p>By default, the native component will be stub-ized, i.e., replaced
-	 * with a stateless component called {@link org.zkoss.zk.ui.StubComponent},
+	 * with a stateless component called {@link org.zkoss.zk.ui.sys.StubComponent},
 	 * such that the memory footprint will be minimized.
 	 * To stub-ize non-native, please use {@link org.zkoss.zk.ui.Component#setStubonly}.
 	 * <p>Default: true. Though rarely, you could disable the stubing by

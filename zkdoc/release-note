@@ -9,6 +9,7 @@ ZK 5.1.0
 * Upgrade Notes
   + org.zkoss.zk.ui.api.*, org.zkoss.zul.api.* and all component related interfaces
     are removed.
+  + StubComponent's package becomes org.zkoss.zk.ui.sys.
   + No longer support ZKuery
 
 	--------

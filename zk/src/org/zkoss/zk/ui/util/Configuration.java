@@ -243,7 +243,7 @@ public class Configuration {
 		}
 		if (DesktopRecycle.class.isAssignableFrom(klass)) {
 			if (_dtRecycle != null)
-				throw new UiException(onlyOnce(PerformanceMeter.class));
+				throw new UiException(onlyOnce(DesktopRecycle.class));
 			_dtRecycle = (DesktopRecycle)(listener = getInstance(klass, listener));
 			added = true;
 		}

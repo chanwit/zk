@@ -165,10 +165,13 @@ implements Component, ComponentCtrl, java.io.Serializable {
 		_def.applyAttributes(this);
 //		if (D.ON && log.debugable()) log.debug("Create comp: "+this);
 	}
-	/** Constructs a stub component.
-	 * @param useless an useless argument
+	/** Constructs a dummy component that is not associated
+	 * with any component definition.
+	 * @param useless an useless argument (it is ignored but used
+	 * to distinquish the default constructor)
+	 * @since 5.1.0
 	 */
-	/*package*/ AbstractComponent(boolean useless) { //called by StubComponent
+	protected AbstractComponent(boolean useless) {
 		_def = ComponentsCtrl.DUMMY;
 	}
 	/** Returns the component definition of the specified class, or null
@@ -1033,6 +1036,9 @@ implements Component, ComponentCtrl, java.io.Serializable {
 	private static void checkParentChild(Component parent, Component child)
 	throws UiException {
 		if (parent != null) {
+			if (parent instanceof org.zkoss.zk.ui.sys.StubsComponent)
+				throw new UiException("Adding a child to "+parent+" not allowed");
+
 			final AbstractComponent acp = (AbstractComponent)parent;
 			if (acp.initChildInfo().inAdding(child))
 				return; //check only once
@@ -1156,13 +1162,45 @@ implements Component, ComponentCtrl, java.io.Serializable {
 			first._parent = this;
 	}
 
-	/** Replaces with the given component.
-	 * This component will be detached at the end.
+	/** Replace the specified component with this component in
+	 * the component tree. In other words, the parent of the given
+	 * component will become the parent of this components, so
+	 * are siblings and children. Furthermore, comp will be detached
+	 * at the end.
+	 *
+	 * <p>Notice that the replacement won't change anything at the client.
+	 * It is the caller'job to maintain the consistency between the server
+	 * and the client.
+	 *
+	 * <p>This method is rarely used.
+	 *
+	 * @param comp the component. In this implementation it supports
+	 * only derived classes of {@link AbstractComponent}.
+	 * @param bFellow whether to add this component to the map of fellows
+	 * if it is assigned with an ID. If false, the component (comp) cannot
+	 * be retrieved back even with an ID.
+	 * @param bListener whether to retain the event listeners and handlers.
+	 * If true, the event listeners and handlers, if any, will be registered
+	 * to this stub component. In other words, the event will be processed.
+	 * However, it is a stub component, rather than the original one.
+	 * I means the event is the most generic format: an instance of
+	 * {@link org.zkoss.zk.ui.event.Event} (rather than MouseEvent or others).
+	 * @param bChildren whether to have the children of the given component.<br/>
+	 * If false, this component won't have any children.<br/>
+	 * If true, the given component's children will belong to this component.
+	 * @exception IllegalStateException if this component has a parent,
+	 * sibling or child.
+	 * @since 5.1.0
 	 */
-	/*package*/ final //called by StubComponent
-	void replaceWith(AbstractComponent comp, boolean bFellow, boolean bListener) {
-		if (comp._parent != null || comp._next != null || comp._prev != null
-		|| comp._chdinf != null || comp._page != null)
+	protected void replace(Component comp, boolean bFellow, boolean bListener,
+	boolean bChildren) {
+		((AbstractComponent)comp).replaceWith(this, bFellow, bListener, bChildren);
+	}
+	private final
+	void replaceWith(AbstractComponent comp, boolean bFellow, boolean bListener,
+	boolean bChildren) {
+		if (this == comp || comp._parent != null || comp._next != null
+		|| comp._prev != null || comp._chdinf != null || comp._page != null)
 			throw new IllegalStateException();
 
 		comp._def = _def;
@@ -1184,7 +1222,7 @@ implements Component, ComponentCtrl, java.io.Serializable {
 		_parent = _next = _prev = null;
 
 		//fix children link
-		if (_chdinf != null) {
+		if (bChildren && _chdinf != null) {
 			for (p = _chdinf.first; p != null; p = p._next)
 				p._parent = comp;
 			comp._chdinf = _chdinf;
@@ -1314,6 +1352,9 @@ implements Component, ComponentCtrl, java.io.Serializable {
 		if ((_auxinf != null ? _auxinf.stubonly: 0) != v)
 			initAuxInfo().stubonly = (byte)v;
 			//no need to update client (it is all about server-side handling)
+	}
+	public void setStubonly(boolean stubonly) {
+		setStubonly(stubonly ? "true": "false");
 	}
 
 	public boolean isInvalidated() {
