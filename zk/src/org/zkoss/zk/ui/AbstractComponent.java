@@ -219,15 +219,6 @@ implements Component, ComponentCtrl, java.io.Serializable {
 		return null;
 	}
 
-	/**
-	 * Creates and returns the instance for storing child components.
-	 * <p>Default: it instantiates {@link AbstractComponent.Children}.
-	 * @deprecated As of release 5.0.4, override {@link #getChildren} instead.
-	 * @since 3.5.1
-	 */
-	protected List newChildren() {
-		return new Children();
-	}
 	/** The default implementation for {@link #getChildren}.
 	 * It is suggested to extend this class if you want to override
 	 * {@link #getChildren} to instantiate your own instance.
@@ -1303,7 +1294,7 @@ implements Component, ComponentCtrl, java.io.Serializable {
 	 * <p>Default: instantiates and returns an instance of {@link Children}.
 	 */
 	public List getChildren() {
-		return newChildren(); //backward compatible: don't new Children() directly
+		return new Children();
 	}
 	/** Returns the root of the specified component.
 	 */
@@ -2444,23 +2435,6 @@ w:use="foo.MyWindow"&gt;
 	 * @see ComponentCtrl#getExtraCtrl
 	 */
 	public Object getExtraCtrl() {
-		return newExtraCtrl(); //backward compatible; don't return null directly
-			//3.0.3: create as late as possible so component has a chance
-			//to customize which object to instantiate
-	}
-	/**
-	 * Used by {@link #getExtraCtrl} to create extra controls.
-	 * It is used only by component developers.
-	 *
-	 * <p>Default: return null.
-	 *
-	 * <p>To provide extra controls, it is simpler to override this method
-	 * instead of {@link #getExtraCtrl}.
-	 * By use of {@link #newExtraCtrl}, you don't need to care of
-	 * cloning and serialization.
-	 * @deprecated As of release 5.0.4, override {@link #getExtraCtrl} instead.
-	 */
-	protected Object newExtraCtrl() {
 		return null;
 	}
 

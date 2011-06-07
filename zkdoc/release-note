@@ -9,6 +9,8 @@ ZK 5.1.0
 * Upgrade Notes
   + org.zkoss.zk.ui.api.*, org.zkoss.zul.api.* and all component related interfaces
     are removed.
+  + AbstractComponent's newChildren() and newExtraCtrl() are both removed.
+    Override getChildren() and getExtraCtrl() instead.
   + StubComponent's package becomes org.zkoss.zk.ui.sys.
   + No longer support ZKuery
 
