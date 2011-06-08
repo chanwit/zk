@@ -25,7 +25,9 @@ import java.util.Date;
 import java.util.TimeZone;
 import java.util.Locale;
 
+import org.zkoss.lang.Library;
 import org.zkoss.lang.Objects;
+import org.zkoss.lang.Strings;
 import org.zkoss.util.Locales;
 import org.zkoss.util.TimeZones;
 import org.zkoss.text.DateFormats;
@@ -313,5 +315,10 @@ will be used to retrieve the real format.
 
 		if(_btnVisible != true)
 			renderer.render("buttonVisible", _btnVisible);
+		
+		String unformater = Library.getProperty("org.zkoss.zul.Timebox.unformater");
+		if (!Strings.isBlank(unformater))
+			renderer.render("unformater", unformater); // TODO: compress
+		// TODO: how to send once for all Timebox
 	}
 }

@@ -239,6 +239,13 @@ zul.db.Timebox = zk.$extends(zul.inp.FormatWidget, {
 		return out.join('');
 	},
 	coerceFromString_: function (val) {
+		if (this._unformater) { // TODO: merge to FormatWidget?
+			var cusv = this._unformater(val);
+			if (cusv) {
+				this._shortcut = val;
+				return cusv;
+			}
+		}
 		if (!val) return null;
 
 		var date = zUtl.today(this._format),
@@ -308,61 +315,64 @@ zul.db.Timebox = zk.$extends(zul.inp.FormatWidget, {
 		if (inp.disabled || inp.readOnly)
 			return;
 
-		var code = evt.keyCode;
-		switch(code){
-		case 48:case 96://0
-		case 49:case 97://1
-		case 50:case 98://2
-		case 51:case 99://3
-		case 52:case 100://4
-		case 53:case 101://5
-		case 54:case 102://6
-		case 55:case 103://7
-		case 56:case 104://8
-		case 57:case 105://9
-			code = code - (code>=96?96:48);
-			this._doType(code);
-			evt.stop();
-			return;
-		case 35://end
-			this.lastPos = inp.value.length;
-			return;
-		case 36://home
-			this.lastPos = 0;
-			return;
-		case 37://left
-			if (this.lastPos > 0)
-				this.lastPos--;
-			return;
-		case 39://right
-			if (this.lastPos < inp.value.length)
-				this.lastPos++;
-			return;
-		case 38://up
-			this._doUp();
-			evt.stop();
-			return;
-		case 40://down
-			this._doDown();
-			evt.stop();
-			return;
-		case 46://del
-			this._doDel();
-			evt.stop();
-			return;
-		case 8://backspace
-			this._doBack();
-			evt.stop();
-			return;
-		case 9:
-			// do nothing
-			break
-		case 13: case 27://enter,esc,tab
-			break;
-		default:
-			if (!(code >= 112 && code <= 123) //F1-F12
-			&& !evt.ctrlKey && !evt.altKey)
+		// control input keys only when no custom unformater is given
+		if (!this._unformater) {
+			var code = evt.keyCode;
+			switch(code){
+			case 48:case 96://0
+			case 49:case 97://1
+			case 50:case 98://2
+			case 51:case 99://3
+			case 52:case 100://4
+			case 53:case 101://5
+			case 54:case 102://6
+			case 55:case 103://7
+			case 56:case 104://8
+			case 57:case 105://9
+				code = code - (code>=96?96:48);
+				this._doType(code);
 				evt.stop();
+				return;
+			case 35://end
+				this.lastPos = inp.value.length;
+				return;
+			case 36://home
+				this.lastPos = 0;
+				return;
+			case 37://left
+				if (this.lastPos > 0)
+					this.lastPos--;
+				return;
+			case 39://right
+				if (this.lastPos < inp.value.length)
+					this.lastPos++;
+				return;
+			case 38://up
+				this._doUp();
+				evt.stop();
+				return;
+			case 40://down
+				this._doDown();
+				evt.stop();
+				return;
+			case 46://del
+				this._doDel();
+				evt.stop();
+				return;
+			case 8://backspace
+				this._doBack();
+				evt.stop();
+				return;
+			case 9:
+				// do nothing
+				break
+			case 13: case 27://enter,esc,tab
+				break;
+			default:
+				if (!(code >= 112 && code <= 123) //F1-F12
+				&& !evt.ctrlKey && !evt.altKey)
+					evt.stop();
+			}
 		}
 		this.$supers('doKeyDown_', arguments);
 	},
@@ -416,6 +426,7 @@ zul.db.Timebox = zk.$extends(zul.inp.FormatWidget, {
 		// cache it for IE
 		this._lastPos = this._getPos();
 		this._changed = true;
+		delete this._shortcut;
 		
 		zk.Widget.mimicMouseDown_(this); //set zk.currentFocus
 		zk(inp).focus(); //we have to set it here; otherwise, if it is in popup of
@@ -531,7 +542,7 @@ zul.db.Timebox = zk.$extends(zul.inp.FormatWidget, {
 		this.$supers('doFocus_', arguments);	
 
 		if (!inp.value)
-			inp.value = this.coerceToString_();
+			inp.value = this._unformater ? '' : this.coerceToString_(); // TODO: restore shortcut value if any
 
 		this._doCheckPos();
 		
@@ -553,7 +564,7 @@ zul.db.Timebox = zk.$extends(zul.inp.FormatWidget, {
 			n.style.width = jq.px0(zk(n).revisedWidth(n.offsetWidth));
 
 		// skip onchange, Bug 2936568
-		if (!this._value && !this._changed)
+		if (!this._value && !this._changed && !this._unformater)
 			this.getInputNode().value = this._lastRawValVld = '';
 
 		this.$supers('doBlur_', arguments);

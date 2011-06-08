@@ -307,6 +307,13 @@ zul.db.Datebox = zk.$extends(zul.inp.FormatWidget, {
 		return this._pop && this._pop.isOpen();
 	},
 	coerceFromString_: function (val) {
+		if (this._unformater) {
+			var cusv = this._unformater(val);
+			if (cusv) {
+				this._shortcut = val;
+				return cusv;
+			}
+		}
 		if (val) {
 			var d = new zk.fmt.Calendar().parseDate(val, this.getFormat(), !this._lenient, this._value);
 			if (!d) return {error: zk.fmt.Text.format(msgzul.DATE_REQUIRED + this.localizedFormat)};
@@ -577,7 +584,8 @@ zul.db.CalendarPop = zk.$extends(zul.db.Calendar, {
 		}
 		var inp = db.getInputNode();
 		zk(pp).position(inp, "after_start");
-
+		delete db._shortcut;
+		
 		setTimeout(function() {
 			_reposition(db, silent);
 		}, 150);
