@@ -413,7 +413,10 @@ zul.db.Timebox = zk.$extends(zul.inp.FormatWidget, {
 		jq(btn).addClass(zcls + "-btn-clk");
 		this.domListen_(document.body, "onZMouseup", "_dodropbtnup");
 		this._currentbtn = btn;
-
+		
+		// if btn down before blur, needs to convert to real time string first
+		if (inp.value && Timebox._unformater)
+			inp.value = this.coerceToString_(this.coerceFromString_(inp.value));
 		if (!inp.value)
 			inp.value = this.coerceToString_();
 			
