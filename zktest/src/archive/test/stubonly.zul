@@ -16,7 +16,7 @@ Copyright (C) 2009 Potix Corporation. All Rights Reserved.
 <window title="test of stub-only" border="normal">
 	<zscript>
 	void on(Event event) {
-		inf.appendChild(new Label(event.getClass().getName()+":"+event.getName()));
+		inf.appendChild(new Label(event.getClass().getName()+":"+event.getName()+":"+event.getTarget()));
 	}
 	</zscript>
 	<button label="invalidate window" onClick="self.parent.invalidate()"/>

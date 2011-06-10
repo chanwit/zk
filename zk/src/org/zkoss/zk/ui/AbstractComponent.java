@@ -74,6 +74,7 @@ import org.zkoss.zk.ui.sys.ContentRenderer;
 import org.zkoss.zk.ui.sys.JsContentRenderer;
 import org.zkoss.zk.ui.sys.JavaScriptValue;
 import org.zkoss.zk.ui.sys.HtmlPageRenders;
+import org.zkoss.zk.ui.sys.StubsComponent;
 import org.zkoss.zk.ui.metainfo.AnnotationMap;
 import org.zkoss.zk.ui.metainfo.Annotation;
 import org.zkoss.zk.ui.metainfo.EventHandlerMap;
@@ -1027,9 +1028,6 @@ implements Component, ComponentCtrl, java.io.Serializable {
 	private static void checkParentChild(Component parent, Component child)
 	throws UiException {
 		if (parent != null) {
-			if (parent instanceof org.zkoss.zk.ui.sys.StubsComponent)
-				throw new UiException("Adding a child to "+parent+" not allowed");
-
 			final AbstractComponent acp = (AbstractComponent)parent;
 			if (acp.initChildInfo().inAdding(child))
 				return; //check only once
@@ -1169,7 +1167,7 @@ implements Component, ComponentCtrl, java.io.Serializable {
 	 * only derived classes of {@link AbstractComponent}.
 	 * @param bFellow whether to add this component to the map of fellows
 	 * if it is assigned with an ID. If false, the component (comp) cannot
-	 * be retrieved back even with an ID.
+	 * be retrieved back even with an ID (note: ID is always preserved).
 	 * @param bListener whether to retain the event listeners and handlers.
 	 * If true, the event listeners and handlers, if any, will be registered
 	 * to this stub component. In other words, the event will be processed.
@@ -1177,7 +1175,8 @@ implements Component, ComponentCtrl, java.io.Serializable {
 	 * I means the event is the most generic format: an instance of
 	 * {@link org.zkoss.zk.ui.event.Event} (rather than MouseEvent or others).
 	 * @param bChildren whether to have the children of the given component.<br/>
-	 * If false, this component won't have any children.<br/>
+	 * If false, this component won't have any children, and all UUID of children
+	 * reference back to this component.<br/>
 	 * If true, the given component's children will belong to this component.
 	 * @exception IllegalStateException if this component has a parent,
 	 * sibling or child.
@@ -1212,35 +1211,48 @@ implements Component, ComponentCtrl, java.io.Serializable {
 
 		_parent = _next = _prev = null;
 
-		//fix children link
-		if (bChildren && _chdinf != null) {
-			for (p = _chdinf.first; p != null; p = p._next)
-				p._parent = comp;
-			comp._chdinf = _chdinf;
-			_chdinf = null;
-		}
-
 		//fix the uuid-to-component map
-		if (_page != null) {
-			comp._page = _page;
+		final Page page;
+		if ((page = _page) != null) {
+			comp._page = page;
 			if (comp._parent == null)
-				((AbstractPage)_page).onReplaced(this, comp);
+				((AbstractPage)page).onReplaced(this, comp);
 				//call onReplaced instead addRoot/removeRoot
 
-			final DesktopCtrl desktopCtrl = (DesktopCtrl)_page.getDesktop();
-			desktopCtrl.removeComponent(this, false);
-			desktopCtrl.addComponent(comp);
+			final DesktopCtrl desktopCtrl = (DesktopCtrl)page.getDesktop();
+			desktopCtrl.mapComponent(_uuid, comp);
 			_page = null;
 		}
 
 		//add comp to the fellow map
-		if (bFellow) {
-			comp._id = _id;
+		comp._id = _id;
+		if (bFellow)
 			addToIdSpaces(comp); ///called after fixing comp._parent...
-		}
 
 		if (_auxinf != null)
 			comp._auxinf = _auxinf.cloneStub(comp, bListener);
+
+		//fix children link; do it as the last step,
+		//since StubsComponent.onChildrenMerge depends on _page
+		if (_chdinf != null)
+			if (bChildren) {
+				for (p = _chdinf.first; p != null; p = p._next)
+					p._parent = comp;
+				comp._chdinf = _chdinf;
+				_chdinf = null;
+			} else if (comp instanceof StubsComponent) { //dirty but not worth to generalize it yet
+				((StubsComponent)comp).onChildrenMerged(this);
+			} else if (page != null) {
+				childrenMerged((DesktopCtrl)page.getDesktop(), _chdinf);
+			}
+	}
+	private static
+	void childrenMerged(DesktopCtrl desktopCtrl, ChildInfo chdinf) {
+		if (chdinf != null)
+			for (AbstractComponent p = chdinf.first; p != null; p = p._next) {
+				desktopCtrl.removeComponent(p, true); //OK to recycle
+				childrenMerged(desktopCtrl, p._chdinf);
+			}
 	}
 
 	/** Appends a child to the end of all children.
@@ -1306,7 +1318,6 @@ implements Component, ComponentCtrl, java.io.Serializable {
 			comp = parent;
 		}
 	}
-
 
 	public boolean isVisible() {
 		return _auxinf == null || _auxinf.visible;

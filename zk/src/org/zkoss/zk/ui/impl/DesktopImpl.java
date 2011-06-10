@@ -558,6 +558,13 @@ public class DesktopImpl implements Desktop, DesktopCtrl, java.io.Serializable {
 		ri.uuids.add(uuid);
 		return true; //recycled
 	}
+	public Component mapComponent(String uuid, Component comp) {
+		if (uuid == null)
+			throw new IllegalArgumentException("null");
+		return comp != null ?
+			(Component)_comps.put(uuid, comp): (Component)_comps.remove(uuid);
+			//no recycle, no check
+	}
 	/** @deprecated As of release 5.0.4, replaced with
 	 * {@link #removeComponent(Component, boolean)}.
 	 */

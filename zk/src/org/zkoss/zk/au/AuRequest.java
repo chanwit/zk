@@ -135,7 +135,6 @@ public class AuRequest {
 				if (_page == null)
 					throw new ComponentNotFoundException("Component not found: "+_uuid);
 			}
-			_uuid = null;
 		}
 	}
 
@@ -178,6 +177,16 @@ public class AuRequest {
 	public Component getComponent() {
 		return _comp;
 	}
+	/** Returns the UUID.
+	 * In most case, it is the same as {@link #getComponent}'s {@link #getUuid}.
+	 * However, they are not the same if the component of the UUID has been
+	 * <i>merged</i> (as a stub component, such as {@link org.zkoss.zk.ui.sys.StubComponent})
+	 * into another one.
+	 * @since 5.1.0
+	 */
+	public String getUuid() {
+		return _uuid;
+	}
 	/** Returns the data of this request.
 	 * If the client sends a string, a number or an array as data,
 	 * the data can be retrieved by the key, "". For example,
@@ -199,7 +208,7 @@ public class AuRequest {
 	}
 	public String toString() {
 		if (_comp != null)
-			return "[comp="+_comp+", cmd="+_cmd+']';
+			return "[comp="+_comp+", uuid="+_uuid+", cmd="+_cmd+']';
 		else if (_page != null)
 			return "[page="+_page+", cmd="+_cmd+']';
 		else
