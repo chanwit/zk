@@ -182,6 +182,7 @@ it will be useful, but WITHOUT ANY WARRANTY.
  * in the input box).
  *
  */
+var Timebox = 
 zul.db.Timebox = zk.$extends(zul.inp.FormatWidget, {
 	_buttonVisible: true,
 	_format: 'HH:mm',
@@ -218,6 +219,15 @@ zul.db.Timebox = zk.$extends(zul.inp.FormatWidget, {
 				}
 				this.onSize();
 			}
+		},
+		/**
+		 * TODO
+		 */
+		/**
+		 * TODO
+		 */
+		unformater: function (unf) {
+			eval('Timebox._unformater = ' + unf);
 		}
 	},
 	setFormat: function (fmt) {
@@ -239,8 +249,9 @@ zul.db.Timebox = zk.$extends(zul.inp.FormatWidget, {
 		return out.join('');
 	},
 	coerceFromString_: function (val) {
-		if (this._unformater) { // TODO: merge to FormatWidget?
-			var cusv = this._unformater(val);
+		var unf = Timebox._unformater;
+		if (unf && jq.isFunction(unf)) {
+			var cusv = unf(val);
 			if (cusv) {
 				this._shortcut = val;
 				return cusv;
@@ -316,7 +327,7 @@ zul.db.Timebox = zk.$extends(zul.inp.FormatWidget, {
 			return;
 
 		// control input keys only when no custom unformater is given
-		if (!this._unformater) {
+		if (!Timebox._unformater) {
 			var code = evt.keyCode;
 			switch(code){
 			case 48:case 96://0
@@ -387,7 +398,7 @@ zul.db.Timebox = zk.$extends(zul.inp.FormatWidget, {
 		this.domUnlisten_(document.body, "onZMouseup", "_dodropbtnup");
 		this._currentbtn = null;
 	},
-	_btnDown: function(evt) {
+	_btnDown: function(evt) { // TODO: format the value first
 		var isRounded = this.inRoundedMold();
 		if (isRounded && !this._buttonVisible) return;
 		
@@ -542,7 +553,7 @@ zul.db.Timebox = zk.$extends(zul.inp.FormatWidget, {
 		this.$supers('doFocus_', arguments);	
 
 		if (!inp.value)
-			inp.value = this._unformater ? '' : this.coerceToString_(); // TODO: restore shortcut value if any
+			inp.value = Timebox._unformater ? '' : this.coerceToString_();
 
 		this._doCheckPos();
 		
@@ -564,7 +575,7 @@ zul.db.Timebox = zk.$extends(zul.inp.FormatWidget, {
 			n.style.width = jq.px0(zk(n).revisedWidth(n.offsetWidth));
 
 		// skip onchange, Bug 2936568
-		if (!this._value && !this._changed && !this._unformater)
+		if (!this._value && !this._changed && !Timebox._unformater)
 			this.getInputNode().value = this._lastRawValVld = '';
 
 		this.$supers('doBlur_', arguments);

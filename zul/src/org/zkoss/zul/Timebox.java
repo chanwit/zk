@@ -304,6 +304,13 @@ will be used to retrieve the real format.
 		df.setTimeZone(tz);
 		return df;
 	}
+	private String getUnformater() {
+		if (org.zkoss.zk.ui.impl.Utils.markClientInfoPerDesktop(
+				getDesktop(), "org.zkoss.zul.Timebox.unformater.isSent")) {
+			return Library.getProperty("org.zkoss.zul.Timebox.unformater");
+		}
+		return null;
+	}
 
 	// super
 	public String getZclass() {
@@ -316,9 +323,8 @@ will be used to retrieve the real format.
 		if(_btnVisible != true)
 			renderer.render("buttonVisible", _btnVisible);
 		
-		String unformater = Library.getProperty("org.zkoss.zul.Timebox.unformater");
+		String unformater = getUnformater();
 		if (!Strings.isBlank(unformater))
 			renderer.render("unformater", unformater); // TODO: compress
-		// TODO: how to send once for all Timebox
 	}
 }

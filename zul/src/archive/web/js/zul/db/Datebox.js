@@ -217,6 +217,15 @@ zul.db.Datebox = zk.$extends(zul.inp.FormatWidget, {
 		displayedTimeZones: function (dtzones) {
 			this._dtzones = dtzones.split(",");
 		},
+		/**
+		 * TODO
+		 */
+		/**
+		 * TODO
+		 */
+		unformater: function (unf) {
+			eval('Datebox._unformater = ' + unf);
+		},
 		/** Sets whether or not date/time parsing is to be lenient.
 		 *
 		 * <p>
@@ -307,8 +316,9 @@ zul.db.Datebox = zk.$extends(zul.inp.FormatWidget, {
 		return this._pop && this._pop.isOpen();
 	},
 	coerceFromString_: function (val) {
-		if (this._unformater) {
-			var cusv = this._unformater(val);
+		var unf = Datebox._unformater;
+		if (unf && jq.isFunction(unf)) {
+			var cusv = unf(val);
 			if (cusv) {
 				this._shortcut = val;
 				return cusv;

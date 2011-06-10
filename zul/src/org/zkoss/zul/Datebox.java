@@ -600,7 +600,14 @@ the short time styling.
 		df.setTimeZone(tz);
 		return df;
 	}
-
+	private String getUnformater() {
+		if (org.zkoss.zk.ui.impl.Utils.markClientInfoPerDesktop(
+				getDesktop(), "org.zkoss.zul.Datebox.unformater.isSent")) {
+			return Library.getProperty("org.zkoss.zul.Datebox.unformater");
+		}
+		return null;
+	}
+	
 	public String getZclass() {
 		return _zclass == null ? "z-datebox" : _zclass;
 	}
@@ -628,9 +635,8 @@ the short time styling.
 			renderer.render("timeZone", _tzone.getID());
 		renderer.render("localizedFormat", getLocalizedFormat());
 		
-		String unformater = Library.getProperty("org.zkoss.zul.Datebox.unformater");
+		String unformater = getUnformater();
 		if (!Strings.isBlank(unformater))
 			renderer.render("unformater", unformater); // TODO: compress
-		// TODO: how to send once for all Datebox
 	}
 }
