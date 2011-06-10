@@ -218,10 +218,10 @@ zul.db.Datebox = zk.$extends(zul.inp.FormatWidget, {
 			this._dtzones = dtzones.split(",");
 		},
 		/**
-		 * TODO
+		 * Returns the unformater.
 		 */
 		/**
-		 * TODO
+		 * Sets the unformater function. This method is called from Server side.
 		 */
 		unformater: function (unf) {
 			eval('Datebox._unformater = ' + unf);

@@ -221,10 +221,10 @@ zul.db.Timebox = zk.$extends(zul.inp.FormatWidget, {
 			}
 		},
 		/**
-		 * TODO
+		 * Returns the unformater.
 		 */
 		/**
-		 * TODO
+		 * Sets the unformater function. This method is called from Server side.
 		 */
 		unformater: function (unf) {
 			eval('Timebox._unformater = ' + unf);
