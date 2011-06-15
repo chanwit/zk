@@ -19,9 +19,8 @@ Copyright (C) 2009 Potix Corporation. All Rights Reserved.
 
 package org.zkoss.zktest.test2;
 
-import org.zkoss.zk.ui.event.Event;
-import org.zkoss.zk.ui.util.GenericAutowireComposer;
 import org.zkoss.zk.ui.util.GenericForwardComposer;
+import org.zkoss.zul.Button;
 
 /**
  * Test whether ZScript variable can be wired.
