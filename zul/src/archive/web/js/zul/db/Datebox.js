@@ -602,7 +602,10 @@ zul.db.CalendarPop = zk.$extends(zul.db.Calendar, {
 		//IE, Opera, and Safari issue: we have to re-position again because some dimensions
 		//in Chinese language might not be correct here.
 		var fmt = db.getTimeFormat(),
-			//we should use UTC date instead of Locale date to our value.
+			unf = Datebox._unformater,
+			value = unf ? unf(inp.value) : null;
+		//we should use UTC date instead of Locale date to our value.
+		if (!value)
 			value = new zk.fmt.Calendar(zk.fmt.Date.parseDate(inp.value, db._format, false, db._value)).toUTCDate()
 				|| (inp.value ? db._value: zUtl.today(fmt));
 		
