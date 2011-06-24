@@ -102,7 +102,7 @@ function zkmprops(uuid, props) {
 	//1. page's AU must be processed after all zkx(), while they might be added
 	//  before zkx (such as test/test.zhtml), or multiple zkx (such jspTags.jsp)
 	//2. mount.js:_startCheck must be called after processing page's AU
-	//  (otherwise, /zkdemo/userguide will jump to #f1 causing additional step)
+	//  (otherwise, zksandbox will jump to #f1 causing additional step)
 	//Note: it is better to block zAu but the chance to be wrong is low --
 	//a timer must be started early and its response depends page's AU
 	jq(function () {
@@ -586,7 +586,7 @@ jq(function() {
 		if (!wgt.afterKeyDown_)
 			return; //handled
 		wevt.target = wgt; //mimic as keydown directly sent to wgt
-		return wgt.afterKeyDown_(wevt);
+		return wgt.afterKeyDown_(wevt,true);
 	}
 
 	jq(document)
@@ -629,7 +629,7 @@ jq(function() {
 		if (wgt) {
 			if (zk.ie)
 				evt.which = 3;
-			var wevt = new zk.Event(wgt, 'onRightClick', evt.mouseData(), {ctl:true}, evt);
+			var wevt = new zk.Event(wgt, 'onRightClick', evt.mouseData(), {}, evt);
 			_doEvt(wevt);
 			if (wevt.domStopped)
 				return false;
@@ -686,7 +686,7 @@ jq(function() {
 
 		if (evt.which == 1)
 			_doEvt(new zk.Event(Widget.$(evt, {child:true}),
-				'onClick', evt.mouseData(), {ctl:true}, evt));
+				'onClick', evt.mouseData(), {}, evt));
 			//don't return anything. Otherwise, it replaces event.returnValue in IE (Bug 1541132)
 	})
 	.bind('zdblclick', function (evt) {
@@ -694,7 +694,7 @@ jq(function() {
 
 		var wgt = Widget.$(evt, {child:true});
 		if (wgt) {
-			var wevt = new zk.Event(wgt, 'onDoubleClick', evt.mouseData(), {ctl:true}, evt);
+			var wevt = new zk.Event(wgt, 'onDoubleClick', evt.mouseData(), {}, evt);
 			_doEvt(wevt);
 			if (wevt.domStopped)
 				return false;

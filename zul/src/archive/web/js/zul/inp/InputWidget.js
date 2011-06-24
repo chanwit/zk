@@ -438,10 +438,11 @@ zul.inp.InputWidget = zk.$extends(zul.Widget, {
 			
 			// Bug #2280308
 			if (this._errbox) {
-				var self = this;
+				var self = this, cstp = self._cst && self._cst._pos;
 				setTimeout(function () {
 					if (self._errbox)
-						self._errbox.open(self, null, "end_before", {dodgeRef: true}); // Bug 3251564
+						self._errbox.open(self, null, cstp || "end_before", 
+								{dodgeRef: !cstp}); // Bug 3251564
 				});
 			}
 		}
@@ -617,8 +618,10 @@ zul.inp.InputWidget = zk.$extends(zul.Widget, {
 				if (msg) {
 					this._markError(msg, val);
 					return {error: msg};
-				} else
+				} else {
 					this._lastRawValVld = value;
+					this.fire('onError', {value: val});
+				}
 			}
 			return {value: val};
 		} finally {
@@ -837,9 +840,5 @@ zul.inp.InputWidget = zk.$extends(zul.Widget, {
 	 * @since 5.0.1
 	 */
 	onChangingForced: true
-});
-zk.load('zul.lang', function () { // Fixed merging JS issue
-	zul.inp.InputWidget._allowKeys = "0123456789"+zk.MINUS+zk.PERCENT
-		+(zk.groupingDenied ? '': zk.GROUPING);
 });
 })();

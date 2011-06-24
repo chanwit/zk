@@ -17,8 +17,15 @@ ZK 5.1.0
 	--------
 ZK 5.0.8
 * Features
+  2971889: Way to notify server of JS error
   3306718: Treeitem allows draggable/droppable (in addion to treerow)
-
+  3287044: decimalbox/intbox/longbox/doublebox/doublespiner/spinner allows users to specify locale
+  3309539: Timebox and Datebox support different language for different locale
+  3310927: ZK JasperReport support JasperReport
+  3315689: Optimize the HtmlMacroComponent 
+  3316591: Allow user to specify error-box position
+  3323594: Render on Demand for Grid and Listbox supports setInitSize
+  
 * Bugs
   3301375: native component in vbox stretch align show javascript error
   3303684: Panel sizable has incorrect moving constraint
@@ -29,8 +36,29 @@ ZK 5.0.8
   3002530: glitches with autopaging and renderdefer
   3306824: NullPointer when combobox's model has null
   3304877: Upload fail when the component with autodisable
-
+  3308335: Fail to dynamically change the roundingMode for subclass...
+  3309174: Remove items from the  model of a non-rod grid cause error
+  3309256: Datebox and Timebox with long format will display wrong
+  3306149: Cannot remove the latest element in grid model (grid in rod)
+  3309632: Upload may incorrectly terminate
+  3307255: Panel in Portallayout missing top and bottom in IE7
+  3310470: Columnlayout does not work with vflex
+  3310055: Timebox issue with daylight saving timezone
+  3309583: Auxheader HTML Error 
+  3315594: Vflex fail with a window contain a listbox with rows
+  3317170: Datebox without rod render a incorrect dom (FF3.6 only)
+  3322903: onTimer may cancel onClick request
+  3322892: emptyMessage fail when Grid has height
+  3309557: Rod render the empty content with listbox
+  3322909: emptyMessage fail when Listbox has height
+  3322970: Listhead checkmark state is not synchronized
+  3310020: init(SCfg) of DhtmlLayoutS. breaks contract of GenericSrvlet
+  3307376: The datebox shall fire onError after the error is cleared.
+  
 * Upgrade Notes
+  + Listbox in the select mold will show up an empty selection if none of listitems
+    are selected (in the prior version, the first item will be shown though it is not
+    selected - Bug 2973303)
   + If enable the autopaging function of Tree, Listbox, and Grid, the height of
 	each row will be applied the following CSS by default. If you want to change
 	the height, please overwrite the CSS rule as your preference.

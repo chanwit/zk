@@ -76,7 +76,9 @@ public class Clients {
 	}
 
 	/** Shows an error message at the browser.
-	 * It is similar to {@link org.zkoss.zul.Messagebox}.
+	 * It works and looks similar to {@link org.zkoss.zul.Messagebox}.
+	 * However, it is not customizable (at the server), but it is
+	 * much faster and light-weighted.
 	 * @since 5.0.3
 	 */
 	public static final void alert(String msg) {

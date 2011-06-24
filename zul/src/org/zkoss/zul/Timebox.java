@@ -21,13 +21,17 @@ package org.zkoss.zul;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.Calendar;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.TimeZone;
 import java.util.Locale;
 
 import org.zkoss.lang.Library;
 import org.zkoss.lang.Objects;
 import org.zkoss.lang.Strings;
+import org.zkoss.util.Dates;
 import org.zkoss.util.Locales;
 import org.zkoss.util.TimeZones;
 import org.zkoss.text.DateFormats;
@@ -227,7 +231,7 @@ will be used to retrieve the real format.
 	public Locale getLocale() {
 		return _locale;
 	}
-	/** Sets the locale used to indetify the format of this timebox.
+	/** Sets the locale used to identify the format of this timebox.
 	 * <p>Default: null (i.e., {@link Locales#getCurrent}, the current locale
 	 * is assumed)
 	 * @since 5.0.7
@@ -235,10 +239,10 @@ will be used to retrieve the real format.
 	public void setLocale(Locale locale) {
 		if (!Objects.equals(_locale, locale)) {
 			_locale = locale;
-			smartUpdate("format", getRealFormat());
+			invalidate();
 		}
 	}
-	/** Sets the locale used to indetify the format of this timebox.
+	/** Sets the locale used to identify the format of this timebox.
 	 * <p>Default: null (i.e., {@link Locales#getCurrent}, the current locale
 	 * is assumed)
 	 * @since 5.0.7
@@ -265,11 +269,13 @@ will be used to retrieve the real format.
 
 	protected Object marshall(Object value) {
 		if (value == null || _tzone == null) return value;
-		return new Date(((Date) value).getTime() - TimeZones.getCurrent().getRawOffset() + _tzone.getRawOffset());
+		Date date = (Date) value;
+		return new Date((date).getTime() - Dates.getTimezoneOffset(TimeZones.getCurrent(), date) + Dates.getTimezoneOffset(_tzone, date));
 	}
 	protected Object unmarshall(Object value) {
 		if (value == null || _tzone == null) return value;
-		return new Date(((Date) value).getTime() + TimeZones.getCurrent().getRawOffset() - _tzone.getRawOffset());
+		Date date = (Date) value;
+		return new Date((date).getTime() + Dates.getTimezoneOffset(TimeZones.getCurrent(), date) - Dates.getTimezoneOffset(_tzone, date));
 	}
 	protected Object coerceFromString(String value) throws WrongValueException {
 		//null or empty string,
@@ -312,6 +318,29 @@ will be used to retrieve the real format.
 		return null;
 	}
 
+	private Object[] getRealSymbols() {
+		if (_locale != null) {
+			final String localeName = _locale.toString();
+			if (org.zkoss.zk.ui.impl.Utils.markClientInfoPerDesktop(
+					getDesktop(),
+					getClass().getName() + localeName)) {
+				final Map map = new HashMap(2);
+				final Calendar cal = Calendar.getInstance(_locale);
+				
+				SimpleDateFormat df = new SimpleDateFormat("a", _locale);
+				cal.set(Calendar.HOUR_OF_DAY, 3);
+				final String[] ampm = new String[2];
+				ampm[0] = df.format(cal.getTime());
+				cal.set(Calendar.HOUR_OF_DAY, 15);
+				ampm[1] = df.format(cal.getTime());
+				map.put("APM", ampm);
+				return new Object[] {localeName, map };
+			}
+			return new Object[] {localeName, null };
+		}
+		return null;
+	}
+	
 	// super
 	public String getZclass() {
 		return _zclass == null ?  "z-timebox" : _zclass;
@@ -326,5 +355,8 @@ will be used to retrieve the real format.
 		String unformater = getUnformater();
 		if (!Strings.isBlank(unformater))
 			renderer.render("unformater", unformater); // TODO: compress
+
+		if (_locale != null)
+			renderer.render("localizedSymbols", getRealSymbols());
 	}
 }

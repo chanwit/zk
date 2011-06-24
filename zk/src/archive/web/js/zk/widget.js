@@ -2075,7 +2075,11 @@ wgt.$f().main.setTitle("foo");
 			//5. bind
 			for (var j = 0, len = wgts.length; j < len; ++j) {
 				wgts[j].bind(fc);
+				//Bug 3322909 Dirty fix for nrows counting wrong,
+				//currently the nrows is for Listbox.
+				var n = this._nrows;  
 				this.onChildReplaced_(oldwgts[j], wgts[j]);
+				this._nrows = n;
 			}
 		}
 	},
@@ -5175,7 +5179,6 @@ function zkopt(opts) {
 		case "dj": zk.debugJS = val; break;
 		case "kd": zk.keepDesktop = val; break;
 		case "pf": zk.pfmeter = val; break;
-		case "cd": zk.clickFilterDelay = val; break;
 		case "ta": zk.timerAlive = val; break;
 		case "gd": zk.groupingDenied = val; break;
 		case "to":

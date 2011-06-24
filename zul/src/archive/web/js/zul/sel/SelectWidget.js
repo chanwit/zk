@@ -42,15 +42,7 @@ it will be useful, but WITHOUT ANY WARRANTY.
 		if (--box._nUpdHeaderCM <= 0 && box.desktop && box._headercm && box._multiple) {
 			var zcls = zk.Widget.$(box._headercm).getZclass() + '-img-seld',
 				$headercm = jq(box._headercm);
-			var checked;
-			for (var it = box.getBodyWidgetIterator({skipHidden:true}), w; (w = it.next());)
-				if (!w.isDisabled() && !w.isSelected()) {
-					checked = false;
-					break;
-				} else
-					checked = true;
-
-			$headercm[checked ? "addClass": "removeClass"](zcls);
+			$headercm[box._isAllSelected() ? "addClass": "removeClass"](zcls);
 		}
 	}
 	function _isButton(evt) {
@@ -486,6 +478,22 @@ zul.sel.SelectWidget = zk.$extends(zul.mesh.MeshWidget, {
 			this._visiRows = v;
 		} else
 			return this.getRows() || this._visiRows || 0;
+	},
+	beforeParentMinFlex_: function (orient) {
+		if (orient == 'h' && this.getRows() > 1) {
+			this.ebody.style.height = '';
+		}
+		this.$supers('beforeParentMinFlex_', arguments);
+	},
+	//Fixed side effect of reversion: 16986
+	afterChildrenMinFlex_: function (orient) {
+		var bdfaker, minWd;
+		if (orient == 'w' && this.getRows() > 1 && 
+			(bdfaker = this.ebdfaker) && (minWd = this._minWd)) {
+			for (var i = minWd.wds.length;i--;)
+				bdfaker.cells[i].style.width = jq.px0(minWd.wds[i]);
+		}
+		this.$supers('afterChildrenMinFlex_', arguments);
 	},
 	/* Height of the head row. If now header, defval is returned. */
 	_headHgh: function (defVal) {
@@ -1058,6 +1066,15 @@ zul.sel.SelectWidget = zk.$extends(zul.mesh.MeshWidget, {
 			this._nUpdHeaderCM = (v = this._nUpdHeaderCM) > 0 ? v + 1: 1;
 			setTimeout(function () {_updHeaderCM(box);}, 100); //do it in batch
 		}
+	},
+	_isAllSelected: function () {
+		var c;
+		for (var it = this.getBodyWidgetIterator({skipHidden:true}), w; (w = it.next());)
+			if (!w.isDisabled() && !w.isSelected())
+				return false;
+			else 
+				c = true;
+		return c;
 	},
 	_ignoreHghExt: function () {
 		return this._rows > 0;

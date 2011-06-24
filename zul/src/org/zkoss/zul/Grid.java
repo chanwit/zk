@@ -38,7 +38,6 @@ import org.zkoss.zk.ui.Execution;
 import org.zkoss.zk.ui.Executions;
 import org.zkoss.zk.ui.Page;
 import org.zkoss.zk.ui.UiException;
-import org.zkoss.zk.ui.WrongValueException;
 import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
@@ -52,7 +51,6 @@ import org.zkoss.zul.event.PagingEvent;
 import org.zkoss.zul.event.RenderEvent;
 import org.zkoss.zul.event.ZulEvents;
 import org.zkoss.zul.ext.Paginal;
-import org.zkoss.zul.ext.Paginated;
 import org.zkoss.zul.impl.DataLoader;
 import org.zkoss.zul.impl.GridDataLoader;
 import org.zkoss.zul.impl.GroupsListModel;
@@ -186,12 +184,25 @@ import org.zkoss.zul.impl.XulElement;
  * Notice that you could specify this attribute in any of its ancestor's attributes.
  * It will be inherited.</dd>
  * </dl>
+ * 
+ * <dt>org.zkoss.zul.grid.preloadSize</dt>.(since 5.0.8) 
+ * <dd>Specifies the number of rows to preload when receiving
+ * the rendering request from the client.
+ * <p>It is used only if live data ({@link #setModel(ListModel)} and
+ * not paging ({@link #getPagingChild}).</dd>
+ * 
+ * <dt>org.zkoss.zul.grid.initRodSize</dt>.(since 5.0.8) 
+ * <dd>Specifies the number of rows rendered when the Grid first render.
+ * <p>
+ * It is used only if live data ({@link #setModel(ListModel)} and not paging
+ * ({@link #getPagingChild}).</dd>
+ * 
  * @author tomyeh
  * @see ListModel
  * @see RowRenderer
  * @see RowRendererExt
  */
-public class Grid extends MeshElement implements Paginated {
+public class Grid extends MeshElement {
 	private static final Log log = Log.lookup(Grid.class);
 	private static final long serialVersionUID = 20091111L;
 
@@ -208,7 +219,6 @@ public class Grid extends MeshElement implements Paginated {
 	private transient Foot _foot;
 	private transient Frozen _frozen;
 	private transient Collection _heads;
-	private String _pagingPosition = "bottom";
 	private transient ListModel _model;
 	private transient RowRenderer _renderer;
 	private transient ListDataListener _dataListener;
@@ -230,10 +240,8 @@ public class Grid extends MeshElement implements Paginated {
 	private int _topPad; //since 5.0.0 top padding
 	private boolean _renderAll; //since 5.0.0
 	
-	
-	private String _emptyMessage;
-	
 	private transient boolean _rod;
+	private String _emptyMessage;
 	
 	static {
 		addClientEvent(Grid.class, Events.ON_RENDER, CE_DUPLICATE_IGNORE|CE_IMPORTANT|CE_NON_DEFERRABLE);
@@ -417,31 +425,6 @@ public class Grid extends MeshElement implements Paginated {
 	}
 
 	//--Paging--//
-	/**
-	 * Sets how to position the paging of grid at the client screen.
-	 * It is meaningless if the mold is not in "paging".
-	 * @param pagingPosition how to position. It can only be "bottom" (the default), or
-	 * "top", or "both".
-	 * @since 3.0.4
-	 */
-	public void setPagingPosition(String pagingPosition) {
-		if (pagingPosition == null || (!pagingPosition.equals("top") &&
-			!pagingPosition.equals("bottom") && !pagingPosition.equals("both")))
-			throw new WrongValueException("Unsupported position : "+pagingPosition);
-		if(!Objects.equals(_pagingPosition, pagingPosition)){
-			_pagingPosition = pagingPosition;
-			smartUpdate("pagingPosition", pagingPosition);
-		}
-	}
-	/**
-	 * Returns how to position the paging of grid at the client screen.
-	 * It is meaningless if the mold is not in "paging".
-	 * @since 3.0.4
-	 */
-	public String getPagingPosition() {
-		return _pagingPosition;
-	}
-	
 	/** Returns the paging controller, or null if not available.
 	 * Note: the paging controller is used only if {@link #getMold} is "paging".
 	 *
@@ -554,41 +537,7 @@ public class Grid extends MeshElement implements Paginated {
 	public Paging getPagingChild() {
 		return _paging;
 	}
-	/** Returns the page size, aka., the number rows per page.
-	 * @exception IllegalStateException if {@link #getPaginal} returns null,
-	 * i.e., mold is not "paging" and no external controller is specified.
-	 */
-	public int getPageSize() {
-		return pgi().getPageSize();
-	}
-	/** Sets the page size, aka., the number rows per page.
-	 * @exception IllegalStateException if {@link #getPaginal} returns null,
-	 * i.e., mold is not "paging" and no external controller is specified.
-	 */
-	public void setPageSize(int pgsz) throws WrongValueException {
-		pgi().setPageSize(pgsz);
-	}
-
-	/** Returns the number of pages.
-	 * Note: there is at least one page even no item at all.
-	 * @since 3.0.4
-	 */
-	public int getPageCount() {
-		return pgi().getPageCount();
-	}
-	/** Returns the active page (starting from 0).
-	 * @since 3.0.4
-	 */
-	public int getActivePage() {
-		return pgi().getActivePage();
-	}
-	/** Sets the active page (starting from 0).
-	 * @since 3.0.4
-	 */
-	public void setActivePage(int pg) throws WrongValueException {
-		pgi().setActivePage(pg);
-	}
-	private Paginal pgi() {
+	protected Paginal pgi() {
 		if (_pgi == null)
 			throw new IllegalStateException("Available only the paging mold");
 		return _pgi;
@@ -777,7 +726,8 @@ public class Grid extends MeshElement implements Paginated {
 			setRowRenderer((RowRenderer)Classes.newInstanceByThread(clsnm));
 	}
 
-	/** Returns the number of rows to preload when receiving
+	/** @deprecated As of release 5.0.8, use custom attributes (org.zkoss.zul.listbox.preloadSize) instead.
+	 * Returns the number of rows to preload when receiving
 	 * the rendering request from the client.
 	 *
 	 * <p>Default: 7.
@@ -792,7 +742,8 @@ public class Grid extends MeshElement implements Paginated {
 		final String size = (String) getAttribute("pre-load-size");
 		return size != null ? Integer.parseInt(size) : _preloadsz;
 	}
-	/** Sets the number of rows to preload when receiving
+	/** @deprecated As of release 5.0.8, use custom attributes (org.zkoss.zul.listbox.preloadSize) instead.
+	 * Sets the number of rows to preload when receiving
 	 * the rendering request from the client.
 	 * <p>It is used only if live data ({@link #setModel(ListModel)} and
 	 * not paging ({@link #getPagingChild}.
@@ -1112,7 +1063,7 @@ public class Grid extends MeshElement implements Paginated {
 					removePagingListener(_pgi);
 				}
 				if (getModel() != null) {
-					getDataLoader().syncModel(0, INIT_LIMIT); //change offset back to 0
+					getDataLoader().syncModel(0, initRodSize()); //change offset back to 0
 					postOnInitRender();
 				}
 				invalidate(); //paging mold -> non-paging mold
@@ -1209,7 +1160,7 @@ public class Grid extends MeshElement implements Paginated {
 		return true;
 	}
 	
-	private boolean evalRod() {
+	/*package*/ boolean evalRod() {
 		return Utils.testAttribute(this, "org.zkoss.zul.grid.rod", false, true);
 	}
 	
@@ -1223,6 +1174,41 @@ public class Grid extends MeshElement implements Paginated {
 			val = Library.getProperty(attr);
 		return val instanceof Boolean ? ((Boolean)val).booleanValue():
 			val != null ? "true".equals(val) || "ignore.change".equals(val): false;
+	}
+	
+	/** 
+	 * Returns the number of rows to preload when receiving the rendering
+	 * request from the client.
+	 * <p>
+	 * Default: 7.
+	 * <p>
+	 * It is used only if live data ({@link #setModel(ListModel)} and not paging
+	 * ({@link #getPagingChild}.
+	 */
+	private int preloadSize() {
+		final String size = (String) getAttribute("pre-load-size");
+		int sz = size != null ? Integer.parseInt(size) : _preloadsz;
+		
+		if ((sz = Utils.testAttribute(this, 
+				"org.zkoss.zul.grid.preloadSize", sz, true)) < 0)
+			throw new UiException("nonnegative is required: " + sz);
+		return sz;
+	}
+	
+	/** 
+	 * Returns the number of rows rendered when the Grid first render.
+	 *  <p>
+	 * Default: 100.
+	 * <p>
+	 * It is used only if live data ({@link #setModel(ListModel)} and not paging
+	 * ({@link #getPagingChild}.
+	 */
+	private int initRodSize() {
+		int sz = Utils.testAttribute(this, "org.zkoss.zul.grid.initRodSize",
+				INIT_LIMIT, true);
+		if ((sz) < 0)
+			throw new UiException("nonnegative is required: " + sz);
+		return sz;
 	}
 	
 	/** Returns whether to sort all of item when model or sort direction be changed.
@@ -1247,7 +1233,7 @@ public class Grid extends MeshElement implements Paginated {
 			} catch (Exception e) {
 				throw UiException.Aide.wrap(e);
 			}
-			_dataLoader.init(this, 0, INIT_LIMIT);
+			_dataLoader.init(this, 0, initRodSize());
 		}
 		return _dataLoader;
 	}
@@ -1360,8 +1346,6 @@ public class Grid extends MeshElement implements Paginated {
 		if (_model != null)
 			render(renderer, "model", true);
 
-		if (!"bottom".equals(_pagingPosition))
-			render(renderer, "pagingPosition", _pagingPosition);
 		if (!"100%".equals(_innerWidth))
 			render(renderer, "innerWidth", _innerWidth);
 		if (_currentTop != 0)
@@ -1376,8 +1360,12 @@ public class Grid extends MeshElement implements Paginated {
 		renderer.render("_totalSize", getDataLoader().getTotalSize());
 		renderer.render("_offset", getDataLoader().getOffset());
 		
-		if (_rod && ((Cropper)getDataLoader()).isCropper()) {//bug #2936064 
-			renderer.render("_grid$rod", true);
+		if (_rod) {
+			if (((Cropper)getDataLoader()).isCropper())//bug #2936064 
+					renderer.render("_grid$rod", true);
+			int sz = initRodSize();
+			if (sz != INIT_LIMIT)
+				renderer.render("initRodSize", initRodSize());
 		}
 	}
 	/*package*/ boolean isRod() {
@@ -1422,7 +1410,7 @@ public class Grid extends MeshElement implements Paginated {
 	public void service(org.zkoss.zk.au.AuRequest request, boolean everError) {
 		final String cmd = request.getCommand();
 		if (cmd.equals("onDataLoading")) {
-			Events.postEvent(DataLoadingEvent.getDataLoadingEvent(request, getPreloadSize()));
+			Events.postEvent(DataLoadingEvent.getDataLoadingEvent(request, preloadSize()));
 		} else if (inPagingMold() && cmd.equals(ZulEvents.ON_PAGE_SIZE)) {
 			final Map data = request.getData();
 			final int oldsize = getPageSize();

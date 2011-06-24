@@ -43,13 +43,14 @@ it will be useful, but WITHOUT ANY WARRANTY.
 		 */
 		HOUR3_FIELD = 7;
 	function _updFormat(wgt, fmt) {
-		var index = [];
+		var index = [],
+			APM = wgt._localizedSymbols ? wgt._localizedSymbols.APM : zk.APM;
 		for (var i = 0, l = fmt.length; i < l; i++) {
 			var c = fmt.charAt(i);
 			switch (c) {
 			case 'a':
-				var len = zk.APM[0].length;
-				index.push(new zul.inp.AMPMHandler([i, i + len - 1], AM_PM_FIELD));
+				var len = APM[0].length;
+				index.push(new zul.inp.AMPMHandler([i, i + len - 1], AM_PM_FIELD, wgt));
 				break;
 			case 'K':
 				var start = i,
@@ -168,7 +169,7 @@ it will be useful, but WITHOUT ANY WARRANTY.
 		}
 		return (lastTh.digits == 1) ? ++len: len;
 	}
-
+	var globallocalizedSymbols = {};
 /**
  * An input box for holding a time (a Date Object, but only Hour & Minute are used.
  *
@@ -176,11 +177,10 @@ it will be useful, but WITHOUT ANY WARRANTY.
  *
  * <p>timebox doens't support customized format. It support HH:mm formate, where HH is hour of day and mm is minute of hour.
  * 
- * <p>Like {@link zul.inp.Combobox} and {@link zul.db.Datebox},
+ * <p>Like {@link zul.inp.Combobox} and {@link Datebox},
  * the value of a read-only time box ({@link #isReadonly}) can be changed
  * by clicking the up or down button (though users cannot type anything
  * in the input box).
- *
  */
 var Timebox = 
 zul.db.Timebox = zk.$extends(zul.inp.FormatWidget, {
@@ -228,9 +228,20 @@ zul.db.Timebox = zk.$extends(zul.inp.FormatWidget, {
 		 */
 		unformater: function (unf) {
 			eval('Timebox._unformater = ' + unf);
-		}
+		},
+		localizedSymbols: [
+			function (val) {
+				if(val) {
+					if (!globallocalizedSymbols[val[0]])
+						globallocalizedSymbols[val[0]] = val[1];
+					return globallocalizedSymbols[val[0]];
+				} 
+				return val;
+			}
+		]
 	},
 	setFormat: function (fmt) {
+		fmt = fmt ? fmt.replace(/\'/g, '') : fmt;
 		_updFormat(this, fmt);
 		this.$supers('setFormat', arguments);
 	},
@@ -506,7 +517,9 @@ zul.db.Timebox = zk.$extends(zul.inp.FormatWidget, {
 		this.getTimeHandler().addTime(this, val);
 	},
 	getTimeHandler: function () {
-		var pos = zk(this.getInputNode()).getSelectionRange()[0];
+		var pos = zk(this.getInputNode()).getSelectionRange()[1];
+			//don't use [0], it may have a bug when the format is aHH:mm:ss 
+		
 		for (var i = 0, f = this._fmthdler, l = f.length; i < l; i++) {
 			if (!f[i].type) continue;
 			if (f[i].index[0] <= pos && f[i].index[1] + 1 >= pos)
@@ -632,11 +645,12 @@ zul.inp.TimeHandler = zk.$extends(zk.Object, {
 	maxsize: 59,
 	minsize: 0,
 	digits: 2,
-	$init: function (index, type) {
+	$init: function (index, type, wgt) {
 		this.index = index;
 		this.type = type;
 		if (index[0] == index[1])
 			this.digits = 1;
+		this.wgt = wgt;
 	},
 	format: function (date) {
 		return '00';
@@ -952,25 +966,28 @@ zul.inp.SecondHandler = zk.$extends(zul.inp.TimeHandler, {
 });
 zul.inp.AMPMHandler = zk.$extends(zul.inp.TimeHandler, {
 	format: function (date) {
+		var APM = this.wgt._localizedSymbols ? this.wgt._localizedSymbols.APM : zk.APM;
 		if (!date)
-			return zk.APM[0];
+			return APM[0];
 		var h = date.getHours();
-		return zk.APM[h < 12 ? 0 : 1];
+		return APM[h < 12 ? 0 : 1];
 	},
 	unformat: function (date, val) {
-		var text = this.getText(val).trim();
-		return (text.length == zk.APM[0].length) ? 
-			zk.APM[0] == text : true;
+		var text = this.getText(val).trim(),
+			APM = this.wgt._localizedSymbols ? this.wgt._localizedSymbols.APM : zk.APM;
+		return (text.length == APM[0].length) ? 
+			APM[0] == text : true;
 	},
 	addTime: function (wgt, num) {
 		var inp = wgt.getInputNode(),
 			start = this.index[0],
 			end = this.index[1] + 1,
 			val = inp.value,
-			text = val.substring(start, end);
+			text = val.substring(start, end),
+			APM = wgt._localizedSymbols ? wgt._localizedSymbols.APM : zk.APM;
 		//restore A/PM text
-		if (text != zk.APM[0] && text != zk.APM[1]) {
-			text = zk.APM[0];
+		if (text != APM[0] && text != APM[1]) {
+			text = APM[0];
 			inp.value = val.substring(0, start) + text + val.substring(end);
 		}
 		this._addNextTime(wgt, num);
@@ -980,9 +997,10 @@ zul.inp.AMPMHandler = zk.$extends(zul.inp.TimeHandler, {
 			start = this.index[0],
 			end = this.index[1] + 1,
 			val = inp.value,
-			text = val.substring(start, end);
+			text = val.substring(start, end),
+			APM = wgt._localizedSymbols ? wgt._localizedSymbols.APM : zk.APM;
 
-		text = zk.APM[0] == text ? zk.APM[1] : zk.APM[0];
+		text = APM[0] == text ? APM[1] : APM[0];
 		inp.value = val.substring(0, start) + text + val.substring(end);
 		zk(inp).setSelectionRange(start, end);
 	}

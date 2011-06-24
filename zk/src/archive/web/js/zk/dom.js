@@ -1897,10 +1897,12 @@ jq.filterTextStyle({width:"100px", fontSize: "10pt"});
 	 * <code>org.zkoss.zul.Messagebox.show()</code> at the server.
 <pre><code>
 jq.alert('Hi');
-jq.alert('This is a popup message box', {mode:popup, icon: ERROR});
+jq.alert('This is a popup message box', {mode:"popup", icon: "ERROR"});
 jq.alert('With listener', {
-  YES: function () {jq.alert('Yes clicked')},
-  NO: function () {jq.alert('No clicked')}
+	button : {
+  		YES: function () {jq.alert('Yes clicked')},
+  		NO: function () {jq.alert('No clicked')}
+	}
 });
 </code></pre>
 	 * @param String msg the message to show
@@ -1940,7 +1942,8 @@ jq.alert('With listener', {
 </td></tr>
 <tr>
 <td> button
-</td><td> a map ({@link Map}) of buttons. If null or empty, OK is assumed
+</td><td> a map ({@link Map}) of buttons.
+</td><td> If null or empty, OK is assumed
 </td><td> Specifies what buttons to display. The key is the button name,
 and the value is a function ({@link Function}) to execute when the button
 is clicked.
@@ -2190,7 +2193,7 @@ zk.copy(jq.Event, {
 	zk: function (evt, wgt) {
 		var type = evt.type,
 			target = zk.Widget.$(evt) || wgt,
-			data, opts;
+			data;
 
 		if (type.startsWith('mouse')) {
 			if (type.length > 5)
@@ -2202,16 +2205,13 @@ zk.copy(jq.Event, {
 			data = evt.keyData();
 		} else if (type == 'dblclick') {
 			data = evt.mouseData();
-			opts = {ctl:true};
 			type = 'DoubleClick';
 		} else {
-			if (type == 'click') {
+			if (type == 'click')
 				data = evt.mouseData();
-				opts = {ctl:true};
-			}
 			type = type.charAt(0).toUpperCase() + type.substring(1);
 		}
-		return new zk.Event(target, 'on' + type, data, opts, evt);
+		return new zk.Event(target, 'on' + type, data, {}, evt);
 	}
 });
 })(document, window);

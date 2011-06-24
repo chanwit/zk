@@ -316,12 +316,12 @@ zul.Uploader = zk.$extends(zk.Object, {
 				success: function(data) {
 					var d = data.split(',');
 					if (data.startsWith('error:')) {
+						self._echo = true; // B50-3309632
 						zul.Uploader.clearInterval(self.id);
-							var wgt = self.getWidget();
-							if (wgt) {
-								self.cancel();
-								zul.Upload.error(data.substring(6, data.length), wgt.uuid, self._sid);
-							}
+						if (wgt) {
+							self.cancel();
+							zul.Upload.error(data.substring(6, data.length), wgt.uuid, self._sid);
+						}
 					} else if (!self.update(zk.parseInt(d[0]), zk.parseInt(d[1])))
 						zul.Uploader.clearInterval(self.id);
 				},
@@ -368,8 +368,13 @@ zul.Uploader = zk.$extends(zk.Object, {
 	 */
 	update: function (sent, total) {
 		var wgt = this.getWidget();
-		if (!wgt || total <= 0) this.end();
+		if (!wgt || total <= 0)
+			if (this._echo)
+				this.end();
+			else
+				return true; // B50-3309632: server may not even see the file yet, keep asking
 		else if (zul.Uploader._tmupload) {
+			this._echo = true;
 			if (sent >= 0 && sent <= 100)
 				this.viewer.update(sent, total);
 			return sent >= 0 && sent < 100;
@@ -383,6 +388,7 @@ zul.Uploader = zk.$extends(zk.Object, {
 	end: function (finish) {
 		this.viewer.destroy(finish);
 		zul.Upload.destroy(this);
+		this._echo = true;
 		
 		//B50-3304877: autodisable and Upload
 		var wgt, upload, aded, parent;
