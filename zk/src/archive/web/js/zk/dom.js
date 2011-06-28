@@ -1127,45 +1127,25 @@ jq(el).zk.center(); //same as 'center'
 	 * @return int the offset width
 	 */
 	offsetWidth: function () {
-		var el = this.jq[0];
-		if (!zk.safari || !jq.nodeName(el, "tr")) return el.offsetWidth;
-
-		var wd = 0;
-		for (var cells = el.cells, j = cells.length; j--;)
-			wd += cells[j].offsetWidth;
-		return wd;
+		return this.jq[0].offsetWidth;
 	},
 	/** Returns the offset height. It is similar to el.offsetHeight, except it solves some browser's bug or limitation. 
 	 * @return int the offset height
 	 */
 	offsetHeight: function () {
-		var el = this.jq[0];
-		if (!zk.safari || !jq.nodeName(el, "tr")) return el.offsetHeight;
-
-		var hgh = 0;
-		for (var cells = el.cells, j = cells.length; j--;) {
-			var h = cells[j].offsetHeight;
-			if (h > hgh) hgh = h;
-		}
-		return hgh;
+		return this.jq[0].offsetHeight;
 	},
 	/** Returns the offset top. It is similar to el.offsetTop, except it solves some browser's bug or limitation. 
 	 * @return int the offset top
 	 */
 	offsetTop: function () {
-		var el = this.jq[0];
-		if (zk.safari && jq.nodeName(el, "tr") && el.cells.length)
-			el = el.cells[0];
-		return el.offsetTop;
+		return this.jq[0].offsetTop;
 	},
 	/** Returns the offset left. It is similar to el.offsetLeft, except it solves some browser's bug or limitation.
 	 * @return int the offset left
 	 */
 	offsetLeft: function () {
-		var el = this.jq[0];
-		if (zk.safari && jq.nodeName(el, "tr") && el.cells.length)
-			el = el.cells[0];
-		return el.offsetLeft;
+		return this.jq[0].offsetLeft;
 	},
 
 	/** Returns the X/Y coordinates of the first matched element relative to the viewport. 

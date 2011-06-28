@@ -25,6 +25,8 @@ ZK 5.0.8
   3315689: Optimize the HtmlMacroComponent 
   3316591: Allow user to specify error-box position
   3323594: Render on Demand for Grid and Listbox supports setInitSize
+  3326788: A way to name the composer GenericAutowireComposer
+  3327013: A way to log message to the client
   
 * Bugs
   3301375: native component in vbox stretch align show javascript error
@@ -54,6 +56,12 @@ ZK 5.0.8
   3322970: Listhead checkmark state is not synchronized
   3310020: init(SCfg) of DhtmlLayoutS. breaks contract of GenericSrvlet
   3307376: The datebox shall fire onError after the error is cleared.
+  3322795: double spinner weird action
+  3322816: Doublespinner cannot accept empty value
+  3306850: doublespinner has weird actions
+  3303770: WrongValueException in Grid with paging mold
+  3314014: Separator bar not showing in IE6
+  3315668: doModal Window sometimes can't close with a cluster weblogic
   
 * Upgrade Notes
   + Listbox in the select mold will show up an empty selection if none of listitems
@@ -79,6 +87,8 @@ ZK 5.0.8
 }
   + iDOM is simplified and the concept of readonly and modification is removed.
   + The id-to-uuid-prefix configuration is removed
+  + Add org.zkoss.zkplus.cluster.ClusterSessionPatch listener to zk.xml
+  	enforcing GAE to write session states for each Ajax request
 
 	--------
 ZK 5.0.7.1

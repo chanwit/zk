@@ -117,4 +117,24 @@ public class StubsComponent extends StubComponent {
 	protected boolean isChildable() {
 		return false;
 	}
+	public String toString() {
+		final StringBuffer sb = new StringBuffer(super.toString());
+		if (_uuids != null) {
+			sb.append('(');
+			for (int j = 0; j < _uuids.length; ++j) {
+				if (j != 0) sb.append(", ");
+				sb.append(_uuids[j]);
+			}
+			sb.append(')');
+		}
+		if (_idmap != null) {
+			sb.append('(');
+			for (int j = 0; j < _idmap.length; ++j) {
+				if (j != 0) sb.append(", ");
+				sb.append(_idmap[j][0]).append('=').append(_idmap[j][1]);
+			}
+			sb.append(')');
+		}
+		return sb.toString();
+	}
 }
