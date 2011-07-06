@@ -126,6 +126,7 @@ implements Condition, java.io.Serializable {
 	 * {@link Page#getZScriptLanguage}.
 	 * @param content the zscript content
 	 * @since 3.0.0
+	 * @see #parseContent
 	 */
 	public ZScript(EvaluatorRef evalr, String zslang, String content, ConditionImpl cond) {
 		_evalr = evalr;
@@ -140,6 +141,7 @@ implements Condition, java.io.Serializable {
 	 * @param evalr the evaluator reference. It is required if cond is not null.
 	 * @param url the URL to load the content of zscript.
 	 * @since 3.0.0
+	 * @see #parseContent
 	 */
 	public ZScript(EvaluatorRef evalr, String zslang, URL url, ConditionImpl cond) {
 		if (url == null)
@@ -160,6 +162,7 @@ implements Condition, java.io.Serializable {
 	 * It is required if cond is not null or url contains EL expression.
 	 * @param url the URL. It may contain XEL expressions.
 	 * @param locator the locator used to locate the zscript file
+	 * @see #parseContent
 	 */
 	public ZScript(EvaluatorRef evalr, String zslang, String url, ConditionImpl cond, Locator locator) {
 		if (url == null || locator == null)
