@@ -413,8 +413,7 @@ function zkmprops(uuid, props) {
 			if (wi) {
 				if (wi[0] === 0) { //page
 					var props = wi[2];
-					zkdt(zk.cut(props, "dt"), zk.cut(props, "cu"), zk.cut(props, "uu"), zk.cut(props, "ru"))
-						._pguid = wi[1];
+					zkdt(zk.cut(props, "dt"), zk.cut(props, "cu"), zk.cut(props, "uu"), zk.cut(props, "ru"));
 					if (owner = zk.cut(props, "ow"))
 						owner = Widget.$(owner);
 				}
@@ -651,7 +650,8 @@ jq(function() {
 			_docMouseDown(e, null, true); //simulate mousedown
 
 			//simulate focus if zk.Draggable invokes evt.stop
-			if ((wgt = e.target) && wgt != zk.currentFocus)
+			if ((wgt = e.target) && wgt != zk.currentFocus
+			&& !zk.Draggable.ignoreStop(wgt.$n()))
 				try {wgt.focus();} catch (e) {}
 				//Bug 3017606/2988327: don't invoke window.blur,or browser might be min (IE/FF)
 		}
@@ -737,20 +737,8 @@ jq(function() {
 		if (bRmDesktop || zk.pfmeter) {
 			try {
 				var dts = zk.Desktop.all;
-				for (var dtid in dts) {
-					var dt = dts[dtid];
-					jq.ajax(zk.$default({
-						url: zk.ajaxURI(null, {desktop:dt,au:true}),
-						data: {dtid: dtid, cmd_0: bRmDesktop?"rmDesktop":"dummy", opt_0: "i"},
-						beforeSend: function (xhr) {
-							if (zk.pfmeter) zAu._pfsend(dt, xhr, true);
-						},
-						//2011/04/22 feature 3291332
-						//Use sync request for chrome and safari.
-						//Note: when pressing F5, the request's URL still arrives before this even async:false
-						async: !zk.safari
-					}, zAu.ajaxSettings), true/*fixed IE memory issue for jQuery 1.4.x*/);
-				}
+				for (var dtid in dts)
+					zAu._rmDesktop(dts[dtid], !bRmDesktop);
 			} catch (e) { //silent
 			}
 		}

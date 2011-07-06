@@ -12,8 +12,8 @@ Copyright (C) 2009 Potix Corporation. All Rights Reserved.
 This program is distributed under LGPL Version 3.0 in the hope that
 it will be useful, but WITHOUT ANY WARRANTY.
 */
-/** The two-dimentional mesh related widgets.
- * A mesh widget is a two-dimentional widgets, such as grid, listbox and tree.
+/** The two-dimensional mesh related widgets.
+ * A mesh widget is a two-dimensional widgets, such as grid, listbox and tree.
  * Classes in this package is the skeletal implementation that can be used
  * to simplify the implementation of grid, listbox and tree.
  */
@@ -37,7 +37,7 @@ it will be useful, but WITHOUT ANY WARRANTY.
 		var wgtn = wgt.$n(),
 			ws = wgtn ? wgtn.style.whiteSpace : ""; //bug#3106514: sizedByContent with not visible columns
 		if (wgtn)
-			wgtn.style.whiteSpace = 'pre';//'nowrap';
+			wgtn.style.whiteSpace = 'nowrap'; // B50-3316030, B50-3346235: pre cause extra space
 		var eheadtblw,
 			efoottblw,
 			ebodytblw,
@@ -106,7 +106,7 @@ it will be useful, but WITHOUT ANY WARRANTY.
 		}
 
 		//calculate widths
-		var	wds = [],
+		var wds = [],
 			width = 0,
 			w = head ? head = head.lastChild : null,
 			headWgt = wgt.getHeadWidget(),
@@ -132,8 +132,23 @@ it will be useful, but WITHOUT ANY WARRANTY.
 				width += wd;
 				if (w) w = w.previousSibling;
 			}
-			if (zk.ie < 8) //**Tricky. ie6/ie7 strange behavior, will generate horizontal scrollbar, minus one to avoid it! 
-				--wds[maxj];
+			/** Fixed for B50-2979776.zul
+			 * if (zk.ie < 8) //**Tricky. ie6/ie7 strange behavior, will generate horizontal scrollbar, minus one to avoid it! 
+				--wds[maxj];*/
+		} else {
+			var tr;
+			if (tr = wgt._getSigRow()) {
+				for (var cells = tr.cells, i = cells.length; i--;) {
+					var wd = cells[i].offsetWidth;
+					wds[i] = wd;
+					if (zk.ie < 8 && max < wd) {
+						max = wd;
+						maxj = i;
+					} else if (zk.ff == 4 || zk.ie == 9) // firefox4 & IE9 still cause break line in case B50-3147926 column 1
+						++wds[i];
+					width += wd;
+				}
+			}
 		}
 
 		if (wgt.eheadtbl) {//restore headers widthes
@@ -150,17 +165,15 @@ it will be useful, but WITHOUT ANY WARRANTY.
 		if (wgt.efoottbl) {//restore footers widthes
 			wgt.efoottbl.width = efoottblw||'';
 			wgt.efoottbl.style.tableLayout = efoottblfix||'';
-			for (var i = ftfaker.cells.length - (fakerflex ? 1 : 0); i--;) {
+			for (var i = ftfaker.cells.length - (fakerflex ? 1 : 0); i--;)
 				ftfaker.cells[i].style.width = ftfakerws[i];
-			}
 		}
 		if (wgt.ebodytbl) {//restore body fackers widthes
 			wgt.ebodytbl.width = ebodytblw||'';
 			wgt.ebodytbl.style.tableLayout = ebodytblfix||'';
 			if (bdfaker)
-				for (var i = bdfaker.cells.length - (fakerflex ? 1 : 0); i--;) {
+				for (var i = bdfaker.cells.length - (fakerflex ? 1 : 0); i--;)
 					bdfaker.cells[i].style.width = bdfakerws[i];
-				}
 		}
 
 		if (wgtn)
@@ -453,7 +466,7 @@ zul.mesh.MeshWidget = zk.$extends(zul.Widget, {
 		if (!this.inServer && this.desktop)
 			this.onResponse();
 	},
-	_fixHeaders: function () {
+	_fixHeaders: function (force) {
 		if (this.head && this.ehead) {
 			var empty = true;
 			var flex = false;
@@ -472,7 +485,7 @@ zul.mesh.MeshWidget = zk.$extends(zul.Widget, {
 			var old = this.ehead.style.display; 
 			this.ehead.style.display = empty ? 'none' : '';
 			//onSize is not fired to empty header when loading page, so we have to simulate it here
-			if (empty && flex && this.isRealVisible()) 
+			if ((force || empty) && flex && this.isRealVisible()) 
 				for (var w = this.head.firstChild; w; w = w.nextSibling)
 					if (w._nhflex) w.fixFlex_();
 			return old != this.ehead.style.display;
@@ -518,7 +531,8 @@ zul.mesh.MeshWidget = zk.$extends(zul.Widget, {
 				}
 				++i;
 			}
-		}
+		} else
+			width = this._minWd.width; // no header
 		return width + (zk.ie && !zk.ie8 ? 1 : 0);
 	},
 	_bindDomNode: function () {
@@ -1057,14 +1071,51 @@ zul.mesh.MeshWidget = zk.$extends(zul.Widget, {
 			if (this.isSizedByContent())
 				this._calcSize();
 			if (this.head) {
-				this._fixHeaders();
+				this._fixHeaders(true/** B50-3315594.zul */);
 				for(var w = this.head.firstChild; w; w = w.nextSibling) 
 					if (w._hflex == 'min' && w.hflexsz === undefined) //header hflex="min" not done yet!
 						return null;				
 			}
-			return this._getMinWd(); //grid.invalidate() with hflex="min" must maintain the width 
+			var width = this._getMinWd(); //grid.invalidate() with hflex="min" must maintain the width
+			if (!this.head && this._hflex == 'min')
+				this._fixBodyMinWd(); // sized by content without header
+			return width;
 		}
 		return null;
+	},
+	_fixBodyMinWd: function () {
+		// called only when there is no header
+		var tr = this.ebodytbl,
+			wds = this._minWd.wds,
+			wlen = wds.length;
+		if (!(tr = tr.firstChild) || !(tr = tr.firstChild))
+			return; // no first tr
+		for (var c = tr.firstChild, i = 0; c && (i < wlen); c = c.nextSibling)
+			c.style.width = (zk.safari ? wds[i++] : zk(c).revisedWidth(wds[i++])) + "px";
+	},
+	_getSigRow: function () {
+		// scan for tr with largest number of td children
+		var tr = this.ebodytbl;
+		if (!(tr = tr.firstChild) || !(tr = tr.firstChild))
+			return; // no first tr
+		for (var maxtr = tr, len, max = maxtr.cells.length; tr; tr = tr.nextSibling)
+			if ((len = tr.cells.length) > max) {
+				maxtr = tr;
+				max = len;
+			}
+		return maxtr;
+	},
+	// fixed for B50-3315594.zul
+	beforeParentMinFlex_: function (orient) {
+		if (orient == 'w') {
+			if (this.isSizedByContent()) 
+				this._calcSize();
+			if (this.head) {
+				this._fixHeaders();
+			}
+		} else {
+			this._calcSize();
+		}
 	},
 	_calcMinWds: function () {
 		if (!this._minWd)

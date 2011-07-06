@@ -62,6 +62,26 @@ ZK 5.0.8
   3303770: WrongValueException in Grid with paging mold
   3314014: Separator bar not showing in IE6
   3315668: doModal Window sometimes can't close with a cluster weblogic
+  3340252: Set vflex to cell in Vbox cause js error
+  3336745: getBoundingClientRect cause error on IE/FF
+  3323593: Timebox with long format shows meanless "z"
+  3314513: Datebox validate fail with different locale
+  3317729: Textbox with hflex="1" shall occupied column's width (IE)
+  3312936: Panel vflex issue (IE6/7)
+  3309193: Chrome returns wrong margin value on InputElement
+  3310406: ztag selector throws error when mounting
+  3339315: Mesh Element with hflex min causes zero width
+  3316035: Grid with sizedByContent and hflex:min display wrong
+  3345636: Chrome, Set hflex="1" to Datebox do not align with Textbox
+  3309975: Textbox in a  draggable component get selection while focus 
+  3310017: The textbox's cursor position cannot be changed
+  3313028: Grid hflex fail while the label in a div with FF4
+  3330762: DoubleSpinner's ClassCastException on value get
+  3348943: ZK JPA cause Exception
+  3316030: Column with hflex:min, but it is not real displayed as min 
+  3325041: doublespinner can't type in floating number
+  3316543: Only load the first property file
+  3304954: HoverImage doesn't show up in menus
   
 * Upgrade Notes
   + Listbox in the select mold will show up an empty selection if none of listitems

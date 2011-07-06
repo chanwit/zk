@@ -2991,7 +2991,7 @@ public class Listbox extends MeshElement {
 		final String size = (String) getAttribute("pre-load-size");
 		int sz = size != null ? Integer.parseInt(size) : _preloadsz;
 		
-		if ((sz = Utils.testAttribute(this, 
+		if ((sz = Utils.getIntAttribute(this, 
 				"org.zkoss.zul.listbox.preloadSize", sz, true)) < 0)
 			throw new UiException("nonnegative is required: " + sz);
 		return sz;
@@ -3006,7 +3006,7 @@ public class Listbox extends MeshElement {
 	 * ({@link #getPagingChild}.
 	 */
 	private int initRodSize() {
-		int sz = Utils.testAttribute(this, "org.zkoss.zul.listbox.initRodSize",
+		int sz = Utils.getIntAttribute(this, "org.zkoss.zul.listbox.initRodSize",
 				INIT_LIMIT, true);
 		if ((sz) < 0)
 			throw new UiException("nonnegative is required: " + sz);

@@ -306,8 +306,9 @@ Copyright (C) 2008 Potix Corporation. All Rights Reserved.
 	function toJSON(target, data) {
 		if (!jq.isArray(data)) {
 			if (data.pageX != null && data.x == null)  {
-				var ofs = target ? target.fromPageCoord(data.pageX, data.pageY):
-					[data.pageX, data.pageY];
+				var ofs = target && target.desktop ? // B50-3336745: target may have been detached
+						target.fromPageCoord(data.pageX, data.pageY):
+						[data.pageX, data.pageY];
 				data.x = ofs[0];
 				data.y = ofs[1];
 			}
@@ -578,6 +579,21 @@ zAu = {
 			}
 			return;
 		}
+	},
+
+	//remove desktop (used in mount.js and wiget.js)
+	_rmDesktop: function (dt, dummy) {
+		jq.ajax(zk.$default({
+			url: zk.ajaxURI(null, {desktop:dt,au:true}),
+			data: {dtid: dt.id, cmd_0: dummy ? "dummy": "rmDesktop", opt_0: "i"},
+			beforeSend: function (xhr) {
+				if (zk.pfmeter) zAu._pfsend(dt, xhr, true);
+			},
+			//2011/04/22 feature 3291332
+			//Use sync request for chrome and safari.
+			//Note: when pressing F5, the request's URL still arrives before this even async:false
+			async: !zk.safari
+		}, zAu.ajaxSettings), true/*fixed IE memory issue for jQuery 1.4.x*/);
 	},
 
 	////Ajax////
