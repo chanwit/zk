@@ -28,10 +28,11 @@ import org.zkoss.zk.xel.Evaluator;
 
 /**
  * Simplify the parsing of arguments.
+ * <p>Note: it is not serializable.</p>
  * @author tomyeh
  * @since 3.6.2
  */
-/*package*/ class ArgumentInfo {
+/*package*/ class ArgumentInfo { //directive
 	/** The arguments (String name, ExValue value), null if no argument. */
 	private final Map _args;
 

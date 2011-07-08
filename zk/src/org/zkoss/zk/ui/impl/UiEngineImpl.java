@@ -662,6 +662,26 @@ public class UiEngineImpl implements UiEngine {
 						}
 					}
 				}
+			} else if (meta instanceof ZkInfo) {
+				final ZkInfo childInfo = (ZkInfo)meta;
+				final ForEach forEach = childInfo.resolveForEach(page, parent);
+				if (forEach == null) {
+					if (isEffective(childInfo, page, parent)) {
+						final Component[] children =
+							execCreateChild(ci, parent, childInfo, replaceableText);
+						for (int j = 0; j < children.length; ++j)
+							created.add(children[j]);
+					}
+				} else {
+					while (forEach.next()) {
+						if (isEffective(childInfo, page, parent)) {
+							final Component[] children =
+								execCreateChild(ci, parent, childInfo, replaceableText);
+							for (int j = 0; j < children.length; ++j)
+								created.add(children[j]);
+						}
+					}
+				}
 			} else if (meta instanceof TextInfo) {
 				//parent must be a native component
 				final String s = ((TextInfo)meta).getValue(parent);
@@ -675,15 +695,14 @@ public class UiEngineImpl implements UiEngine {
 		return (Component[])created.toArray(new Component[created.size()]);
 	}
 	private static Component[] execCreateChild(
+	CreateInfo ci, Component parent, ZkInfo childInfo,
+	ReplaceableText replaceableText) {
+		return childInfo.withSwitch() ?
+			execSwitch(ci, childInfo, parent): execCreate0(ci, childInfo, parent);
+	}
+	private static Component[] execCreateChild(
 	CreateInfo ci, Component parent, ComponentInfo childInfo,
 	ReplaceableText replaceableText) {
-		if (childInfo instanceof ZkInfo) {
-			final ZkInfo zkInfo = (ZkInfo)childInfo;
-			return zkInfo.withSwitch() ?
-				execSwitch(ci, zkInfo, parent):
-				execCreate0(ci, childInfo, parent);
-		}
-
 		final ComponentDefinition childdef = childInfo.getComponentDefinition();
 		if (childdef.isInlineMacro()) {
 			final Map props = new HashMap();
@@ -860,19 +879,22 @@ public class UiEngineImpl implements UiEngine {
 	private static final void execNonComponent(
 	CreateInfo ci, Component comp, Object meta) {
 		final Page page = ci.page;
-		if (meta instanceof ZScript) {
-			final ZScript zscript = (ZScript)meta;
-			if (zscript.isDeferred()) {
-				((PageCtrl)page).addDeferredZScript(comp, zscript);
-					//isEffective is handled later
-			} else if (isEffective(zscript, page, comp)) {
-				final Scope scope =
-					Scopes.beforeInterpret(comp != null ? (Scope)comp: page);
-				try {
-					page.interpret(zscript.getLanguage(),
-						zscript.getContent(page, comp), scope);
-				} finally {
-					Scopes.afterInterpret();
+		if (meta instanceof ZScriptInfo) {
+			//Spec fix since 5.1.0: if/unless shall be evaluated first
+			final ZScriptInfo zsInfo = (ZScriptInfo)meta;
+			if (isEffective(zsInfo, page, comp)) {
+				if (zsInfo.isDeferred()) {
+					((PageCtrl)page).addDeferredZScript(comp, zsInfo.getZScript());
+						//isEffective is handled later
+				} else {
+					final Scope scope =
+						Scopes.beforeInterpret(comp != null ? (Scope)comp: page);
+					try {
+						page.interpret(zsInfo.getLanguage(),
+							zsInfo.getContent(page, comp), scope);
+					} finally {
+						Scopes.afterInterpret();
+					}
 				}
 			}
 		} else if (meta instanceof AttributesInfo) {

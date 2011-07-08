@@ -43,7 +43,7 @@ import org.zkoss.zk.ui.sys.PageConfig;
 import org.zkoss.zk.xel.Evaluator;
 import org.zkoss.zk.xel.ExValue;
 import org.zkoss.zk.xel.impl.SimpleEvaluator;
-import org.zkoss.zk.xel.impl.EvaluatorRef;
+import org.zkoss.zk.xel.EvaluatorRef;
 
 /**
  * A page definition.
@@ -56,7 +56,9 @@ import org.zkoss.zk.xel.impl.EvaluatorRef;
  * @author tomyeh
  * @see ComponentDefinition
  */
-public class PageDefinition extends NodeInfo {
+public class PageDefinition implements NodeInfo {
+	/** A list of a children ({@link NodeInfo}). */
+	private final List _children = new LinkedList();
 	private final LanguageDefinition _langdef;
 	private final Locator _locator;
 	private String _id, _title, _style;
@@ -135,11 +137,6 @@ public class PageDefinition extends NodeInfo {
 	 */
 	public LanguageDefinition getLanguageDefinition() {
 		return _langdef;
-	}
-	/** Returns the parent (always null).
-	 */
-	public NodeInfo getParent() {
-		return null;
 	}
 
 	/** Returns the locator associated with this page definition.
@@ -454,8 +451,8 @@ public class PageDefinition extends NodeInfo {
 			for (Iterator it = _hdResDefs.iterator(); it.hasNext();) {
 				final ResponseHeaderInfo rhi = (ResponseHeaderInfo)it.next();
 				headers.add(new Object[] {
-					rhi.getName(), rhi.getValue(page),
-					Boolean.valueOf(rhi.shallAppend(page))});
+					rhi.getName(), rhi.getValue(this, page),
+					Boolean.valueOf(rhi.shallAppend(this, page))});
 			}
 		return headers;
 	}
@@ -518,9 +515,9 @@ public class PageDefinition extends NodeInfo {
 
 		final StringBuffer sb = new StringBuffer(256);
 		for (Iterator it = defs.iterator(); it.hasNext();) {
-			final HeaderInfo hi = (HeaderInfo)it.next();
-			if (hi.isEffective(page))
-				sb.append(hi.toHTML(page)).append('\n');
+			final String s = ((HeaderInfo)it.next()).toHTML(this, page);
+			if (s != null && s.length() > 0)
+				sb.append(s).append('\n');
 		}
 		return sb.toString();
 	}
@@ -851,9 +848,7 @@ public class PageDefinition extends NodeInfo {
 		return _expfcls;
 	}
 
-	/** Returns the evaluator based on this page definition (never null).
-	 * @since 3.0.0
-	 */
+	//@Override (NodeInfo)
 	public Evaluator getEvaluator() {
 		if (_eval == null)
 			_eval = newEvaluator();
@@ -862,10 +857,7 @@ public class PageDefinition extends NodeInfo {
 	private Evaluator newEvaluator() {
 		return new SimpleEvaluator(getTaglibMapper(), _expfcls);
 	}
-	/** Returns the evaluator reference (never null).
-	 *
-	 * @since 3.0.0
-	 */
+	//@Override (NodeInfo)
 	public EvaluatorRef getEvaluatorRef() {
 		if (_evalr == null)
 			_evalr = newEvaluatorRef();
@@ -947,8 +939,39 @@ public class PageDefinition extends NodeInfo {
 	}
 
 	//NodeInfo//
+	/** Returns the parent (always null).
+	 */
+	public NodeInfo getParent() {
+		return null;
+	}
+	/** Returns the page definition (always this).
+	 */
 	public PageDefinition getPageDefinition() {
 		return this;
+	}
+	//@Override
+	public void appendChild(NodeInfo child) {
+		NodeInfo oldp = child.getParent();
+		if (oldp != null)
+			oldp.removeChild(child);
+
+		_children.add(child);
+		((LeafInfo)child).setParentDirectly(this); //except root, all are LeafInfo
+		BranchInfo.fixEvaluatorRefDown(child, getEvaluatorRef());
+			//Use getEvaluatorRef() to force _evalr being assigned
+	}
+	//@Override
+	public boolean removeChild(NodeInfo child) {
+		if (child != null && _children.remove(child)) {
+			((LeafInfo)child).setParentDirectly(null); //except root, all are LeafInfo
+			BranchInfo.fixEvaluatorRefDown(child, null);
+			return true;
+		}
+		return false;
+	}
+	//@Override
+	public List getChildren() {
+		return _children;
 	}
 
 	//Object//

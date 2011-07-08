@@ -43,10 +43,11 @@ import org.zkoss.zk.xel.Evaluator;
  * Why not? Since there is no way to run zscript before the init directive
  * (and better performance).
  * </p>
+ * <p>Note: it is not serializable.</p>
  *
  * @author tomyeh
  */
-public class InitiatorInfo extends ArgumentInfo {
+public class InitiatorInfo extends ArgumentInfo { //directive
 //	private static final Log log = Log.lookup(InitiatorInfo.class);
 
 	/** A class, an ExValue or an Initiator. */

@@ -12,6 +12,7 @@ ZK 5.1.0
   + AbstractComponent's newChildren() and newExtraCtrl() are both removed.
     Override getChildren() and getExtraCtrl() instead.
   + StubComponent's package becomes org.zkoss.zk.ui.sys.
+  + EvaluatorRef's package becomes org.zkoss.zk.xel.
   + No longer support ZKuery
 
 	--------

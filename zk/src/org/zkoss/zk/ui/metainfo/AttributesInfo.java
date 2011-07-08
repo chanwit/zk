@@ -24,10 +24,8 @@ import org.zkoss.zk.ui.Page;
 import org.zkoss.zk.ui.Component;
 import org.zkoss.zk.ui.Components;
 import org.zkoss.zk.ui.UiException;
-import org.zkoss.zk.ui.util.Condition;
 import org.zkoss.zk.ui.util.ConditionImpl;
 import org.zkoss.zk.xel.Evaluator;
-import org.zkoss.zk.xel.impl.EvaluatorRef;
 import org.zkoss.zk.xel.impl.Utils;
 
 /**
@@ -39,19 +37,13 @@ import org.zkoss.zk.xel.impl.Utils;
  *
  * @author tomyeh
  */
-public class AttributesInfo extends EvalRefStub
-implements Condition, java.io.Serializable {
+public class AttributesInfo extends ConditionLeafInfo {
 	/** Map(String name, ExValue/ExValue[]/Map value). */
 	private final Map _attrs;
-	private final ConditionImpl _cond;
 	private final int _composite;
 	private final int _scope;
 
 	/** Constructor.
-	 * @param evalr the evaluator reference. It cannot be null.
-	 * Retrieve it from {@link LanguageDefinition#getEvaluatorRef}
-	 * or {@link PageDefinition#getEvaluatorRef}, depending which it
-	 * belongs.
 	 * @param attrs the custom attributes (String name, String value).
 	 * Once called, the caller shall not access attrs again -- it belongs
 	 * to this object.
@@ -59,13 +51,13 @@ implements Condition, java.io.Serializable {
 	 * @param composite indicates the composite type.
 	 * It can be one of "none", "list" or "map".
 	 * If null or empty, "none" is assumed.
-	 * @exception IllegalArgumentException if evalr is null,
-	 * or the composite type is illegal.
+	 * @exception IllegalArgumentException if the composite type is illegal.
 	 * @since 3.0.6
 	 */
-	public AttributesInfo(EvaluatorRef evalr,
+	public AttributesInfo(NodeInfo parent,
 	Map attrs, String scope, String composite, ConditionImpl cond) {
-		if (evalr == null) throw new IllegalArgumentException();
+		super(parent, cond);
+
 		if (composite == null || composite.length() == 0
 		|| composite.equals("none"))
 			_composite = Utils.SCALAR;
@@ -76,7 +68,6 @@ implements Condition, java.io.Serializable {
 		else
 			throw new IllegalArgumentException("Unkonwn composite: "+composite);
 
-		_evalr = evalr;
 		_attrs = attrs;
 		if (_attrs != null) {
 			for (Iterator it = _attrs.entrySet().iterator(); it.hasNext();) {
@@ -89,23 +80,16 @@ implements Condition, java.io.Serializable {
 
 		_scope = scope == null ?
 			Component.COMPONENT_SCOPE: Components.getScope(scope);
-		_cond = cond;
 	}
-	/** The same as AttributesInfo(evalr, attrs, scope, "none", cond).
+	/** The same as AttributesInfo(parent, attrs, scope, "none", cond).
 	 *
-	 * @param evalr the evaluator reference. It cannot be null.
-	 * Retrieve it from {@link LanguageDefinition#getEvaluatorRef}
-	 * or {@link PageDefinition#getEvaluatorRef}, depending which it
-	 * belongs.
 	 * @param attrs the custom attributes (String name, String value).
 	 * Once called, the caller shall not access attrs again -- it belongs
 	 * to this object.
 	 * @param scope specifies the scope.
-	 * @exception IllegalArgumentException if evalr is null
 	 */
-	public AttributesInfo(EvaluatorRef evalr,
-	Map attrs, String scope, ConditionImpl cond) {
-		this(evalr, attrs, scope, null, cond);
+	public AttributesInfo(NodeInfo parent, Map attrs, String scope, ConditionImpl cond) {
+		this(parent, attrs, scope, null, cond);
 	}
 
 	/** Returns the scope.
@@ -127,7 +111,7 @@ implements Condition, java.io.Serializable {
 	 */
 	public void apply(Component comp) {
 		if (_attrs != null && isEffective(comp)) {
-			final Evaluator eval = _evalr.getEvaluator();
+			final Evaluator eval = getEvaluator();
 			for (Iterator it = _attrs.entrySet().iterator(); it.hasNext();) {
 				final Map.Entry me = (Map.Entry)it.next();
 				final String name = (String)me.getKey();
@@ -142,7 +126,7 @@ implements Condition, java.io.Serializable {
 	 */
 	public void apply(Page page) {
 		if (_attrs != null && isEffective(page)) {
-			final Evaluator eval = _evalr.getEvaluator();
+			final Evaluator eval = getEvaluator();
 			for (Iterator it = _attrs.entrySet().iterator(); it.hasNext();) {
 				final Map.Entry me = (Map.Entry)it.next();
 				final String name = (String)me.getKey();
@@ -151,14 +135,6 @@ implements Condition, java.io.Serializable {
 					Utils.evaluateComposite(eval, page, value), _scope);
 			}
 		}
-	}
-
-	//Condition//
-	public boolean isEffective(Component comp) {
-		return _cond == null || _cond.isEffective(_evalr, comp);
-	}
-	public boolean isEffective(Page page) {
-		return _cond == null || _cond.isEffective(_evalr, page);
 	}
 
 	//Object//
