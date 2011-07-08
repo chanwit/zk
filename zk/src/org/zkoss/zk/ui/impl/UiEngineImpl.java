@@ -614,7 +614,7 @@ public class UiEngineImpl implements UiEngine {
 			}
 		}
 
-		Component[] cs = execCreate0(ci, parentInfo, parent);
+		Component[] cs = execCreate0(ci, parentInfo, parent, null);
 
 		if (fulfillURI != null) {
 			fulfillURI = (String)Evaluators.evaluate(
@@ -632,8 +632,8 @@ public class UiEngineImpl implements UiEngine {
 
 		return cs;
 	}
-	private static final Component[] execCreate0(
-	CreateInfo ci, NodeInfo parentInfo, Component parent) {
+	private static final Component[] execCreate0(CreateInfo ci,
+	NodeInfo parentInfo, Component parent, Component insertBefore) {
 		final List created = new LinkedList();
 		final Page page = ci.page;
 		final PageDefinition pagedef = parentInfo.getPageDefinition();
@@ -648,7 +648,8 @@ public class UiEngineImpl implements UiEngine {
 				if (forEach == null) {
 					if (isEffective(childInfo, page, parent)) {
 						final Component[] children =
-							execCreateChild(ci, parent, childInfo, replaceableText);
+							execCreateChild(ci, parent, childInfo,
+								replaceableText, insertBefore);
 						for (int j = 0; j < children.length; ++j)
 							created.add(children[j]);
 					}
@@ -656,7 +657,8 @@ public class UiEngineImpl implements UiEngine {
 					while (forEach.next()) {
 						if (isEffective(childInfo, page, parent)) {
 							final Component[] children =
-								execCreateChild(ci, parent, childInfo, replaceableText);
+								execCreateChild(ci, parent, childInfo,
+									replaceableText, insertBefore);
 							for (int j = 0; j < children.length; ++j)
 								created.add(children[j]);
 						}
@@ -668,7 +670,8 @@ public class UiEngineImpl implements UiEngine {
 				if (forEach == null) {
 					if (isEffective(childInfo, page, parent)) {
 						final Component[] children =
-							execCreateChild(ci, parent, childInfo, replaceableText);
+							execCreateChild(ci, parent, childInfo,
+								replaceableText, insertBefore);
 						for (int j = 0; j < children.length; ++j)
 							created.add(children[j]);
 					}
@@ -676,7 +679,8 @@ public class UiEngineImpl implements UiEngine {
 					while (forEach.next()) {
 						if (isEffective(childInfo, page, parent)) {
 							final Component[] children =
-								execCreateChild(ci, parent, childInfo, replaceableText);
+								execCreateChild(ci, parent, childInfo,
+									replaceableText, insertBefore);
 							for (int j = 0; j < children.length; ++j)
 								created.add(children[j]);
 						}
@@ -686,8 +690,8 @@ public class UiEngineImpl implements UiEngine {
 				//parent must be a native component
 				final String s = ((TextInfo)meta).getValue(parent);
 				if (s != null && s.length() > 0)
-					parent.appendChild(
-						((Native)parent).getHelper().newNative(s));
+					parent.insertBefore(
+						((Native)parent).getHelper().newNative(s), insertBefore);
 			} else {
 				execNonComponent(ci, parent, meta);
 			}
@@ -696,15 +700,19 @@ public class UiEngineImpl implements UiEngine {
 	}
 	private static Component[] execCreateChild(
 	CreateInfo ci, Component parent, ZkInfo childInfo,
-	ReplaceableText replaceableText) {
+	ReplaceableText replaceableText, Component insertBefore) {
 		return childInfo.withSwitch() ?
-			execSwitch(ci, childInfo, parent): execCreate0(ci, childInfo, parent);
+			execSwitch(ci, childInfo, parent, insertBefore):
+			execCreate0(ci, childInfo, parent, insertBefore);
 	}
 	private static Component[] execCreateChild(
 	CreateInfo ci, Component parent, ComponentInfo childInfo,
-	ReplaceableText replaceableText) {
+	ReplaceableText replaceableText, Component insertBefore) {
 		final ComponentDefinition childdef = childInfo.getComponentDefinition();
 		if (childdef.isInlineMacro()) {
+			if (insertBefore != null)
+				throw new UnsupportedOperationException("The inline macro doesn't support template");
+
 			final Map props = new HashMap();
 			props.put("includer", parent);
 			childInfo.evalProperties(props, ci.page, parent, true);
@@ -722,12 +730,14 @@ public class UiEngineImpl implements UiEngine {
 				//and it is ok since it is onl blank string
 			}
 
-			Component child = execCreateChild0(ci, parent, childInfo, rt);
+			Component child =
+				execCreateChild0(ci, parent, childInfo, rt, insertBefore);
 			return child != null ? new Component[] {child}: new Component[0];
 		}
 	}
 	private static Component execCreateChild0(CreateInfo ci,
-	Component parent, ComponentInfo childInfo, String replaceableText) {
+	Component parent, ComponentInfo childInfo, String replaceableText,
+	Component insertBefore) {
 		Composer composer = childInfo.resolveComposer(ci.page, parent);
 		ComposerExt composerExt = null;
 		boolean bPopComposer = false;
@@ -751,7 +761,7 @@ public class UiEngineImpl implements UiEngine {
 			if (childInfo == null)
 				return null;
 
-			child = ci.uf.newComponent(ci.page, parent, childInfo);
+			child = ci.uf.newComponent(ci.page, parent, childInfo, insertBefore);
 
 			if (replaceableText != null) {
 				final Object xc = ((ComponentCtrl)child).getExtraCtrl();
@@ -822,7 +832,7 @@ public class UiEngineImpl implements UiEngine {
 	}
 	/** Handles <zk switch>. */
 	private static Component[] execSwitch(CreateInfo ci, ZkInfo switchInfo,
-	Component parent) {
+	Component parent, Component insertBefore) {
 		final Page page = ci.page;
 		final Object switchCond = switchInfo.resolveSwitch(page, parent);
 		for (Iterator it = switchInfo.getChildren().iterator(); it.hasNext();) {
@@ -831,7 +841,7 @@ public class UiEngineImpl implements UiEngine {
 			if (forEach == null) {
 				if (isEffective(caseInfo, page, parent)
 				&& isCaseMatched(caseInfo, page, parent, switchCond)) {
-					return execCreateChild(ci, parent, caseInfo, null);
+					return execCreateChild(ci, parent, caseInfo, null, insertBefore);
 				}
 			} else {
 				final List created = new LinkedList();
@@ -839,7 +849,7 @@ public class UiEngineImpl implements UiEngine {
 					if (isEffective(caseInfo, page, parent)
 					&& isCaseMatched(caseInfo, page, parent, switchCond)) {
 						final Component[] children =
-							execCreateChild(ci, parent, caseInfo, null);
+							execCreateChild(ci, parent, caseInfo, null, insertBefore);
 						for (int j = 0; j < children.length; ++j)
 							created.add(children[j]);
 						return (Component[])created.toArray(new Component[created.size()]);
@@ -901,6 +911,10 @@ public class UiEngineImpl implements UiEngine {
 			final AttributesInfo attrs = (AttributesInfo)meta;
 			if (comp != null) attrs.apply(comp); //it handles isEffective
 			else attrs.apply(page);
+		} else if (meta instanceof TemplateInfo) {
+			final TemplateInfo tempInfo = (TemplateInfo)meta;
+			if (isEffective(tempInfo, page, comp))
+				comp.setTemplate(tempInfo.getName(), new TemplateImpl(tempInfo));
 		} else if (meta instanceof VariablesInfo) {
 			final VariablesInfo vars = (VariablesInfo)meta;
 			if (comp != null) vars.apply(comp); //it handles isEffective
@@ -2085,6 +2099,21 @@ public class UiEngineImpl implements UiEngine {
 	}
 
 	//Supporting Classes//
+	private static class TemplateImpl implements Template, java.io.Serializable {
+		private final TemplateInfo _tempInfo;
+
+		private TemplateImpl(TemplateInfo tempInfo) {
+			_tempInfo = tempInfo;
+		}
+		public Component[] create(Component parent, Component insertBefore) {
+			final Execution exec = Executions.getCurrent();
+			return execCreate0(
+				new CreateInfo(
+					((WebAppCtrl)exec.getDesktop().getWebApp()).getUiFactory(),
+					exec, parent.getPage(), null), //technically sys composer can be used but we don't (to simplify it)
+				_tempInfo, parent, insertBefore);
+		}
+	}
 	/** The listener to create children when the fulfill condition is
 	 * satisfied.
 	 */
@@ -2157,7 +2186,7 @@ public class UiEngineImpl implements UiEngine {
 				new CreateInfo(
 					((WebAppCtrl)exec.getDesktop().getWebApp()).getUiFactory(),
 					exec, _comp.getPage(), null), //technically sys composer can be used but we don't (to simplify it)
-				_compInfo, _comp);
+				_compInfo, _comp, null);
 
 			if (_uri != null) {
 				final String uri = (String)Evaluators.evaluate(

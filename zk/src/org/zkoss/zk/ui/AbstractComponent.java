@@ -60,6 +60,7 @@ import org.zkoss.zk.ui.ext.render.Cropper;
 import org.zkoss.zk.ui.util.ComponentSerializationListener;
 import org.zkoss.zk.ui.util.ComponentActivationListener;
 import org.zkoss.zk.ui.util.ComponentCloneListener;
+import org.zkoss.zk.ui.util.Template;
 import org.zkoss.zk.ui.sys.ExecutionCtrl;
 import org.zkoss.zk.ui.sys.ExecutionsCtrl;
 import org.zkoss.zk.ui.sys.ComponentCtrl;
@@ -75,6 +76,8 @@ import org.zkoss.zk.ui.sys.JsContentRenderer;
 import org.zkoss.zk.ui.sys.JavaScriptValue;
 import org.zkoss.zk.ui.sys.HtmlPageRenders;
 import org.zkoss.zk.ui.sys.StubsComponent;
+import org.zkoss.zk.ui.sys.Attributes;
+import org.zkoss.zk.ui.sys.PropertiesRenderer;
 import org.zkoss.zk.ui.metainfo.AnnotationMap;
 import org.zkoss.zk.ui.metainfo.Annotation;
 import org.zkoss.zk.ui.metainfo.EventHandlerMap;
@@ -87,8 +90,6 @@ import org.zkoss.zk.ui.metainfo.ComponentDefinitionMap;
 import org.zkoss.zk.ui.metainfo.DefinitionNotFoundException;
 import org.zkoss.zk.ui.metainfo.EventHandler;
 import org.zkoss.zk.ui.metainfo.ZScript;
-import org.zkoss.zk.ui.sys.Attributes;
-import org.zkoss.zk.ui.sys.PropertiesRenderer;
 import org.zkoss.zk.ui.impl.SimpleIdSpace;
 import org.zkoss.zk.ui.impl.SimpleScope;
 import org.zkoss.zk.ui.impl.Utils;
@@ -3022,6 +3023,30 @@ w:use="foo.MyWindow"&gt;
 			_auxinf = new AuxInfo();
 		return _auxinf;
 	}
+
+	//@Override
+	public Template getTemplate(String name) {
+		return _auxinf != null && _auxinf.templates != null ?
+			(Template)_auxinf.templates.get(name): null;
+	}
+	//@Override
+	public Template setTemplate(String name, Template template) {
+		if (template == null) {
+			return _auxinf != null && _auxinf.templates != null ?
+				(Template)_auxinf.templates.remove(name): null;
+		} else {
+			AuxInfo auxinf = initAuxInfo();
+			if (auxinf.templates == null)
+				auxinf.templates = new HashMap(4);
+			return (Template)auxinf.templates.put(name, template);
+		}
+	}
+	//@Override
+	public Set getTemplateNames() {
+		return _auxinf != null && _auxinf.templates != null ?
+			_auxinf.templates.keySet(): Collections.EMPTY_SET;
+	}
+
 	/** Merge multiple memembers into an single object (and create on demand)
 	 * to minimize the footprint
 	 * @since 5.0.4
@@ -3059,6 +3084,9 @@ w:use="foo.MyWindow"&gt;
 		private Map wgtovds;
 		/** A map of client DOM attributes to set, Map(String name, String value). */
 		private Map wgtattrs;
+
+		/** The templates. */
+		private Map templates;
 
 		/** Whether this component is stub-only (0: inheirt, -1: false, 1: true). */
 		private byte stubonly;

@@ -85,11 +85,13 @@ abstract public class AbstractUiFactory implements UiFactory {
 		return new PageImpl(richlet, path);
 	}
 	public Component newComponent(Page page, Component parent,
-	ComponentInfo compInfo) {
+	ComponentInfo compInfo, Component insertBefore) {
 		final Component comp = compInfo.newInstance(page, parent);
 
-		if (parent != null) comp.setParent(parent);
-		else comp.setPage(page);
+		if (parent != null)
+			parent.insertBefore(comp, insertBefore);
+		else
+			comp.setPageBefore(page, insertBefore);
 
 		if (comp instanceof BeforeCompose)
 			((BeforeCompose)comp).beforeCompose();

@@ -30,9 +30,15 @@ public class TemplateInfo extends BranchInfo {
 	public TemplateInfo(NodeInfo parent, String name, ConditionImpl cond) {
 		super(parent, cond);
 
-		if (name == null)
+		if (name == null || name.length() == 0)
 			throw new IllegalArgumentException("null");
 		_name = name;
+	}
+
+	/** Returns the name of the template info.
+	 */
+	public String getName() {
+		return _name;
 	}
 
 	//Object//

@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.Iterator;
 
+import org.zkoss.zk.ui.util.Template;
 import org.zkoss.zk.ui.ext.Scope;
 import org.zkoss.zk.ui.metainfo.ComponentDefinition;
 import org.zkoss.zk.ui.event.EventListener;
@@ -979,6 +980,24 @@ w:use="foo.MyWindow"&gt;
 	 * @since 5.0.3
 	 */
 	public Set getWidgetAttributeNames();
+
+	/** Returns the template of the given name, or null if not available.
+	 * @since 5.1.0
+	 * @see #setTemplate
+	 */
+	public Template getTemplate(String name);
+	/** Sets a UI template which could be retrieved later
+	 * with {@link #getTemplate}.
+	 * @param name the template's name. It cannot be empty or null.
+	 * @param template the template to assign. If it is null, the previous
+	 * template, if any, will be removed
+	 * @return the previous template, if any
+	 */
+	public Template setTemplate(String name, Template template);
+	/** Returns a readonly set of the names of all templates.
+	 * @since 5.1.0
+	 */
+	public Set getTemplateNames();
 
 	/** Sets an AU service to process the AU request before the component's
 	 * default handling.

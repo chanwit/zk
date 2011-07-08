@@ -123,10 +123,10 @@ public interface UiFactory {
 	 * @param page the page that the new component belongs to (never null).
 	 * @param parent the parent compoent, or null if the new component is root.
 	 * @param compInfo the component information
-	 * @since 2.4.0
+	 * @since 5.1.0
 	 */
 	public Component newComponent(Page page, Component parent,
-	ComponentInfo compInfo);
+	ComponentInfo compInfo, Component insertBefore);
 
 	/** Creates and initializes a component based on the specified
 	 * {@link ComponentDefinition}.
