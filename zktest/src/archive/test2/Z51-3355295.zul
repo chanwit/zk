@@ -1,0 +1,21 @@
+<window>
+	<html><![CDATA[
+	<ul><li>You shall see three items and each has two colums</li></ul>
+	]]></html>
+	<zscript>
+	ListModel infos = new ListModelArray(
+		new String[][] {
+			{"Apple", "10kg"},
+			{"Orange", "20kg"},
+			{"Mango", "12kg"}
+		});
+	</zscript>			
+	<listbox model="${infos}">
+		<template name="renderer">
+			<listitem>
+				<listcell label="${each[0]}"/>
+				<listcell label="${each[1]}"/>
+			</listitem>
+		</template>
+	</listbox>
+</window>

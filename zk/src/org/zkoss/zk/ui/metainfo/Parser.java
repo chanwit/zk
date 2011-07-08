@@ -633,11 +633,15 @@ public class Parser {
 					new TextInfo(parent, label);
 						//Don't trim if native (3.5.0)
 				} else {
-					pi = parent instanceof ComponentInfo ? (ComponentInfo)parent: null;
 					final String textAs = pi != null ? pi.getTextAs(): null;
 					if (textAs != null) { //implies pi != null (parent is ComponentInfo)
 						if (trimLabel.length() != 0)
-							pi.addProperty(textAs, trimLabel, null);
+							if (pi == parent) {
+								pi.addProperty(textAs, trimLabel, null);
+							} else if (!(parent instanceof TemplateInfo)) {
+								throw new UnsupportedOperationException(
+									(parent instanceof ZkInfo ? "<zk>": parent.toString()) + " not allowed in text-as");
+							}
 					} else {
 						if (isTrimLabel() && !parentlang.isRawLabel()) {
 							if (trimLabel.length() == 0)
