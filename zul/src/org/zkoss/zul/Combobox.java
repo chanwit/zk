@@ -24,8 +24,10 @@ import org.zkoss.lang.Classes;
 import org.zkoss.lang.Exceptions;
 import org.zkoss.lang.Objects;
 import org.zkoss.util.logging.Log;
+import org.zkoss.zk.au.AuRequest;
 import org.zkoss.zk.au.out.AuInvoke;
 import org.zkoss.zk.ui.Component;
+import org.zkoss.zk.ui.Components;
 import org.zkoss.zk.ui.UiException;
 import org.zkoss.zk.ui.WrongValueException;
 import org.zkoss.zk.ui.event.Event;
@@ -34,6 +36,7 @@ import org.zkoss.zk.ui.event.Events;
 import org.zkoss.zk.ui.event.InputEvent;
 import org.zkoss.zk.ui.event.OpenEvent;
 import org.zkoss.zk.ui.event.SelectEvent;
+import org.zkoss.zk.ui.ext.Blockable;
 import org.zkoss.zul.event.ListDataEvent;
 import org.zkoss.zul.event.ListDataListener;
 import org.zkoss.zul.event.ZulEvents;
@@ -538,7 +541,18 @@ public class Combobox extends Textbox {
 		if (rows != 1)
 			throw new UnsupportedOperationException("Combobox doesn't support multiple rows, "+rows);
 	}
-
+	public Object getExtraCtrl() {
+		return new Blockable() {
+			public boolean shallBlock(AuRequest request) {
+				// B50-3316103: special case of readonly component: do not block onChange and onSelect
+				final String cmd = request.getCommand();
+				if(Events.ON_OPEN.equals(cmd))
+					return false;
+				return !Components.isRealVisible(Combobox.this) || isDisabled() || 
+					(isReadonly() && Events.ON_CHANGING.equals(cmd));
+			}
+		};
+	}
 	private void syncSelectionToModel() {
 		if (_model instanceof Selectable) {
 			Selectable model = (Selectable) _model;

@@ -126,10 +126,10 @@ it will be useful, but WITHOUT ANY WARRANTY.
 				if (zk.ie < 8 && max < wd) {
 					max = wd;
 					maxj = i;
-				} else if (zk.ff == 4 || zk.ie == 9) {// firefox4 & IE9 still cause break line in case B50-3147926 column 1
+				} else if (zk.ff > 4 || zk.ie == 9) {// firefox4 & IE9 still cause break line in case B50-3147926 column 1
 					++wds[i];
 				}
-				width += wd;
+				width += wds[i]; // using wds[i] instead of wd for B50-3183172.zul
 				if (w) w = w.previousSibling;
 			}
 			/** Fixed for B50-2979776.zul
@@ -144,9 +144,9 @@ it will be useful, but WITHOUT ANY WARRANTY.
 					if (zk.ie < 8 && max < wd) {
 						max = wd;
 						maxj = i;
-					} else if (zk.ff == 4 || zk.ie == 9) // firefox4 & IE9 still cause break line in case B50-3147926 column 1
+					} else if (zk.ff > 4 || zk.ie == 9) // firefox4 & IE9 still cause break line in case B50-3147926 column 1
 						++wds[i];
-					width += wd;
+					width += wds[i]; // using wds[i] instead of wd for B50-3183172.zul
 				}
 			}
 		}
@@ -468,26 +468,35 @@ zul.mesh.MeshWidget = zk.$extends(zul.Widget, {
 	},
 	_fixHeaders: function (force) {
 		if (this.head && this.ehead) {
-			var empty = true;
-			var flex = false;
-			for (var i = this.heads.length; i-- > 0;) {
+			var empty = true,
+				flex = false,
+				meshmin = (this._hflex == 'min');
+			for (var i = this.heads.length; i-- > 0;)
 				for (var w = this.heads[i].firstChild; w; w = w.nextSibling) {
+					if (meshmin && !w._width && !w._nhflex) {
+						// B50-3357475: assume header hflex min if width/hflex unspecified
+						w._hflex = 'min';
+						w._nhflex = -65500; // min
+						w._nhflexbak = true;
+					}
 					if (!flex && w._nhflex)
 						flex = true;
-					if (w.getLabel() || w.getImage()
-							|| w.nChildren) {
+					if (w.getLabel() || w.getImage() || w.nChildren)
 						empty = false;
-						break;
-					}
 				}
-				if (!empty) break;
-			}
-			var old = this.ehead.style.display; 
+			var old = this.ehead.style.display,
+				tofix = (force || empty) && flex && this.isRealVisible();
 			this.ehead.style.display = empty ? 'none' : '';
 			//onSize is not fired to empty header when loading page, so we have to simulate it here
-			if ((force || empty) && flex && this.isRealVisible()) 
-				for (var w = this.head.firstChild; w; w = w.nextSibling)
-					if (w._nhflex) w.fixFlex_();
+			for (var w = this.head.firstChild; w; w = w.nextSibling) {
+				if (tofix && w._nhflex)
+					w.fixFlex_();
+				if (w._nhflexbak) {
+					delete w._hflex;
+					delete w._nhflex;
+					delete w._nhflexbak;
+				}
+			}
 			return old != this.ehead.style.display;
 		}
 	},
@@ -754,21 +763,22 @@ zul.mesh.MeshWidget = zk.$extends(zul.Widget, {
 				this.ehead.style.width = "";
 			if (this.efoot) 
 				this.efoot.style.width = "";
-				
+		
+			// Bug 3310051
+			if (zk.ie6_ && this._hflex && this._hflex != 'min') {
+				n.style.width = '';
+			}
 			n._lastsz = null;// Bug #3013683: ie6 will do onSize twice
 		}
 		
 		// Bug 2896474
-		if (zk.ie6_ && this._vflex) {
+		if (zk.ie6_ && this._vflex && this._vflex != 'min') {
 			var hgh = this.getHeight();
 			if (!hgh || hgh == "auto" || hgh.indexOf('%') >= 0) {
 				var n = this.$n();
-				
 				n.style.height = '';
-				if (this.ebody) {
-					// check if this or this.parent has _vflex='min' should reset an empty string for B50-2976912.zul
-					this.ebody.style.height = (this._vflex != 'min' && (!this.parent || this.parent._vflex != 'min')) ? '0px' : '';
-				}
+				if (this.ebody) 
+					this.ebody.style.height = "";
 				n._lastsz = null;
 			}
 		}
@@ -935,10 +945,10 @@ zul.mesh.MeshWidget = zk.$extends(zul.Widget, {
 			}
 		}
 		if (this.ehead) {
-			if (tblwd) this.ehead.style.width = tblwd + 'px';
-			if (this.isSizedByContent() && this.ebodyrows && this.ebodyrows.length)
-				this._adjHeadWd();
-			else if (tblwd && this.efoot) this.efoot.style.width = tblwd + 'px';
+			if (tblwd) 
+				this.ehead.style.width = tblwd + 'px';
+			if (tblwd && this.efoot) 
+				this.efoot.style.width = tblwd + 'px';
 		} else if (this.efoot) {
 			if (tblwd) this.efoot.style.width = tblwd + 'px';
 			if (this.efoottbl.rows.length && this.ebodyrows && this.ebodyrows.length)
@@ -947,7 +957,9 @@ zul.mesh.MeshWidget = zk.$extends(zul.Widget, {
 		
 		//check if need to span width
 		this._adjSpanWd();
-
+		// no header case
+		this._fixBodyMinWd(true);
+		
 		//bug# 3022669: listbox hflex="min" sizedByContent="true" not work
 		if (this._hflexsz === undefined && this._hflex == 'min' && this._width === undefined && n.offsetWidth > this.ebodytbl.offsetWidth) {
 			n.style.width = this.ebodytbl.offsetWidth + 'px';
@@ -992,9 +1004,7 @@ zul.mesh.MeshWidget = zk.$extends(zul.Widget, {
 	},
 	//return if all widths of columns are fixed (directly or indirectly)
 	_isAllWidths: function() {
-		if (this.isSizedByContent())
-			return true;
-		else if (!this.head)
+		if (!this.head)
 			return false;
 		var allwidths = true;
 		for (var w = this.head.firstChild; w; w = w.nextSibling) {
@@ -1034,7 +1044,7 @@ zul.mesh.MeshWidget = zk.$extends(zul.Widget, {
 		}
 		
 		//feature #3025419: flex column to compensate widget width and summation of column widths
-		out.push('<th id="', head.uuid, fakeId, 'flex"', (allwidths || this.isSizedByContent() ? '' : ' style="width:0px"'), '></th></tr></tbody>');
+		out.push('<th id="', head.uuid, fakeId, 'flex"', (allwidths ? '' : ' style="width:0px"'), '></th></tr></tbody>');
 	},
 
 	//super//
@@ -1068,30 +1078,32 @@ zul.mesh.MeshWidget = zk.$extends(zul.Widget, {
 	//bug# 3022669: listbox hflex="min" sizedByContent="true" not work
 	beforeMinFlex_: function (orient) {
 		if (this._hflexsz === undefined && orient == 'w' && this._width === undefined) {
-			if (this.isSizedByContent())
-				this._calcSize();
 			if (this.head) {
 				this._fixHeaders(true/** B50-3315594.zul */);
 				for(var w = this.head.firstChild; w; w = w.nextSibling) 
 					if (w._hflex == 'min' && w.hflexsz === undefined) //header hflex="min" not done yet!
 						return null;				
 			}
-			var width = this._getMinWd(); //grid.invalidate() with hflex="min" must maintain the width
-			if (!this.head && this._hflex == 'min')
-				this._fixBodyMinWd(); // sized by content without header
-			return width;
+			this._fixBodyMinWd(); // sized by content without header
+			return this._getMinWd(); //grid.invalidate() with hflex="min" must maintain the width
 		}
 		return null;
 	},
-	_fixBodyMinWd: function () {
-		// called only when there is no header
-		var tr = this.ebodytbl,
-			wds = this._minWd.wds,
-			wlen = wds.length;
-		if (!(tr = tr.firstChild) || !(tr = tr.firstChild))
-			return; // no first tr
-		for (var c = tr.firstChild, i = 0; c && (i < wlen); c = c.nextSibling)
-			c.style.width = (zk.safari ? wds[i++] : zk(c).revisedWidth(wds[i++])) + "px";
+	_fixBodyMinWd: function (fixMesh) {
+		// effective only when there is no header
+		if (!this.head && this._hflex == 'min') {
+			var bdw = zk(this.$n()).padBorderWidth();
+				wd = this._getMinWd() + bdw, // has to call _getMinWd first so this._minWd will be available
+				tr = this.ebodytbl,
+				wds = this._minWd.wds,
+				wlen = wds.length;
+			if (fixMesh)
+				this.setFlexSize_({width:wd}, true);
+			if (!(tr = tr.firstChild) || !(tr = tr.firstChild))
+				return; // no first tr
+			for (var c = tr.firstChild, i = 0; c && (i < wlen); c = c.nextSibling)
+				c.style.width = (zk.safari ? wds[i++] : zk(c).revisedWidth(wds[i++])) + "px";
+		}
 	},
 	_getSigRow: function () {
 		// scan for tr with largest number of td children
@@ -1109,14 +1121,10 @@ zul.mesh.MeshWidget = zk.$extends(zul.Widget, {
 	// fixed for B50-3315594.zul
 	beforeParentMinFlex_: function (orient) {
 		if (orient == 'w') {
-			if (this.isSizedByContent()) 
-				this._calcSize();
-			if (this.head) {
+			if (this.head)
 				this._fixHeaders();
-			}
-		} else {
+		} else
 			this._calcSize();
-		}
 	},
 	_calcMinWds: function () {
 		if (!this._minWd)
@@ -1325,10 +1333,6 @@ zul.mesh.MeshWidget = zk.$extends(zul.Widget, {
 				}
 			}
 		}
-	
-		if (zk.opera && this.isSizedByContent())
-			dst.parentNode.parentNode.style.width = sum + "px";
-	
 		if (fakeRow)
 			src.parentNode.removeChild(src);
 	}

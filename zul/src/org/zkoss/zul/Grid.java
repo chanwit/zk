@@ -284,6 +284,7 @@ public class Grid extends MeshElement {
 		if (_dataLoader != null) {
 			_dataLoader.reset();
 			_dataLoader = null;
+			smartUpdate("_lastoffset", 0); //reset for bug 3357641
 		}
 	}
 	
@@ -599,6 +600,8 @@ public class Grid extends MeshElement {
 					_model.removeListDataListener(_dataListener);
 					if (_model instanceof GroupsListModel)
 						_rows.getChildren().clear();
+					
+					resetDataLoader(); // Bug 3357641
 				} else {
 					if (_rows != null) _rows.getChildren().clear(); //Bug 1807414
 					smartUpdate("model", true);
@@ -712,6 +715,13 @@ public class Grid extends MeshElement {
 					getDataLoader().syncModel(-1, -1); //we have to recreate all
 				} else if (getAttribute(ATTR_ON_INIT_RENDER_POSTED) == null) {
 					getDataLoader().syncModel(-1, -1); //we have to recreate all
+				} else {
+					//bug# 3039282, we need to resyncModel if not in a defer mode
+					final Execution exec = Executions.getCurrent();
+					final boolean defer = exec == null ? false : exec.getAttribute("zkoss.Grid.deferInitModel_"+getUuid()) != null;
+					final boolean rod = evalRod();
+					if (!defer || !rod)
+						getDataLoader().syncModel(-1, -1);
 				}
 			}
 		}

@@ -34,6 +34,8 @@ ZK 5.0.8
   3323594: Render on Demand for Grid and Listbox supports setInitSize
   3326788: A way to name the composer GenericAutowireComposer
   3327013: A way to log message to the client
+  3355806: Feature Update: custom-attributes shall be allowed to specify page's attrs (without specifying the scope attribute explicity)
+  3307322: Control Keys support backspace
   
 * Bugs
   3301375: native component in vbox stretch align show javascript error
@@ -89,6 +91,41 @@ ZK 5.0.8
   3325041: doublespinner can't type in floating number
   3316543: Only load the first property file
   3304954: HoverImage doesn't show up in menus
+  3340841: Listitem doesn't show selection if disabled
+  3316665: setVflex to Window calculate a wrong height
+  3306729: vflex of listbox not work well on IE6
+  3310051: Listbox with hflex cannot shorten its width on IE6
+  3301498: Alignment of rows and header broken
+  3357475: Grid with hflex min should imply default header hflex
+  3303877: IE6 only, vflex fail with tabbox  
+  3305038: Fileupload.get() cause javascript error
+  3357931: WrongValueException Thrown On Valid Component
+  3353121: Grid in Tabbox vflex issue, IE7 only
+  3303872: IE8 only, tabpanel disappear after hide then show
+  3303874: IE7 only, the scroll bar do not appear in the tabpanel
+  3306835: can not drag image into listbox on IE9
+  3343388: Set hflex="min" to Groupbox fail
+  3353521: Window render Caption in a wrong place
+  3357573: child in the groupbox cannot resize correctly
+  3345912: IE6 only, use Cell in Grid,it appears a strange line
+  3356022: borderlayout and tabpanel bug
+  3355680: hflex fail in combobox while select options
+  3304968: IE9 only, tab will be hide after open then close
+  3362731: IE Rod, use mouse wheel scrol down to end cause js error
+  3309122: ROD issue when use oncreate
+  3317743: Listbox checkmarks don't work as expected in paging mold
+  3365535: Groupbox default mold hflex min may have wrong size
+  3300935: (ipad)Tooltip shall not appear while taps on a component
+  3314143: Treeitem in a close dot tree does not render correctly
+  3306281: onClick in Flash with IE not working
+  3343001: IE6 7 only, Tree will not increase height when open treeitem
+  3352909: Listbox ROD will not render item in a correct position
+  3354086: Model attribute will not accept a ListModel
+  3343077: IE only, column of Grid and Tree do not sync with scroll bar
+  3316103: InaccessibleWidgetBlockService wrongly blocks Combobox
+  3357641: listbox scroll bar position issue if ROD is true
+  3358505: ZK EE with native failed to invalidate (JS error)
+  3327522: Visible property for borderlayout panels (west, east, etc)
   
 * Upgrade Notes
   + Listbox in the select mold will show up an empty selection if none of listitems
@@ -161,6 +198,7 @@ May 11, 2011
   3299234: A way to get the list of data from onBindingValidate evt
   3299344: A way to get associated bean of a Binding
   3299827: Support Mac listbox multiple selection
+  3337441: Firefox Listbox Multiselect
   
 * Bugs
   3286462: native component cause issue in fulfill
