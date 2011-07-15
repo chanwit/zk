@@ -17,6 +17,10 @@ ZK 5.1.0
     a server push implementation.
   + AbstractComponent's newChildren() and newExtraCtrl() are both removed.
     Override getChildren() and getExtraCtrl() instead.
+  + The event processing thread is deprecated and might be removed in the future
+  + The Window, Messagebox and Fileupload components won't throw InterruptedException.
+    Rather, it is wrapped with UiException (because the event processing thread is
+    deprecated)
   + StubComponent's package becomes org.zkoss.zk.ui.sys.
   + EvaluatorRef's package becomes org.zkoss.zk.xel.
   + No longer support ZKuery

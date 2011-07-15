@@ -22,7 +22,7 @@ package org.zkoss.zktest.test2;
 import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.util.GenericAutowireComposer;
 import org.zkoss.zk.ui.util.GenericForwardComposer;
-import org.zkoss.zul.api.Button;
+import org.zkoss.zul.Button;
 
 /**
  * Test whether zscript's variable can be wired.
