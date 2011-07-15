@@ -44,20 +44,36 @@ import org.zkoss.mesg.Messages;
 import org.zkoss.util.ArraysX;
 import org.zkoss.util.logging.Log;
 import org.zkoss.web.servlet.Servlets;
-import org.zkoss.json.*;
+import org.zkoss.xel.VariableResolver;
+import org.zkoss.json.JSONArray;
 
 import org.zkoss.zk.mesg.MZk;
 import org.zkoss.zk.ui.*;
 import org.zkoss.zk.ui.sys.*;
 import org.zkoss.zk.ui.sys.Attributes;
-import org.zkoss.zk.ui.event.*;
+import org.zkoss.zk.ui.event.Event;
+import org.zkoss.zk.ui.event.Events;
+import org.zkoss.zk.ui.event.Express;
+import org.zkoss.zk.ui.event.FulfillEvent;
+import org.zkoss.zk.ui.event.CreateEvent;
+import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.metainfo.*;
 import org.zkoss.zk.ui.ext.AfterCompose;
 import org.zkoss.zk.ui.ext.Native;
 import org.zkoss.zk.ui.ext.Scope;
 import org.zkoss.zk.ui.ext.Scopes;
 import org.zkoss.zk.ui.ext.render.PrologAllowed;
-import org.zkoss.zk.ui.util.*;
+import org.zkoss.zk.ui.util.Composer;
+import org.zkoss.zk.ui.util.ComposerExt;
+import org.zkoss.zk.ui.util.FullComposer;
+import org.zkoss.zk.ui.util.Condition;
+import org.zkoss.zk.ui.util.ForEach;
+import org.zkoss.zk.ui.util.Template;
+import org.zkoss.zk.ui.util.ExecutionMonitor;
+import org.zkoss.zk.ui.util.PerformanceMeter;
+import org.zkoss.zk.ui.util.Monitor;
+import org.zkoss.zk.ui.util.Configuration;
+import org.zkoss.zk.ui.util.ComponentCloneListener;
 import org.zkoss.zk.xel.Evaluators;
 import org.zkoss.zk.scripting.Interpreter;
 import org.zkoss.zk.au.*;
@@ -914,7 +930,7 @@ public class UiEngineImpl implements UiEngine {
 		} else if (meta instanceof TemplateInfo) {
 			final TemplateInfo tempInfo = (TemplateInfo)meta;
 			if (isEffective(tempInfo, page, comp))
-				comp.setTemplate(tempInfo.getName(), new TemplateImpl(tempInfo));
+				comp.setTemplate(tempInfo.getName(), new TemplateImpl(tempInfo, comp));
 		} else if (meta instanceof VariablesInfo) {
 			final VariablesInfo vars = (VariablesInfo)meta;
 			if (comp != null) vars.apply(comp); //it handles isEffective
@@ -2101,17 +2117,30 @@ public class UiEngineImpl implements UiEngine {
 	//Supporting Classes//
 	private static class TemplateImpl implements Template, java.io.Serializable {
 		private final TemplateInfo _tempInfo;
+		private final Map _params;
 
-		private TemplateImpl(TemplateInfo tempInfo) {
+		private TemplateImpl(TemplateInfo tempInfo, Component comp) {
 			_tempInfo = tempInfo;
+			_params = tempInfo.resolveParameters(comp);
 		}
-		public Component[] create(Component parent, Component insertBefore) {
+		public Component[] create(Component parent, Component insertBefore,
+		VariableResolver resolver) {
 			final Execution exec = Executions.getCurrent();
-			return execCreate0(
-				new CreateInfo(
-					((WebAppCtrl)exec.getDesktop().getWebApp()).getUiFactory(),
-					exec, parent.getPage(), null), //technically sys composer can be used but we don't (to simplify it)
-				_tempInfo, parent, insertBefore);
+			if (resolver != null)
+				exec.addVariableResolver(resolver);
+			try {
+				return execCreate0(
+					new CreateInfo(
+						((WebAppCtrl)exec.getDesktop().getWebApp()).getUiFactory(),
+						exec, parent.getPage(), null), //technically sys composer can be used but we don't (to simplify it)
+					_tempInfo, parent, insertBefore);
+			} finally {
+			if (resolver != null)
+					exec.removeVariableResolver(resolver);
+			}
+		}
+		public Map getParameters() {
+			return _params;
 		}
 	}
 	/** The listener to create children when the fulfill condition is

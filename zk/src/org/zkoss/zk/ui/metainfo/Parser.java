@@ -1055,10 +1055,35 @@ public class Parser {
 		if (el.getAttribute("forEach") != null)
 			log.warning("forEach is ignored since <template> doesn't support it, "+el.getLocator());
 
+		String ifc = null, unless = null,
+			name = null;
+		final Map params = new LinkedHashMap(); //reserve the order
+		for (Iterator it = el.getAttributeItems().iterator();
+		it.hasNext();) {
+			final Attribute attr = (Attribute)it.next();
+			final Namespace attrns = attr.getNamespace();
+			final String attURI = attrns != null ? attrns.getURI(): "";
+			final String attnm = attr.getLocalName();
+			final String attval = attr.getValue();
+			if ("if".equals(attnm)) {
+				ifc = attval;
+			} else if ("unless".equals(attnm)) {
+				unless = attval;
+			} else if ("name".equals(attnm)) {
+				name = attval;
+			} else {
+				final String attPref = attrns != null ? attrns.getPrefix(): null;
+				if (!"xmlns".equals(attnm) && !"xml".equals(attnm)
+				&& attURI.indexOf("w3.org") < 0
+				&& (attPref == null
+				 || (!"xmlns".equals(attPref) && !"xml".equals(attPref))))
+					params.put(attnm, attval);
+			}
+		}
+		if (name == null)
+			throw new UiException("The name attribute required, "+el.getLocator());
 		return new TemplateInfo(parent,
-			IDOMs.getRequiredAttributeValue(el, "name"),
-			ConditionImpl.getInstance(
-				el.getAttributeValue("if"), el.getAttributeValue("unless")));
+			name, ConditionImpl.getInstance(ifc, unless), params);
 	}
 	private static ZkInfo parseZk(NodeInfo parent, Element el,
 	AnnotationHelper annHelper) throws Exception {

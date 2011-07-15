@@ -12,6 +12,9 @@ Copyright (C) 2011 Potix Corporation. All Rights Reserved.
 */
 package org.zkoss.zk.ui.util;
 
+import java.util.Map;
+
+import org.zkoss.xel.VariableResolver;
 import org.zkoss.zk.ui.Component;
 
 /**
@@ -26,7 +29,17 @@ public interface Template {
 	 * @param insertBefore the component that the new components shall
 	 * be inserted before. If null, the new components will be appended.
 	 * If insertBefore.getParent() is not the same as parent, it is ignored.
+	 * @param resolver the addition variable resolver used to render
+	 * the template. Ignored if null.
 	 * @exception NullPointerException if parent is null
 	 */
-	public Component[] create(Component parent, Component insertBefore);
+	public Component[] create(Component parent, Component insertBefore,
+	VariableResolver resolver);
+	/** Returns a readonly map of the parameters that are assigned
+	 * to the template.
+	 * <p>Notice that if a parameter's value contains EL expression, it will
+	 * be evaluated when this object is instantiated and assigned to a component
+	 * (by use of {@link Component#setTemplate}).
+	 */
+	public Map getParameters();
 }
