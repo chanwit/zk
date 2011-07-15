@@ -55,6 +55,9 @@ public class InitiatorInfo extends ArgumentInfo { //directive
 
 	/** Constructs with a class, and {@link #newInitiator} will
 	 * instantiate a new instance.
+	 * @param args the map of arguments. Ignored if null.<br/>
+	 * Notice that, once assigned, the map belongs to this object, and the caller
+	 * shall not access it again
 	 * @since 3.6.2
 	 */
 	public InitiatorInfo(Class cls, Map args) {

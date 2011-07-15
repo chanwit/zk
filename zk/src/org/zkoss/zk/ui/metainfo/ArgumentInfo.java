@@ -36,6 +36,11 @@ import org.zkoss.zk.xel.Evaluator;
 	/** The arguments (String name, ExValue value), null if no argument. */
 	private final Map _args;
 
+	/**
+	 * @param args the map of arguments. Ignored if null.<br/>
+	 * Notice that, once assigned, the map belongs to this object, and the caller
+	 * shall not access it again
+	 */
 	/*package*/ ArgumentInfo(Map args) {
 		if (args != null && !args.isEmpty()) {
 			for (Iterator it = args.entrySet().iterator(); it.hasNext();) {

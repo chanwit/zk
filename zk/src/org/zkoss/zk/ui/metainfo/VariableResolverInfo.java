@@ -46,6 +46,9 @@ public class VariableResolverInfo extends ArgumentInfo { //directive
 	private final Object _resolver;
 
 	/** Constructs with a class.
+	 * @param args the map of arguments. Ignored if null.<br/>
+	 * Notice that, once assigned, the map belongs to this object, and the caller
+	 * shall not access it again
 	 * @since 3.6.2
 	 */
 	public VariableResolverInfo(Class cls, Map args) {

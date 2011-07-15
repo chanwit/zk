@@ -43,6 +43,9 @@ public class FunctionMapperInfo extends ArgumentInfo { //directive
 	private final Object _mapper;
 
 	/** Constructs with a class.
+	 * @param args the map of arguments. Ignored if null.<br/>
+	 * Notice that, once assigned, the map belongs to this object, and the caller
+	 * shall not access it again
 	 * @since 3.6.1
 	 */
 	public FunctionMapperInfo(Class cls, Map args) {
