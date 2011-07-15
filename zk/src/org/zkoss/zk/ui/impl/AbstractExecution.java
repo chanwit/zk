@@ -27,6 +27,9 @@ import java.io.Reader;
 import java.io.IOException;
 
 import org.zkoss.idom.Document;
+import org.zkoss.util.CollectionsX;
+import org.zkoss.xel.VariableResolver;
+import org.zkoss.xel.XelContext;
 import org.zkoss.web.servlet.Servlets;
 
 import org.zkoss.zk.ui.Sessions;
@@ -70,6 +73,7 @@ abstract public class AbstractExecution implements Execution, ExecutionCtrl {
 	private Collection _resps;
 	/** The information of the event being served, or null if not under event processing. */
 	private ExecutionInfo _execinf;
+	private List _resolvers;
 	/** Whether onPiggyback is checked for this execution. */
 	private boolean _piggybacked;
 
@@ -353,6 +357,36 @@ abstract public class AbstractExecution implements Execution, ExecutionCtrl {
 	}
 	public void setExecutionInfo(ExecutionInfo execinf) {
 		_execinf = execinf;
+	}
+
+	public boolean addVariableResolver(VariableResolver resolver) {
+		if (resolver == null)
+			throw new IllegalArgumentException("null");
+
+		if (_resolvers == null)
+			_resolvers = new LinkedList();
+		else if (_resolvers.contains(resolver))
+			return false;
+
+		_resolvers.add(0, resolver); //FILO order
+		return true;
+	}
+	public boolean removeVariableResolver(VariableResolver resolver) {
+		return _resolvers != null && _resolvers.remove(resolver);
+	}
+	public boolean hasVariableResolver(VariableResolver resolver) {
+		return _resolvers != null && _resolvers.contains(resolver);
+	}
+	public Object getXelVariable(String name) {
+		if (_resolvers != null) {
+			for (Iterator it = CollectionsX.comodifiableIterator(_resolvers);
+			it.hasNext();) {
+				Object o = ((VariableResolver)it.next()).resolveVariable(name);
+				if (o != null)
+					return o;
+			}
+		}
+		return null;
 	}
 
 	//Object//

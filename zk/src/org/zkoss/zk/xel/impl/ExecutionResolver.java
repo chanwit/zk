@@ -154,7 +154,11 @@ public class ExecutionResolver implements VariableResolverX {
 					return o;
 			}
 
-			Object o = _exec.getAttribute(name);
+			Object o = _exec.getXelVariable(name);
+			if (o != null)
+				return o;
+
+			o = _exec.getAttribute(name);
 			if (o != null || _exec.hasAttribute(name))
 				return o;
 
@@ -177,6 +181,10 @@ public class ExecutionResolver implements VariableResolverX {
 
 			if (page != null) {
 				Object o = page.getZScriptVariable(name);
+				if (o != null)
+					return o;
+
+				o = _exec.getXelVariable(name);
 				if (o != null)
 					return o;
 

@@ -1506,12 +1506,6 @@ public class Components {
 			return exec().isIncluded();
 		}
 
-		/** @deprecated As of release 5.0.0, MIL is no longer supported.
-		 */
-		public boolean isMilDevice() {
-			return exec().isMilDevice();
-		}
-
 		public boolean isRobot() {
 			return exec().isRobot();
 		}
@@ -1609,6 +1603,19 @@ public class Components {
 
 		public String locate(String path) {
 			return exec().locate(path);
+		}
+
+		public boolean addVariableResolver(VariableResolver resolver) {
+			return exec().addVariableResolver(resolver);
+		}
+		public boolean removeVariableResolver(VariableResolver resolver) {
+			return exec().removeVariableResolver(resolver);
+		}
+		public boolean hasVariableResolver(VariableResolver resolver) {
+			return exec().hasVariableResolver(resolver);
+		}
+		public Object getXelVariable(String name) {
+			return exec().getXelVariable(name);
 		}
 
 		public String toString() {

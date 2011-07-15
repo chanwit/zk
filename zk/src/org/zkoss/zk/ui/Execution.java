@@ -163,6 +163,46 @@ public interface Execution extends Scope {
 	 */
 	public VariableResolver getVariableResolver();
 
+	/** Adds a name resolver that will be used to resolve a variable
+	 * (by {@link #getVariableResolver}).
+	 *
+	 * <p>The new added variable resolver has the higher priority.
+	 * In additions, the priority of the variable resolver added with this method
+	 * is higher than the attributes defined in the execution, and
+	 * any variable resolver added to a page
+	 * ({@link Page#addVariableResolver}).
+	 *
+	 * <p>Notice that {@link #getVariableResolver} returns a variable resolver
+	 * used to evaluate EL expressions. It
+	 * resolves all builtin names and all custom variable resolvers.
+	 * It is not any variable resolver added by this method.
+	 *
+	 * @return wether the resolver is added successfully.
+	 * Note: if the resolver was added before, it won't be added again
+	 * and this method returns false.
+	 * @since 5.0.8
+	 */
+	public boolean addVariableResolver(VariableResolver resolver);
+	/** Removes a name resolve that was added by {@link #addVariableResolver}.
+	 *
+	 * @return false if resolved is not added before.
+	 * @since 5.0.8
+	 */
+	public boolean removeVariableResolver(VariableResolver resolver);
+	/** Returns if the specified variable resolved has been registered
+	 * @see #addVariableResolver
+	 * @since 5.0.8
+	 */
+	public boolean hasVariableResolver(VariableResolver resolver);
+	/** Returns the object, if any, defined in any variable resolver
+	 * added by {@link #addVariableResolver}.
+	 * <p>Notice that it looks only for the variables defined
+	 * in {@link #addVariableResolver}. To get a variable an EL expression
+	 * can reference, please use {@link #getVariableResolver} instead.
+	 * @since 5.0.8
+	 */
+	public Object getXelVariable(String name);
+
 	/** Queues an event to this execution.
 	 * In other words, the event is placed to the event queue.
 	 *
@@ -894,15 +934,8 @@ public interface Execution extends Scope {
 	 * @since 3.5.1
 	 */
 	public boolean isOpera();
-	/** @deprecated As of release 5.0.0, MIL is no longer supported.
-	 */
-	public boolean isMilDevice();
 	/** Returns whether the client is a mobile device supporting HIL
 	 * (Handset Interactive Language).
-	 *
-	 * <p>Note: ZK Mobile for Android supports both MIL and HIL.
-	 * That is, both {@link #isHilDevice} and {@link #isMilDevice}
-	 * return true.
 	 *
 	 * @since 3.0.2
 	 */

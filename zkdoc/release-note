@@ -5,6 +5,7 @@ ZK 5.1.0
   3025389: A way to monitor the execution and event processing
   3355295: A way to define a template that component could use
   2947727: The instantiation of Composer & Server Push customizable
+  ZK-217: A way to add a temporary variable resolver to an execution
 
 * Bugs
 
