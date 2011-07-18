@@ -845,10 +845,12 @@ public class Grid extends MeshElement {
 			int realOfs = ofs - getDataLoader().getOffset();
 			if (realOfs < 0) realOfs = 0;
 			boolean open = true;
-			for (Iterator it = _rows.getChildren().listIterator(realOfs);
-			j < pgsz && it.hasNext();) {
-				final Row row = (Row) (Row)it.next();		
-				if (row.isVisible() && (open || row instanceof Groupfoot || row instanceof Group)) {
+			for (Row row = (Row)_rows.getChildren().get(realOfs), nxt;
+			j < pgsz && row != null; row = nxt) {
+				nxt = (Row)row.getNextSibling();
+
+				if (row.isVisible()
+				&& (open || row instanceof Groupfoot || row instanceof Group)) {
 					renderer.render(row); 
 					++j;
 				}
@@ -929,6 +931,9 @@ public class Grid extends MeshElement {
 
 			try {
 				_renderer.render(row, _model.getElementAt(row.getIndex()));
+				Object v = row.getAttribute("org.zkoss.zul.Grid.renderAs");
+				if (v != null) //a new row is created to replace the existent one
+					row = (Row)v;
 			} catch (Throwable ex) {
 				try {
 					final Label label = newRenderLabel(Exceptions.getMessage(ex));
@@ -993,8 +998,10 @@ public class Grid extends MeshElement {
 
 		final Renderer renderer = new Renderer();
 		try {
-			for (Iterator it = _rows.getChildren().iterator(); it.hasNext();)
-				renderer.render((Row)it.next());
+			for (Row row = (Row)_rows.getChildren().get(0), nxt; row != null; row = nxt) {
+				nxt = (Row)row.getNextSibling(); //retrieve first since it might be changed
+				renderer.render(row);
+			}
 		} catch (Throwable ex) {
 			renderer.doCatch(ex);
 		} finally {

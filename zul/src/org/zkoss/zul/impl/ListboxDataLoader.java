@@ -207,10 +207,9 @@ public class ListboxDataLoader implements DataLoader, Cropper {
 
 	public Object getRealRenderer() {
 		final ListitemRenderer renderer = _listbox.getItemRenderer();
-		return renderer != null ? renderer: new TemplateRender(); 
+		return renderer != null ? renderer: _defRend;
 	}
-	private static class TemplateRender
-	implements ListitemRenderer, java.io.Serializable {
+	private static final ListitemRenderer _defRend = new ListitemRenderer() {
 		public void render(Listitem item, final Object data) {
 			final Listbox listbox = (Listbox)item.getParent();
 			final Template tm = listbox.getTemplate("model");
@@ -233,7 +232,7 @@ public class ListboxDataLoader implements DataLoader, Cropper {
 				item.detach();
 			}
 		}
-	}
+	};
 
 	public void syncModel(int offset, int limit) {
 		_listbox.setAttribute(Listbox.SYNCING_MODEL, Boolean.TRUE);
