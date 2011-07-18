@@ -1544,8 +1544,7 @@ public class Listbox extends MeshElement {
 					final int[] g = (int[]) _groupsInfo
 							.get(getGroupCount() - 1);
 
-					g[2] = ((Listitem) getItems().get(
-							getItems().size() - 1))
+					g[2] = ((Listitem) getItems().get(getItems().size() - 1))
 							.getIndex();
 				} else if (refChild instanceof Listitem) {
 					final int idx = ((Listitem) refChild).getIndex();
@@ -2389,7 +2388,6 @@ public class Listbox extends MeshElement {
 	}
 	
 	private void doInitRenderer() {
-	
 		final Renderer renderer = new Renderer();
 		try {
 			int pgsz, ofs;
@@ -2415,11 +2413,12 @@ public class Listbox extends MeshElement {
 			if (realOfs < 0)
 				realOfs = 0;
 			boolean open = true;
-			for (Iterator it = getItems().listIterator(realOfs); j < pgsz
-					&& it.hasNext();) {
-				final Listitem item = (Listitem) it.next();
+			for (Listitem item = (Listitem)getItems().get(realOfs), nxt;
+			j < pgsz && item != null; item = nxt) {
+				nxt = nextListitem(item); //retrieve first since it might be changed
+
 				if (item.isVisible()
-						&& (open || item instanceof Listgroupfoot || item instanceof Listgroup)) {
+				&& (open || item instanceof Listgroupfoot || item instanceof Listgroup)) {
 					renderer.render(item);
 					++j;
 				}
@@ -2434,6 +2433,11 @@ public class Listbox extends MeshElement {
 			renderer.doFinally();
 		}
 		Events.postEvent(ZulEvents.ON_AFTER_RENDER, this, null);// notify the listbox when items have been rendered.
+	}
+	private static Listitem nextListitem(Listitem item) {
+		final Component c = item.getNextSibling();
+		return c instanceof Listitem ? (Listitem)c: null;
+			//listitem must be placed contineously
 	}
 	private void postOnInitRender() {
 		// 20080724, Henri Chen: optimize to avoid postOnInitRender twice
@@ -2502,6 +2506,9 @@ public class Listbox extends MeshElement {
 
 			try {
 				_renderer.render(item, value);
+				Object v = item.getAttribute("org.zkoss.zul.Listbox.renderAs");
+				if (v != null) //a new listitem is created to replace the existent one
+					item = (Listitem)v;
 			} catch (Throwable ex) {
 				try {
 					item.setLabel(Exceptions.getMessage(ex));
@@ -2579,8 +2586,10 @@ public class Listbox extends MeshElement {
 
 		final Renderer renderer = new Renderer();
 		try {
-			for (Iterator it = getItems().iterator(); it.hasNext();)
-				renderer.render((Listitem) it.next());
+			for (Listitem item = (Listitem)getItems().get(0), nxt; item != null; item = nxt) {
+				nxt = nextListitem(item); //retrieve first since it might be changed
+				renderer.render(item);
+			}
 		} catch (Throwable ex) {
 			renderer.doCatch(ex);
 		} finally {
