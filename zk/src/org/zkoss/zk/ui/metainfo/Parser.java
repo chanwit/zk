@@ -1052,7 +1052,7 @@ public class Parser {
 	AnnotationHelper annHelper) throws Exception {
 		if (annHelper.clear())
 			log.warning("Annotations are ignored since <template> doesn't support them, "+el.getLocator());
-		if (el.getAttribute("forEach") != null)
+		if (el.getAttributeItem("forEach") != null)
 			log.warning("forEach is ignored since <template> doesn't support it, "+el.getLocator());
 
 		String ifc = null, unless = null,
