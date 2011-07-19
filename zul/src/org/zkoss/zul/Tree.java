@@ -36,10 +36,13 @@ import org.zkoss.lang.Library;
 import org.zkoss.lang.Objects;
 import org.zkoss.io.Serializables;
 import org.zkoss.util.logging.Log;
+import org.zkoss.xel.VariableResolver;
+
 import org.zkoss.zk.au.AuRequests;
 import org.zkoss.zk.ui.Component;
 import org.zkoss.zk.ui.UiException;
 import org.zkoss.zk.ui.WrongValueException;
+import org.zkoss.zk.ui.util.Template;
 import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.SerializableEventListener;
@@ -93,6 +96,8 @@ import org.zkoss.zul.impl.Utils;
  */
 public class Tree extends MeshElement {
 	private static final Log log = Log.lookup(Tree.class);
+	private static final String ATTR_ON_INIT_RENDER_POSTED =
+		"org.zkoss.zul.Tree.onInitLaterPosted";
 
 	private transient Treecols _treecols;
 	private transient Treefoot _treefoot;
@@ -1136,9 +1141,8 @@ public class Tree extends MeshElement {
 	}
 
 	//-- ComponentCtrl --//
-	/*
+	/**
 	 * Handles when the tree model's content changed
-	 * <p>Author: jeffliu
 	 */
 	private void onTreeDataChange(TreeDataEvent event){
 		//if the treeparent is empty, render tree's treechildren
@@ -1291,7 +1295,6 @@ public class Tree extends MeshElement {
 
 	/*
 	 * Initial Tree data listener
-	 * <p>Author: jeffliu
 	 */
 	private void initDataListener() {
 		if (_dataListener == null)
@@ -1331,7 +1334,7 @@ public class Tree extends MeshElement {
 				initDataListener();
 			}
 			doSort(this);
-			syncModel();
+			postOnInitRender();
 		} else if (_model != null) {
 			_model.removeTreeDataListener(_dataListener);
 			_model = null;
@@ -1339,6 +1342,22 @@ public class Tree extends MeshElement {
 				//don't call getItems().clear(), since it readonly
 			//bug# 3095453: tree can't expand if model is set in button onClick
 			smartUpdate("model", false);
+		}
+	}
+
+	/** Handles a private event, onInitRender. It is used only for
+	 * implementation, and you rarely need to invoke it explicitly.
+	 * @since 5.1.0
+	 */
+	public void onInitRender() {
+		removeAttribute(ATTR_ON_INIT_RENDER_POSTED);
+		renderTree();
+	}
+	private void postOnInitRender() {
+		//20080724, Henri Chen: optimize to avoid postOnInitRender twice
+		if (getAttribute(ATTR_ON_INIT_RENDER_POSTED) == null) {
+			setAttribute(ATTR_ON_INIT_RENDER_POSTED, Boolean.TRUE);
+			Events.postEvent("onInitRender", this, null);
 		}
 	}
 
@@ -1367,13 +1386,6 @@ public class Tree extends MeshElement {
 		return false;
 	}
 	
-	/** Synchronizes the tree to be consistent with the specified model.
-	 * <p>Author: jeffliu
-	 */
-	private void syncModel() {
-		renderTree();
-	}
-
 	/** Sets the renderer which is used to render each item
 	 * if {@link #getModel} is not null.
 	 *
@@ -1389,7 +1401,7 @@ public class Tree extends MeshElement {
 		if (_renderer != renderer) {
 			_renderer = renderer;
 			if (_model != null)
-				syncModel();
+				postOnInitRender();
 		}
 	}
 
@@ -1461,6 +1473,9 @@ public class Tree extends MeshElement {
 			ti.setParent(parent);
 			Object childNode = _model.getChild(node, i);
 			renderer.render(ti, childNode);
+			Object v = ti.getAttribute("org.zkoss.zul.Tree.renderAs");
+			if (v != null) //a new item is created to replace the existent one
+				(ti = (Treeitem)v).setOpen(false);
 			if(!_model.isLeaf(childNode) && ti.getTreechildren() == null){
 				Treechildren tc = new Treechildren();
 				tc.setParent(ti);
@@ -1473,29 +1488,44 @@ public class Tree extends MeshElement {
 		return ti;
 	}
 
-	private static TreeitemRenderer getDefaultItemRenderer() {
-		return _defRend;
-	}
-	private static final TreeitemRenderer _defRend = new TreeitemRenderer() {
-		public void render(Treeitem ti, Object node){
-			Treecell tc = new Treecell(Objects.toString(node));
-			Treerow tr = null;
-			ti.setValue(node);
-			if(ti.getTreerow()==null){
-				tr = new Treerow();
-				tr.setParent(ti);
-			}else{
-				tr = ti.getTreerow();
-				tr.getChildren().clear();
-			}
-			tc.setParent(tr);
-		}
-	};
 	/** Returns the renderer used to render items.
 	 */
 	private TreeitemRenderer getRealRenderer() {
-		return _renderer != null ? _renderer: getDefaultItemRenderer();
+		return _renderer != null ? _renderer: _defRend;
 	}
+	private static final TreeitemRenderer _defRend = new TreeitemRenderer() {
+		public void render(Treeitem ti, final Object node){
+			Tree tree = ti.getTree();
+			final Template tm = tree.getTemplate("model");
+			if (tm == null) {
+				Treecell tc = new Treecell(Objects.toString(node));
+				Treerow tr = null;
+				ti.setValue(node);
+				if(ti.getTreerow()==null){
+					tr = new Treerow();
+					tr.setParent(ti);
+				}else{
+					tr = ti.getTreerow();
+					tr.getChildren().clear();
+				}
+				tc.setParent(tr);
+			} else {
+				final Component[] items = tm.create(ti.getParent(), ti,
+					new VariableResolver() {
+						public Object resolveVariable(String name) {
+							return "each".equals(name) ? node: null;
+						}
+					});
+				if (items.length != 1)
+					throw new UiException("The model template must have exactly one item, not "+items.length);
+
+				((Treeitem)items[0]).setValue(node);
+				ti.setAttribute("org.zkoss.zul.Tree.renderAs", items[0]);
+					//indicate a new item is created to replace the existent one
+				ti.detach();
+			}
+		}
+	};
 
 	/** Used to render treeitem if _model is specified. */
 	private class Renderer implements java.io.Serializable {
@@ -1633,6 +1663,10 @@ public class Tree extends MeshElement {
 
 			renderChildren(renderer, tc, node);
 		}
+
+		Object v = item.getAttribute("org.zkoss.zul.Tree.renderAs");
+		if (v != null) //a new item is created to replace the existent one
+			(item = (Treeitem)v).setOpen(false);
 		item.setLoaded(true);
 	}
 
