@@ -2,27 +2,30 @@
 ZK 5.1.0
 * Features
   ZK-139: A way to define a template that component could use
+  ZK-216: Listbox/Tree/Grid supports the template for rendering model
+  ZK-217: A way to add a temporary variable resolver to an execution
   2974464: A way to customize message with i3-label
   3025389: A way to monitor the execution and event processing
   3355295: A way to define a template that component could use
   2947727: The instantiation of Composer & Server Push customizable
-  ZK-217: A way to add a temporary variable resolver to an execution
+  ZK-224: Tree shall render the model in the onInitRender event listener
 
 * Bugs
 
 * Upgrade Notes
   + org.zkoss.zk.ui.api.*, org.zkoss.zul.api.* and all component related interfaces
     are removed.
+  + The Window, Messagebox and Fileupload components won't throw InterruptedException.
+    Rather, it is wrapped with UiException (because the event processing thread is
+    deprecated)
   + UiFactory's newComponent method's signature is changed. Furthermore
     Two new methods are, newComposer and newServerPush, added to UiFactory
     to allow developers to customize the instantiation of a composer or 
     a server push implementation.
+  + Tree's model rendering is deferred to the onInitRender event
   + AbstractComponent's newChildren() and newExtraCtrl() are both removed.
     Override getChildren() and getExtraCtrl() instead.
   + The event processing thread is deprecated and might be removed in the future
-  + The Window, Messagebox and Fileupload components won't throw InterruptedException.
-    Rather, it is wrapped with UiException (because the event processing thread is
-    deprecated)
   + StubComponent's package becomes org.zkoss.zk.ui.sys.
   + EvaluatorRef's package becomes org.zkoss.zk.xel.
   + No longer support ZKuery
@@ -42,7 +45,8 @@ ZK 5.0.8
   3327013: A way to log message to the client
   3355806: Feature Update: custom-attributes shall be allowed to specify page's attrs (without specifying the scope attribute explicity)
   3307322: Control Keys support backspace
-  
+  3326111: A way to specify fileSizeThreshold for fileupload in zk.xml
+  214    : Add a databinding composer instead of 
 * Bugs
   3301375: native component in vbox stretch align show javascript error
   3303684: Panel sizable has incorrect moving constraint
@@ -132,11 +136,17 @@ ZK 5.0.8
   3357641: listbox scroll bar position issue if ROD is true
   3358505: ZK EE with native failed to invalidate (JS error)
   3327522: Visible property for borderlayout panels (west, east, etc)
+  3337441: Firefox Listbox Multiselect
+  ZK-210: Style Tag Ignored in IE6/7/8
+  3363687: Window onCreate fired twice for Execution#sendRedirect() 
+  
   
 * Upgrade Notes
   + Listbox in the select mold will show up an empty selection if none of listitems
     are selected (in the prior version, the first item will be shown though it is not
     selected - Bug 2973303)
+  + Listheader's selectAll checkmark will disable when Listbox in ROD mode. Here
+	is the feature tracker - http://tracker.zkoss.org/browse/ZK-220
   + If enable the autopaging function of Tree, Listbox, and Grid, the height of
 	each row will be applied the following CSS by default. If you want to change
 	the height, please overwrite the CSS rule as your preference.
@@ -204,7 +214,6 @@ May 11, 2011
   3299234: A way to get the list of data from onBindingValidate evt
   3299344: A way to get associated bean of a Binding
   3299827: Support Mac listbox multiple selection
-  3337441: Firefox Listbox Multiselect
   
 * Bugs
   3286462: native component cause issue in fulfill
