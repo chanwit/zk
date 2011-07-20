@@ -24,6 +24,8 @@ import org.zkoss.lang.Classes;
 import org.zkoss.lang.Exceptions;
 import org.zkoss.lang.Objects;
 import org.zkoss.util.logging.Log;
+import org.zkoss.xel.VariableResolver;
+
 import org.zkoss.zk.au.AuRequest;
 import org.zkoss.zk.au.out.AuInvoke;
 import org.zkoss.zk.ui.Component;
@@ -31,6 +33,7 @@ import org.zkoss.zk.ui.Components;
 import org.zkoss.zk.ui.HtmlBasedComponent;
 import org.zkoss.zk.ui.UiException;
 import org.zkoss.zk.ui.WrongValueException;
+import org.zkoss.zk.ui.util.Template;
 import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
@@ -268,10 +271,13 @@ public class Combobox extends Textbox {
 				(String)data.getData() : getRawText());
 		try {
 			int pgsz = subset.getSize(), ofs = 0, j = 0;
-			for (Iterator it = getItems().listIterator(ofs);
-			j < pgsz && it.hasNext(); ++j){
-				Comboitem item = (Comboitem)it.next();
+			for (Comboitem item = (Comboitem)getItems().get(ofs), nxt;
+			j < pgsz && item != null; ++j, item = nxt) {
+				nxt = (Comboitem)item.getNextSibling(); //store it first
 				renderer.render(subset, item);
+				Object v = item.getAttribute("org.zkoss.zul.Combobox.renderAs");
+				if (v != null) //a new item is created to replace the existent one
+					item = (Comboitem)v;
 				fixSelectOnRender(item);// comboitem can be selected after set a label
 			}
 		} catch (Throwable ex) {
@@ -292,19 +298,34 @@ public class Combobox extends Textbox {
 		}
 	}
 
-	private static ComboitemRenderer getDefaultItemRenderer() {
-		return _defRend;
-	}
 	private static final ComboitemRenderer _defRend = new ComboitemRenderer() {
-		public void render(Comboitem item, Object data) {
-			item.setLabel(Objects.toString(data));
-			item.setValue(data);
+		public void render(Comboitem item, final Object data) {
+			final Combobox cb = (Combobox)item.getParent();
+			final Template tm = cb.getTemplate("model");
+			if (tm == null) {
+				item.setLabel(Objects.toString(data));
+				item.setValue(data);
+			} else {
+				final Component[] items = tm.create(item.getParent(), item,
+					new VariableResolver() {
+						public Object resolveVariable(String name) {
+							return "each".equals(name) ? data: null;
+						}
+					});
+				if (items.length != 1)
+					throw new UiException("The model template must have exactly one item, not "+items.length);
+
+				((Comboitem)items[0]).setValue(data);
+				item.setAttribute("org.zkoss.zul.Combobox.renderAs", items[0]);
+					//indicate a new item is created to replace the existent one
+				item.detach();
+			}
 		}
 	};
-	/** Returns the renderer used to render rows.
+	/** Returns the renderer used to render items.
 	 */
 	private ComboitemRenderer getRealRenderer() {
-		return _renderer != null ? _renderer: getDefaultItemRenderer();
+		return _renderer != null ? _renderer: _defRend;
 	}
 
 	/** Used to render comboitem if _model is specified. */

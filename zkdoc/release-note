@@ -2,7 +2,7 @@
 ZK 5.1.0
 * Features
   ZK-139: A way to define a template that component could use
-  ZK-216: Listbox/Tree/Grid supports the template for rendering model
+  ZK-216: Listbox/Tree/Grid/Combobox supports the template for rendering model
   ZK-217: A way to add a temporary variable resolver to an execution
   2974464: A way to customize message with i3-label
   3025389: A way to monitor the execution and event processing
