@@ -175,14 +175,14 @@ abstract public class MeshElement extends XulElement implements Paginated {
 	protected abstract Paginal pgi();
 
 	/** Returns the page size, aka., the number rows per page.
-	 * @exception IllegalStateException if {@link #getPaginal} returns null,
+	 * @exception IllegalStateException if {@link #pgi} returns null,
 	 * i.e., mold is not "paging" and no external controller is specified.
 	 */
 	public int getPageSize() {
 		return pgi().getPageSize();
 	}
 	/** Sets the page size, aka., the number rows per page.
-	 * @exception IllegalStateException if {@link #getPaginal} returns null,
+	 * @exception IllegalStateException if {@link #pgi} returns null,
 	 * i.e., mold is not "paging" and no external controller is specified.
 	 */
 	public void setPageSize(int pgsz) throws WrongValueException {
