@@ -1473,7 +1473,7 @@ public class Tree extends MeshElement {
 			ti.setParent(parent);
 			Object childNode = _model.getChild(node, i);
 			renderer.render(ti, childNode);
-			Object v = ti.getAttribute("org.zkoss.zul.Tree.renderAs");
+			Object v = ti.getAttribute("org.zkoss.zul.model.renderAs");
 			if (v != null) //a new item is created to replace the existent one
 				(ti = (Treeitem)v).setOpen(false);
 			if(!_model.isLeaf(childNode) && ti.getTreechildren() == null){
@@ -1519,8 +1519,10 @@ public class Tree extends MeshElement {
 				if (items.length != 1)
 					throw new UiException("The model template must have exactly one item, not "+items.length);
 
-				((Treeitem)items[0]).setValue(node);
-				ti.setAttribute("org.zkoss.zul.Tree.renderAs", items[0]);
+				final Treeitem nti = (Treeitem)items[0];
+				if (nti.getValue() == null) //template might set it
+					nti.setValue(node);
+				ti.setAttribute("org.zkoss.zul.model.renderAs", nti);
 					//indicate a new item is created to replace the existent one
 				ti.detach();
 			}
@@ -1664,7 +1666,7 @@ public class Tree extends MeshElement {
 			renderChildren(renderer, tc, node);
 		}
 
-		Object v = item.getAttribute("org.zkoss.zul.Tree.renderAs");
+		Object v = item.getAttribute("org.zkoss.zul.model.renderAs");
 		if (v != null) //a new item is created to replace the existent one
 			(item = (Treeitem)v).setOpen(false);
 		item.setLoaded(true);

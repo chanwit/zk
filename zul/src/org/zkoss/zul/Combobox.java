@@ -275,7 +275,7 @@ public class Combobox extends Textbox {
 			j < pgsz && item != null; ++j, item = nxt) {
 				nxt = (Comboitem)item.getNextSibling(); //store it first
 				renderer.render(subset, item);
-				Object v = item.getAttribute("org.zkoss.zul.Combobox.renderAs");
+				Object v = item.getAttribute("org.zkoss.zul.model.renderAs");
 				if (v != null) //a new item is created to replace the existent one
 					item = (Comboitem)v;
 				fixSelectOnRender(item);// comboitem can be selected after set a label
@@ -315,8 +315,10 @@ public class Combobox extends Textbox {
 				if (items.length != 1)
 					throw new UiException("The model template must have exactly one item, not "+items.length);
 
-				((Comboitem)items[0]).setValue(data);
-				item.setAttribute("org.zkoss.zul.Combobox.renderAs", items[0]);
+				final Comboitem nci = (Comboitem)items[0];
+				if (nci.getValue() == null) //template might set it
+					nci.setValue(data);
+				item.setAttribute("org.zkoss.zul.model.renderAs", nci);
 					//indicate a new item is created to replace the existent one
 				item.detach();
 			}

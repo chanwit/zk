@@ -931,7 +931,7 @@ public class Grid extends MeshElement {
 
 			try {
 				_renderer.render(row, _model.getElementAt(row.getIndex()));
-				Object v = row.getAttribute("org.zkoss.zul.Grid.renderAs");
+				Object v = row.getAttribute("org.zkoss.zul.model.renderAs");
 				if (v != null) //a new row is created to replace the existent one
 					row = (Row)v;
 			} catch (Throwable ex) {

@@ -2506,7 +2506,7 @@ public class Listbox extends MeshElement {
 
 			try {
 				_renderer.render(item, value);
-				Object v = item.getAttribute("org.zkoss.zul.Listbox.renderAs");
+				Object v = item.getAttribute("org.zkoss.zul.model.renderAs");
 				if (v != null) //a new listitem is created to replace the existent one
 					item = (Listitem)v;
 			} catch (Throwable ex) {

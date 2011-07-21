@@ -246,8 +246,10 @@ public class GridDataLoader implements DataLoader, Cropper {
 				if (items.length != 1)
 					throw new UiException("The model template must have exactly one row, not "+items.length);
 
-				((Row)items[0]).setValue(data);
-				row.setAttribute("org.zkoss.zul.Grid.renderAs", items[0]);
+				final Row nr = (Row)items[0];
+				if (nr.getValue() == null) //template might set it
+					nr.setValue(data);
+				row.setAttribute("org.zkoss.zul.model.renderAs", nr);
 					//indicate a new row is created to replace the existent one
 				row.detach();
 			}
