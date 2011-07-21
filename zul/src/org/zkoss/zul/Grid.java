@@ -845,7 +845,7 @@ public class Grid extends MeshElement {
 			int realOfs = ofs - getDataLoader().getOffset();
 			if (realOfs < 0) realOfs = 0;
 			boolean open = true;
-			for (Row row = (Row)_rows.getChildren().get(realOfs), nxt;
+			for (Row row = _rows.getChildren().size() <= realOfs ? null: (Row)_rows.getChildren().get(realOfs), nxt;
 			j < pgsz && row != null; row = nxt) {
 				nxt = (Row)row.getNextSibling();
 
@@ -998,7 +998,7 @@ public class Grid extends MeshElement {
 
 		final Renderer renderer = new Renderer();
 		try {
-			for (Row row = (Row)_rows.getChildren().get(0), nxt; row != null; row = nxt) {
+			for (Row row = _rows.getChildren().size() <= 0 ? null: (Row)_rows.getChildren().get(0), nxt; row != null; row = nxt) {
 				nxt = (Row)row.getNextSibling(); //retrieve first since it might be changed
 				renderer.render(row);
 			}

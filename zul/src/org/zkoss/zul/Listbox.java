@@ -2413,7 +2413,7 @@ public class Listbox extends MeshElement {
 			if (realOfs < 0)
 				realOfs = 0;
 			boolean open = true;
-			for (Listitem item = (Listitem)getItems().get(realOfs), nxt;
+			for (Listitem item = getItems().size() <= realOfs ? null: (Listitem)getItems().get(realOfs), nxt;
 			j < pgsz && item != null; item = nxt) {
 				nxt = nextListitem(item); //retrieve first since it might be changed
 
@@ -2586,7 +2586,7 @@ public class Listbox extends MeshElement {
 
 		final Renderer renderer = new Renderer();
 		try {
-			for (Listitem item = (Listitem)getItems().get(0), nxt; item != null; item = nxt) {
+			for (Listitem item = getItems().size() <= 0 ? null: (Listitem)getItems().get(0), nxt; item != null; item = nxt) {
 				nxt = nextListitem(item); //retrieve first since it might be changed
 				renderer.render(item);
 			}
