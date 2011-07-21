@@ -52,13 +52,12 @@ Copyright (C) 2008 Potix Corporation. All Rights Reserved.
 		if (s) o.push(s);
 		return o.join(":");
 	}
-	
-var globallocalizedSymbols = {},
-	Datebox =
+	var globallocalizedSymbols = {};
 /**
  * An edit box for holding a date.
  * <p>Default {@link #getZclass}: z-datebox.
  */
+var Datebox = 
 zul.db.Datebox = zk.$extends(zul.inp.FormatWidget, {
 	_buttonVisible: true,
 	_lenient: true,
