@@ -28,6 +28,7 @@ import org.zkoss.zk.ui.util.ConditionImpl;
  */
 public class TemplateInfo extends BranchInfo {
 	private final String _name;
+	private final ExValue _src;
 	private final Map _params;
 
 	/** Creates a template.
@@ -38,12 +39,13 @@ public class TemplateInfo extends BranchInfo {
 	 * Notice that, once assigned, the map belongs to this object, and the caller
 	 * shall not access it again
 	 */
-	public TemplateInfo(NodeInfo parent, String name, ConditionImpl cond, Map params) {
+	public TemplateInfo(NodeInfo parent, String name, String src, Map params, ConditionImpl cond) {
 		super(parent, cond);
 
 		if (name == null || name.length() == 0)
 			throw new IllegalArgumentException("null");
 		_name = name;
+		_src = src != null ? new ExValue(src, String.class): null;
 
 		if (params != null && !params.isEmpty()) {
 			for (Iterator it = params.entrySet().iterator(); it.hasNext();) {
@@ -59,6 +61,11 @@ public class TemplateInfo extends BranchInfo {
 	 */
 	public String getName() {
 		return _name;
+	}
+	/** Returns the URI to create the template from, or null if not specified.
+	 */
+	public String getSrc(Component comp) {
+		return _src != null ? (String)_src.getValue(_evalr, comp): null;
 	}
 	/** Evaluates and returns a readonly map of parameters assigned
 	 * to this template (never null).

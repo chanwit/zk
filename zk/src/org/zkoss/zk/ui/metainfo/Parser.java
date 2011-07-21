@@ -1056,7 +1056,7 @@ public class Parser {
 			log.warning("forEach is ignored since <template> doesn't support it, "+el.getLocator());
 
 		String ifc = null, unless = null,
-			name = null;
+			name = null, src = null;
 		final Map params = new LinkedHashMap(); //reserve the order
 		for (Iterator it = el.getAttributeItems().iterator();
 		it.hasNext();) {
@@ -1065,12 +1065,14 @@ public class Parser {
 			final String attURI = attrns != null ? attrns.getURI(): "";
 			final String attnm = attr.getLocalName();
 			final String attval = attr.getValue();
-			if ("if".equals(attnm)) {
+			if ("name".equals(attnm)) {
+				name = attval;
+			} else if ("src".equals(attnm)) {
+				src = attval;
+			} else if ("if".equals(attnm)) {
 				ifc = attval;
 			} else if ("unless".equals(attnm)) {
 				unless = attval;
-			} else if ("name".equals(attnm)) {
-				name = attval;
 			} else {
 				final String attPref = attrns != null ? attrns.getPrefix(): null;
 				if (!"xmlns".equals(attnm) && !"xml".equals(attnm)
@@ -1083,7 +1085,7 @@ public class Parser {
 		if (name == null)
 			throw new UiException("The name attribute required, "+el.getLocator());
 		return new TemplateInfo(parent,
-			name, ConditionImpl.getInstance(ifc, unless), params);
+			name, src, params, ConditionImpl.getInstance(ifc, unless));
 	}
 	private static ZkInfo parseZk(NodeInfo parent, Element el,
 	AnnotationHelper annHelper) throws Exception {

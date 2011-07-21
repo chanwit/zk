@@ -637,15 +637,18 @@ public class UiEngineImpl implements UiEngine {
 				((ComponentInfo)parentInfo).getEvaluator(),
 				parent, fulfillURI, String.class);
 			if (fulfillURI != null) {
-				final Component c =
-					ci.exec.createComponents(fulfillURI, parent, insertBefore, null);
-				if (c != null) {
-					cs = (Component[])ArraysX.resize(cs, cs.length + 1);
-					cs[cs.length - 1] = c;
-				}
+				cs = merge(cs,
+					ci.exec.createComponents(fulfillURI, parent, insertBefore, null));
 			}
 		}
 
+		return cs;
+	}
+	private static Component[] merge(Component[] cs, Component c) {
+		if (c != null) {
+			cs = (Component[])ArraysX.resize(cs, cs.length + 1);
+			cs[cs.length - 1] = c;
+		}
 		return cs;
 	}
 	private static final Component[] execCreate0(CreateInfo ci,
@@ -2123,18 +2126,21 @@ public class UiEngineImpl implements UiEngine {
 	private static class TemplateImpl implements Template, java.io.Serializable {
 		private final TemplateInfo _tempInfo;
 		private final Map _params;
+		private final String _src;
 
 		private TemplateImpl(TemplateInfo tempInfo, Component comp) {
 			_tempInfo = tempInfo;
 			_params = tempInfo.resolveParameters(comp);
+			_src = tempInfo.getSrc(comp);
 		}
 		public Component[] create(Component parent, Component insertBefore,
 		VariableResolver resolver) {
 			final Execution exec = Executions.getCurrent();
+			final Component[] cs;
 			if (resolver != null)
 				exec.addVariableResolver(resolver);
 			try {
-				return execCreate0(
+				cs = execCreate0(
 					new CreateInfo(
 						((WebAppCtrl)exec.getDesktop().getWebApp()).getUiFactory(),
 						exec, parent.getPage(), null), //technically sys composer can be used but we don't (to simplify it)
@@ -2143,6 +2149,10 @@ public class UiEngineImpl implements UiEngine {
 				if (resolver != null)
 					exec.removeVariableResolver(resolver);
 			}
+
+			final Component c2 = _src != null ?
+				exec.createComponents(_src, parent, insertBefore, resolver): null;
+			return merge(cs, c2);
 		}
 		public Map getParameters() {
 			return _params;
