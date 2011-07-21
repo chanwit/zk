@@ -1253,44 +1253,57 @@ public class Components {
 				Component parent, Map arg) {
 			return exec().createComponents(pagedef, parent, arg);
 		}
-
 		public Component createComponents(String uri, Component parent, Map arg) {
 			return exec().createComponents(uri, parent, arg);
+		}
+		public Component createComponentsDirectly(String content,
+				String extension, Component parent, Map arg) {
+			return exec().createComponentsDirectly(content, extension, parent, arg);
+		}
+		public Component createComponentsDirectly(Document content,
+				String extension, Component parent, Map arg) {
+			return exec().createComponentsDirectly(content, extension, parent, arg);
+		}
+		public Component createComponentsDirectly(Reader reader,
+				String extension, Component parent, Map arg) throws IOException {
+			return exec().createComponentsDirectly(reader, extension, parent, arg);
+		}
+
+		public Component createComponents(PageDefinition pagedef,
+				Component parent, Component insertBefore, VariableResolver resolver) {
+			return exec().createComponents(pagedef, parent, insertBefore, resolver);
+		}
+		public Component createComponents(String uri, Component parent, Component insertBefore, VariableResolver resolver) {
+			return exec().createComponents(uri, parent, insertBefore, resolver);
+		}
+		public Component createComponentsDirectly(String content,
+				String extension, Component parent, Component insertBefore, VariableResolver resolver) {
+			return exec().createComponentsDirectly(content, extension, parent, insertBefore, resolver);
+		}
+		public Component createComponentsDirectly(Document content,
+				String extension, Component parent, Component insertBefore, VariableResolver resolver) {
+			return exec().createComponentsDirectly(content, extension, parent, insertBefore, resolver);
+		}
+		public Component createComponentsDirectly(Reader reader,
+				String extension, Component parent, Component insertBefore, VariableResolver resolver) throws IOException {
+			return exec().createComponentsDirectly(reader, extension, parent, insertBefore, resolver);
 		}
 
 		public Component[] createComponents(PageDefinition pagedef, Map arg) {
 			return exec().createComponents(pagedef, arg);
 		}
-
 		public Component[] createComponents(String uri, Map arg) {
 			return exec().createComponents(uri, arg);
-		}
-
-		public Component createComponentsDirectly(String content,
-				String extension, Component parent, Map arg) {
-			return exec().createComponentsDirectly(content, extension, parent, arg);
-		}
-
-		public Component createComponentsDirectly(Document content,
-				String extension, Component parent, Map arg) {
-			return exec().createComponentsDirectly(content, extension, parent, arg);
-		}
-
-		public Component createComponentsDirectly(Reader reader,
-				String extension, Component parent, Map arg) throws IOException {
-			return exec().createComponentsDirectly(reader, extension, parent, arg);
 		}
 
 		public Component[] createComponentsDirectly(String content,
 				String extension, Map arg) {
 			return exec().createComponentsDirectly(content, extension, arg);
 		}
-
 		public Component[] createComponentsDirectly(Document content,
 				String extension, Map arg) {
 			return exec().createComponentsDirectly(content, extension, arg);
 		}
-
 		public Component[] createComponentsDirectly(Reader reader,
 				String extension, Map arg) throws IOException {
 			return exec().createComponentsDirectly(reader, extension, arg);

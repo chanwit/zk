@@ -5,8 +5,8 @@ ZK 5.1.0
   ZK-216: Listbox/Tree/Grid/Combobox supports the template for rendering model
   ZK-217: A way to add a temporary variable resolver to an execution
   2974464: A way to customize message with i3-label
+  ZK-233: Execution.createComponents support inserting before particular component and variable resolver
   3025389: A way to monitor the execution and event processing
-  3355295: A way to define a template that component could use
   2947727: The instantiation of Composer & Server Push customizable
   ZK-224: Tree shall render the model in the onInitRender event listener
 

@@ -23,6 +23,8 @@ import java.io.IOException;
 import java.io.Writer;
 
 import org.zkoss.json.JSONArray;
+import org.zkoss.xel.VariableResolver;
+
 import org.zkoss.zk.ui.WebApp;
 import org.zkoss.zk.ui.Desktop;
 import org.zkoss.zk.ui.Page;
@@ -235,13 +237,19 @@ public interface UiEngine {
 	 * to any page.
 	 * @param parent the parent component, or null if no parent compoent.
 	 * If parent is specified, page is ignored.
+	 * @param insertBefore the sibling component that new components will be
+	 * inserted before. Ignored if null (i.e., append as last children).
+	 * @param resolver the variable resolver used to resolve variables.
+	 * Ignored if null.
 	 * @param arg a map of parameters that is accessible by the arg variable
 	 * in EL, or by {@link Execution#getArg}.
 	 * Ignored if null.
 	 * @return the components being created.
+	 * @since 5.1.0
 	 */
 	public Component[] createComponents(Execution exec,
-	PageDefinition pagedef, Page page, Component parent, Map arg);
+	PageDefinition pagedef, Page page, Component parent,
+	Component insertBefore, VariableResolver resolver, Map arg);
 
 	/** Sends a temporary redirect response to the client using the specified
 	 * redirect location URL.

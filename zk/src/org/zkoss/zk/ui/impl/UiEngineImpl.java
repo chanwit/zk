@@ -405,7 +405,7 @@ public class UiEngineImpl implements UiEngine {
 							execCreate(new CreateInfo(
 								((WebAppCtrl)wapp).getUiFactory(), exec, page,
 								config.getComposer(page)),
-							pagedef, null);
+							pagedef, null, null);
 					}
 
 					inits.doAfterCompose(page, comps);
@@ -612,7 +612,7 @@ public class UiEngineImpl implements UiEngine {
 	 * @return the first component being created.
 	 */
 	private static final Component[] execCreate(
-	CreateInfo ci, NodeInfo parentInfo, Component parent) {
+	CreateInfo ci, NodeInfo parentInfo, Component parent, Component insertBefore) {
 		String fulfillURI = null;
 		if (parentInfo instanceof ComponentInfo) {
 			final ComponentInfo pi = (ComponentInfo)parentInfo;
@@ -630,7 +630,7 @@ public class UiEngineImpl implements UiEngine {
 			}
 		}
 
-		Component[] cs = execCreate0(ci, parentInfo, parent, null);
+		Component[] cs = execCreate0(ci, parentInfo, parent, insertBefore);
 
 		if (fulfillURI != null) {
 			fulfillURI = (String)Evaluators.evaluate(
@@ -638,7 +638,7 @@ public class UiEngineImpl implements UiEngine {
 				parent, fulfillURI, String.class);
 			if (fulfillURI != null) {
 				final Component c =
-					ci.exec.createComponents(fulfillURI, parent, null);
+					ci.exec.createComponents(fulfillURI, parent, insertBefore, null);
 				if (c != null) {
 					cs = (Component[])ArraysX.resize(cs, cs.length + 1);
 					cs[cs.length - 1] = c;
@@ -793,7 +793,7 @@ public class UiEngineImpl implements UiEngine {
 				composerExt.doBeforeComposeChildren(child);
 			ci.doBeforeComposeChildren(child, bRoot);
 
-			execCreate(ci, childInfo, child); //recursive
+			execCreate(ci, childInfo, child, null); //recursive (and appendChild)
 
 			if (bNative)
 				setEpilog(ci, child, (NativeInfo)childInfo);
@@ -947,7 +947,8 @@ public class UiEngineImpl implements UiEngine {
 	}
 
 	public Component[] createComponents(Execution exec,
-	PageDefinition pagedef, Page page, Component parent, Map arg) {
+	PageDefinition pagedef, Page page, Component parent,
+	Component insertBefore, VariableResolver resolver, Map arg) {
 		if (pagedef == null)
 			throw new IllegalArgumentException("pagedef");
 
@@ -995,13 +996,15 @@ public class UiEngineImpl implements UiEngine {
 		final IdSpace prevIS = fakeIS ?
 			ExecutionsCtrl.setVirtualIdSpace(
 				fakepg ? (IdSpace)page: new SimpleIdSpace()): null;
+		if (resolver != null)
+			exec.addVariableResolver(resolver);
 		try {
 			if (fakepg) pagedef.init(page, false);
 
 			final Component[] comps = execCreate(
 				new CreateInfo(((WebAppCtrl)wapp).getUiFactory(),
 					exec, page, null), //technically sys composer can be used but we don't (to make it simple)
-				pagedef, parent);
+				pagedef, parent, insertBefore);
 			inits.doAfterCompose(page, comps);
 
 			if (fakepg)
@@ -1017,6 +1020,8 @@ public class UiEngineImpl implements UiEngine {
 			inits.doCatch(ex);
 			throw UiException.Aide.wrap(ex);
 		} finally {
+			if (resolver != null)
+				exec.removeVariableResolver(resolver);
 			exec.popArg();
 			execCtrl.setCurrentPage(prevpg); //restore it
 			execCtrl.setCurrentPageDefinition(olddef); //restore it
@@ -2135,7 +2140,7 @@ public class UiEngineImpl implements UiEngine {
 						exec, parent.getPage(), null), //technically sys composer can be used but we don't (to simplify it)
 					_tempInfo, parent, insertBefore);
 			} finally {
-			if (resolver != null)
+				if (resolver != null)
 					exec.removeVariableResolver(resolver);
 			}
 		}
