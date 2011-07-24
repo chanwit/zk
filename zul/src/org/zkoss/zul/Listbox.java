@@ -2977,6 +2977,8 @@ public class Listbox extends MeshElement {
 				renderer.render("rightSelect", false);
 			if (isListgroupSelectable())
 				renderer.render("groupSelect", true);
+			if (!inPagingMold() && _jsel >= 0)
+				renderer.render("selectedIndex", _jsel); // B50-ZK-56
 		}
 	}
 	/** Returns whether to toggle a list item selection on right click

@@ -47,6 +47,7 @@ ZK 5.0.8
   3307322: Control Keys support backspace
   3326111: A way to specify fileSizeThreshold for fileupload in zk.xml
   ZK-214: Add a databinding composer instead of initiator
+  ZK-230: org.zkoss.zkplus.embed.Renders provides an option to control whether to generate addtion DOM element for the page
 
 * Bugs
   3301375: native component in vbox stretch align show javascript error
@@ -142,6 +143,13 @@ ZK 5.0.8
   3363687: Window onCreate fired twice for Execution#sendRedirect() 
   ZK-223: Fine tune ZKThemes and sandbox
   ZK-200: Outside Window border disappear when defer including
+  ZK-215: Combobox options width failed in IE
+  ZK-56:  setSelectedIndex not scroll the selectedItem 
+  ZK-232: Server push fail in cluster environment
+  ZK-159: Hflex fail with nest container
+  ZK-182: Header of grid scroll fail after remove the Frozen
+  ZK-163: The Flashchart didn't compatible with jre / jdk 1.4.x
+  ZK-195: Tree with vflex causes wrong wd in another tree w/ scrollbar
   
 * Upgrade Notes
   + Listbox in the select mold will show up an empty selection if none of listitems
