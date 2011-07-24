@@ -1275,7 +1275,7 @@ public class Parser {
 		//Optimize 1: merge to prolog, if the first children are
 		//native and have no child
 		for (Iterator it = compInfo.getChildren().iterator(); it.hasNext();) {
-			final Object o = it.next();
+			final NodeInfo o = (NodeInfo)it.next();
 			if (o instanceof NativeInfo) {
 				final NativeInfo childInfo = (NativeInfo)o;
 				if (!childInfo.getChildren().isEmpty())
@@ -1285,7 +1285,7 @@ public class Parser {
 				break;
 			}
 
-			compInfo.addPrologChildDirectly(o);
+			compInfo.addPrologChild(o);
 			it.remove(); //detach it from the children list
 		}
 
@@ -1309,8 +1309,8 @@ public class Parser {
 				}
 			}
 			while (it.hasNext()) {
-				final Object o = it.next();
-				compInfo.addEpilogChildDirectly(o);
+				final NodeInfo o = (NodeInfo)it.next();
+				compInfo.addEpilogChild(o);
 				it.remove();
 			}
 		}

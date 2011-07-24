@@ -93,48 +93,7 @@ public class NativeInfo extends ComponentInfo {
 	 * @param child the prolog child.
 	 * @see #getPrologChildren
 	 */
-	public void addPrologChild(NativeInfo child) {
-		addPrologChildDirectly(child);
-	}
-	/** Adds a prolog child.
-	 *
-	 * @param child the prolog child. If child belongs to {@link #getChildren},
-	 * it will be removed first.
-	 * @see #getPrologChildren
-	 */
-	public void addPrologChild(ZScript child) {
-		addPrologChildDirectly(child);
-	}
-	/** Adds a prolog child.
-	 *
-	 * @param child the prolog child. If child belongs to {@link #getChildren},
-	 * it will be removed first.
-	 * @see #getPrologChildren
-	 */
-	public void addPrologChild(VariablesInfo child) {
-		addPrologChildDirectly(child);
-	}
-	/** Adds a prolog child.
-	 *
-	 * <p>Note: if child belong to other {@link ComponentInfo},
-	 * you have to remove them first before calling this method.
-	 * Otherwise, the result is unpreditable.
-	 *
-	 * @param child the prolog child.
-	 * @see #getPrologChildren
-	 */
-	public void addPrologChild(AttributesInfo child) {
-		addPrologChildDirectly(child);
-	}
-	/** Adds a text as a prolog child.
-	 */
-	public void addPrologChild(TextInfo text) {
-		addPrologChildDirectly(text);
-	}
-	/** Adds a prolog child.
-	 * @param chld the child can NOT be{@link ComponentInfo}.
-	 */
-	/*package*/ void addPrologChildDirectly(Object child) {
+	public void addPrologChild(NodeInfo child) {
 		if (_prokids == null)
 			_prokids = new LinkedList();
 		_prokids.add(child);
@@ -145,40 +104,7 @@ public class NativeInfo extends ComponentInfo {
 	 * it will be removed first.
 	 * @see #getPrologChildren
 	 */
-	public void addEpilogChild(NativeInfo child) {
-		addEpilogChildDirectly(child);
-	}
-	/** Adds an epilog child.
-	 *
-	 * @param child the epilog child. If child belongs to {@link #getChildren},
-	 * it will be removed first.
-	 * @see #getPrologChildren
-	 */
-	public void addEpilogChild(ZScript child) {
-		addEpilogChildDirectly(child);
-	}
-	/** Adds an epilog child.
-	 *
-	 * @param child the epilog child. If child belongs to {@link #getChildren},
-	 * it will be removed first.
-	 * @see #getPrologChildren
-	 */
-	public void addEpilogChild(VariablesInfo child) {
-		addEpilogChildDirectly(child);
-	}
-	/** Adds an epilog child.
-	 *
-	 * @param child the epilog child. If child belongs to {@link #getChildren},
-	 * it will be removed first.
-	 * @see #getPrologChildren
-	 */
-	public void addEpilogChild(AttributesInfo child) {
-		addEpilogChildDirectly(child);
-	}
-	/** Adds an epilog child.
-	 * @param chld the child can NOT be{@link ComponentInfo}.
-	 */
-	/*package*/ void addEpilogChildDirectly(Object child) {
+	public void addEpilogChild(NodeInfo child) {
 		if (_epikids == null)
 			_epikids = new LinkedList();
 		_epikids.add(child);
