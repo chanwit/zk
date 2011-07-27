@@ -58,6 +58,7 @@ ZK 5.0.8
   3307322: Control Keys support backspace
   3326111: A way to specify fileSizeThreshold for fileupload in zk.xml
   ZK-230: org.zkoss.zkplus.embed.Renders provides an option to control whether to generate addtion DOM element for the page
+  ZK-219: Update zk.Event documentation
 
 * Bugs
   3301375: native component in vbox stretch align show javascript error
@@ -164,6 +165,9 @@ ZK 5.0.8
   ZK-206: Set Hflex="min" to listheader fail, FF5 IE6,7
   ZK-198: Splitter issue with double Borderlayout
   ZK-190: Change style of div in border layout cause error of style
+  ZK-236: Borderlayout North/South failed to concern caption height
+  ZK-238: Grid with frozen, scrolled then delete frozen, some columns is hidden
+  ZK-221: problem with events in firefox 4.x and up
   
 * Upgrade Notes
   + Listbox in the select mold will show up an empty selection if none of listitems
