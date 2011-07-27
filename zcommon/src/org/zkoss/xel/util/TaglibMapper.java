@@ -27,6 +27,7 @@ import org.zkoss.lang.Objects;
 import org.zkoss.util.resource.Locator;
 import org.zkoss.idom.Element;
 import org.zkoss.xel.FunctionMapper;
+import org.zkoss.xel.FunctionMapperExt;
 import org.zkoss.xel.Function;
 import org.zkoss.xel.XelException;
 import org.zkoss.xel.taglib.Taglibs;
@@ -41,7 +42,8 @@ import org.zkoss.xel.taglib.Taglib;
  * @since Taglib
  * @since Taglibs
  */
-public class TaglibMapper implements FunctionMapper, Cloneable, java.io.Serializable {
+public class TaglibMapper
+implements FunctionMapper, FunctionMapperExt, Cloneable, java.io.Serializable {
 	/** Map(String prefix+":"+name, Function func). */
 	protected Map _mtds;
 	/** Map(String name, Class cls). */
@@ -144,6 +146,7 @@ public class TaglibMapper implements FunctionMapper, Cloneable, java.io.Serializ
 	public Function resolveFunction(String prefix, String name) {
 		return _mtds != null ? (Function)_mtds.get(prefix+":"+name): null;
 	}
+	//-- FunctionMapperExt --//
 	public Collection getClassNames() {
 		return _clses != null ? _clses.keySet(): (Collection)Collections.EMPTY_LIST;
 	}
