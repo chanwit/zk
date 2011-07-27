@@ -37,6 +37,7 @@ import org.zkoss.lang.Classes;
 import org.zkoss.lang.Objects;
 import org.zkoss.lang.Strings;
 import org.zkoss.lang.Library;
+import org.zkoss.lang.ClassResolver;
 import org.zkoss.lang.Exceptions;
 import org.zkoss.lang.Expectable;
 import org.zkoss.util.CollectionsX;
@@ -113,7 +114,7 @@ import org.zkoss.zk.scripting.*;
  */
 public class PageImpl extends AbstractPage implements java.io.Serializable {
 	private static final Log log = Log.lookup(PageImpl.class);
-    private static final long serialVersionUID = 20101025L;
+    private static final long serialVersionUID = 20110726L;
 
 	/** The component that includes this page, or null if not included. */
 	private transient Component _owner;
@@ -122,7 +123,7 @@ public class PageImpl extends AbstractPage implements java.io.Serializable {
 	private transient Desktop _desktop;
 	private String _id = "", _uuid;
 	private String _title = "", _style = "";
-	private final String _path;
+	private String _path;
 	private String _zslang;
 	/** A list of deferred zscript [Component parent, {@link ZScript}]. */
 	private List _zsDeferred;
@@ -133,7 +134,7 @@ public class PageImpl extends AbstractPage implements java.io.Serializable {
 	/** The reason to store it is PageDefinition is not serializable. */
 	private FunctionMapper _mapper;
 	/** The reason to store it is PageDefinition is not serializable. */
-	private ComponentDefinitionMap _compdefs;
+	private final ComponentDefinitionMap _compdefs;
 	/** The reason to store it is PageDefinition is not serializable. */
 	private transient LanguageDefinition _langdef;
 	/** The header tags. */
@@ -151,6 +152,8 @@ public class PageImpl extends AbstractPage implements java.io.Serializable {
 	private transient Map _ips;
 	/** A list of {@link VariableResolver}. */
 	private transient List _resolvers;
+	/** A list of class's name pattern (String). */
+	private final ClassResolver _clsresolver;
 	private boolean _complete;
 
 	/** Constructs a page by giving the page definition.
@@ -167,8 +170,13 @@ public class PageImpl extends AbstractPage implements java.io.Serializable {
 	 * @param pgdef the page definition (never null).
 	 */
 	public PageImpl(PageDefinition pgdef) {
-		this(pgdef.getLanguageDefinition(), pgdef.getComponentDefinitionMap(),
+		constr(pgdef.getLanguageDefinition(),
 			pgdef.getRequestPath(), pgdef.getZScriptLanguage());
+
+		_compdefs = pgdef.getComponentDefinitionMap();
+		_clsresolver = pgdef.getImportedClassResolver();
+
+		//NOTE: don't store pgdef since it is not serializable
 	}
 	/** Constructs a page without page definition and richlet.
 	 *
@@ -180,14 +188,11 @@ public class PageImpl extends AbstractPage implements java.io.Serializable {
 	 */
 	public PageImpl(LanguageDefinition langdef,
 	ComponentDefinitionMap compdefs, String path, String zslang) {
-		init();
-
-		_langdef = langdef;
+		constr(langdef, path, zslang);
 		_compdefs = compdefs != null ? compdefs:
 			new ComponentDefinitionMap(
 				_langdef.getComponentDefinitionMap().isCaseInsensitive());
-		_path = path != null ? path: "";
-		_zslang = zslang != null ? zslang: "Java";
+		_clsresolver = new SimpleClassResolver();
 	}
 
 	/** Constructs a page by specifying a richlet.
@@ -203,13 +208,17 @@ public class PageImpl extends AbstractPage implements java.io.Serializable {
 	 * @param path the request path, or null if not available
 	 */
 	public PageImpl(Richlet richlet, String path) {
-		init();
+		constr(richlet.getLanguageDefinition(), path, null);
 
-		_langdef = richlet.getLanguageDefinition();
 		_compdefs = new ComponentDefinitionMap(
 			_langdef.getComponentDefinitionMap().isCaseInsensitive());
+		_clsresolver = new SimpleClassResolver();
+	}
+	private void constr(LanguageDefinition langdef, String path, String zslang) {
+		init();
+		_langdef = langdef;
 		_path = path != null ? path: "";
-		_zslang = "Java";
+		_zslang = zslang != null ? zslang: "Java";
 	}
 	/** Initialized the page when contructed or deserialized.
 	 */
@@ -402,7 +411,7 @@ public class PageImpl extends AbstractPage implements java.io.Serializable {
 
 	public Class resolveClass(String clsnm) throws ClassNotFoundException {
 		try {
-			return Classes.forNameByThread(clsnm);
+			return _clsresolver.resolveClass(clsnm);
 		} catch (ClassNotFoundException ex) {
 			for (Iterator it = getLoadedInterpreters().iterator();
 			it.hasNext();) {
@@ -422,7 +431,7 @@ public class PageImpl extends AbstractPage implements java.io.Serializable {
 		}
 
 		try {
-			return Classes.forNameByThread(clsnm);
+			return _clsresolver.resolveClass(clsnm);
 		} catch (ClassNotFoundException ex) {
 			return null;
 		}
@@ -583,7 +592,6 @@ public class PageImpl extends AbstractPage implements java.io.Serializable {
 	}
 	public void init(PageConfig config) {
 		final Execution exec = Executions.getCurrent();
-
 		if (((ExecutionCtrl)exec).isRecovering()) {
 			final String uuid = config.getUuid(), id = config.getId();
 			if (uuid == null || id == null)

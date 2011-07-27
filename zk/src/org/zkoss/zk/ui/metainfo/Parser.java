@@ -143,6 +143,7 @@ public class Parser {
 	throws Exception {
 		//1. parse the page and import directive if any
 		final List pis = new LinkedList(), imports = new LinkedList();
+		final List impclses = new LinkedList();
 		String lang = null;
 		for (Iterator it = doc.getChildren().iterator(); it.hasNext();) {
 			final Object o = it.next();
@@ -165,11 +166,18 @@ public class Parser {
 				final Map params = pi.parseData();
 				final String src = (String)params.remove("src");
 				final String dirs = (String)params.remove("directives");
+				final String cls = (String)params.remove("class");
 				if (!params.isEmpty())
 					log.warning("Ignored unknown attributes: "+params.keySet()+", "+pi.getLocator());
-				noELnorEmpty("src", src, pi);
-				noEL("directives", dirs, pi);
-				imports.add(new String[] {src, dirs});
+				if (src != null) {
+					noELnorEmpty("src", src, pi);
+					noEL("directives", dirs, pi);
+					imports.add(new String[] {src, dirs});
+				}
+				if (cls != null) {
+					noELnorEmpty("class", cls, pi);
+					impclses.add(cls);
+				}
 			} else {
 				pis.add(pi);
 			}
@@ -182,7 +190,7 @@ public class Parser {
 				LanguageDefinition.lookup(lang);
 		final PageDefinition pgdef = new PageDefinition(langdef, getLocator());
 
-		//3. resolve imports
+		//3a. resolve imports
 		if (!imports.isEmpty()) {
 			final RequestInfo ri =
 				new RequestInfoImpl(_wapp, null, null, null, getLocator());
@@ -200,6 +208,9 @@ public class Parser {
 				}
 			}
 		}
+		//3b. resolve impclses
+		for (Iterator it = impclses.iterator(); it.hasNext();)
+			pgdef.addImportedClass((String)it.next());
 
 		//4. Processing the rest of processing instructions at the top level
 		for (Iterator it = pis.iterator(); it.hasNext();)
@@ -210,13 +221,6 @@ public class Parser {
 		if (root != null)
 			parse(pgdef, pgdef, root, new AnnotationHelper(), false);
 		return pgdef;
-	}
-	private static Class locateClass(String clsnm) throws Exception {
-		try {
-			return Classes.forNameByThread(clsnm);
-		} catch (ClassNotFoundException ex) {
-			throw new ClassNotFoundException("Class not found: "+clsnm, ex);
-		}
 	}
 	/** Parses a list of string separated by comma, into a String array.
 	 */
@@ -251,15 +255,9 @@ public class Parser {
 
 			final Map args = new LinkedHashMap(params);
 			if ("variable-resolver".equals(target))
-				pgdef.addVariableResolverInfo(
-					clsnm.indexOf("${") >= 0 ? //class supports EL
-						new VariableResolverInfo(clsnm, args):
-						new VariableResolverInfo(locateClass(clsnm), args));
+				pgdef.addVariableResolverInfo(new VariableResolverInfo(clsnm, args));
 			else
-				pgdef.addFunctionMapperInfo(
-					clsnm.indexOf("${") >= 0 ? //class supports EL
-						new FunctionMapperInfo(clsnm, args):
-						new FunctionMapperInfo(locateClass(clsnm), args));
+				pgdef.addFunctionMapperInfo(new FunctionMapperInfo(clsnm, args));
 		} else if ("component".equals(target)) { //declare a component
 			parseComponentDirective(pgdef, pi, params);
 		} else if ("taglib".equals(target)) {
@@ -337,12 +335,7 @@ public class Parser {
 			if (!isEmpty(zsrc))
 				throw new UiException("You cannot specify both class and zscript, "+pi.getLocator());
 
-			pgdef.addInitiatorInfo(
-				clsnm.indexOf("${") >= 0 ? //class supports EL
-					new InitiatorInfo(clsnm, args):
-					new InitiatorInfo(locateClass(clsnm), args));
-				//Note: we don't resolve the class name later because
-				//no zscript run before init (and better performance)
+			pgdef.addInitiatorInfo(new InitiatorInfo(clsnm, args));
 		}
 	}
 	/** Process the page directive. */
@@ -430,7 +423,7 @@ public class Parser {
 				ref = langdef.getComponentDefinition(extds);
 			} else {
 				try {
-					final Class cls = Classes.forNameByThread(clsnm);
+					final Class cls = pgdef.getImportedClassResolver().resolveClass(clsnm);
 					if (lang != null) {
 						ref = langdef.getComponentDefinition(cls);
 							//throw exception if not found
@@ -499,7 +492,8 @@ public class Parser {
 		final String clsnm = (String)params.remove("class");
 		if (clsnm != null && clsnm.length() > 0) {
 			noELnorEmpty("class", clsnm, pi);
-			pgdef.setExpressionFactoryClass(locateClass(clsnm));
+			pgdef.setExpressionFactoryClass(
+				pgdef.getImportedClassResolver().resolveClass(clsnm));
 		} else { //name has the lower priorty
 			final String nm = (String)params.remove("name");
 			if (nm != null)
@@ -517,12 +511,16 @@ public class Parser {
 				String cn = (k >= 0 ? im.substring(k + 1): im).trim();
 
 				if (cn.length() != 0) {
-					final Class cs = locateClass(cn);
 					if (nm == null || nm.length() == 0) {
 						final int j = cn.lastIndexOf('.');
 						nm = j >= 0 ? cn.substring(j + 1): cn;
 					}
-					pgdef.addExpressionImport(nm, cs);
+					pgdef.addExpressionImport(nm, Classes.forNameByThread(cn));
+						//evaluator's import does not support <?import class?>,
+						//since it looks strange.
+						//FUTURE: it is better to deprecate this attribute, and
+						//have FunctionMapperExt to depend on <?import class?>
+						//(however, it is worth since only MVEL/OGNL uses it)
 				}
 			}
 		}
@@ -541,7 +539,7 @@ public class Parser {
 
 		final Method mtd;
 		try {
-			final Class cls = Classes.forNameByThread(clsnm);
+			final Class cls = pgdef.getImportedClassResolver().resolveClass(clsnm);
 			mtd = Classes.getMethodBySignature(cls, sig, null);
 		} catch (ClassNotFoundException ex) {
 			throw new UiException("Class not found: "+clsnm+", "+pi.getLocator());

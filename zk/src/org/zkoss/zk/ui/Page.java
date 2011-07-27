@@ -21,6 +21,7 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 
+import org.zkoss.lang.ClassResolver;
 import org.zkoss.xel.FunctionMapper;
 import org.zkoss.xel.VariableResolver;
 import org.zkoss.xel.XelContext;
@@ -89,7 +90,7 @@ import org.zkoss.zk.ui.metainfo.ComponentDefinitionMap;
  *
  * @author tomyeh
  */
-public interface Page extends IdSpace, Scope {
+public interface Page extends IdSpace, Scope, ClassResolver {
 	/** Returns ID which is unique in the request (never null).
 	 *
 	 * <p>Note: it returns null when

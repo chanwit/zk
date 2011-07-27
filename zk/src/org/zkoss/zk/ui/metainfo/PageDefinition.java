@@ -25,6 +25,8 @@ import java.util.Map;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 
+import org.zkoss.lang.Classes;
+import org.zkoss.lang.ClassResolver;
 import org.zkoss.util.resource.Locator;
 import org.zkoss.xel.ExpressionFactory;
 import org.zkoss.xel.Expressions;
@@ -44,6 +46,7 @@ import org.zkoss.zk.xel.Evaluator;
 import org.zkoss.zk.xel.ExValue;
 import org.zkoss.zk.xel.impl.SimpleEvaluator;
 import org.zkoss.zk.xel.EvaluatorRef;
+import org.zkoss.zk.ui.impl.ImportedClassResolver;
 
 /**
  * A page definition.
@@ -94,8 +97,10 @@ public class PageDefinition implements NodeInfo {
 	/** Map(String name, ExValue value). */
 	private Map _rootAttrs;
 	private ExValue _contentType, _docType, _firstLine, _wgtcls;
-	/** The expression factory (ExpressionFactory).*/
+	/** The class of the expression factory (ExpressionFactory).*/
 	private Class _expfcls;
+	/** The class resolver. */
+	private final ImportedClassResolver _clsresolver = new ImportedClassResolver();
 	private final ComponentDefinitionMap _compdefs;
 	private Boolean _cacheable;
 	private Boolean _autoTimeout;
@@ -256,6 +261,9 @@ public class PageDefinition implements NodeInfo {
 	 * @since 3.0.2
 	 */
 	public void imports(PageDefinition pgdef, String[] directives) {
+		if (directives == null || contains(directives, "import"))
+			_clsresolver.addAll(pgdef._clsresolver);
+
 		if (pgdef._initdefs != null
 		&& (directives == null || contains(directives, "init")))
 			for (Iterator it = pgdef._initdefs.iterator(); it.hasNext();)
@@ -327,6 +335,31 @@ public class PageDefinition implements NodeInfo {
 		imports(pgdef, null);
 	}
 
+	/** Adds an imported class
+	 * Like Java, it is used to import a class or a package of classes, so
+	 * that it simplifies the use of the apply attribute, the init directive
+	 * and others.
+	 * 
+	 * @param clsptn the class's full-qualitified name, e.g., <code>com.foo.FooComposer</code>,
+	 * a wildcard representing all classes of the give pacakge, e.g., <code>com.foo.*</code>.
+	 * @since 5.1.0
+	 */
+	public void addImportedClass(String clsptn) {
+		_clsresolver.addImportedClass(clsptn);
+	}
+	/** Returns a readonly list of the imported class.
+	 * @since 5.1.0
+	 */
+	public List getImportedClasses() {
+		return _clsresolver.getImportedClasses();
+	}
+	/** Returns the class resolver represented by {@link #getImportedClasses}.
+	 * @since 5.1.0
+	 */
+	public ClassResolver getImportedClassResolver() {
+		return _clsresolver;
+	}
+
 	/** Adds a defintion of {@link org.zkoss.zk.ui.util.Initiator}. */
 	public void addInitiatorInfo(InitiatorInfo init) {
 		if (init == null)
@@ -386,13 +419,13 @@ public class PageDefinition implements NodeInfo {
 	 * @since 3.0.0
 	 */
 	public void addXelMethod(String prefix, String name, Function func) {
+		checkXelModifiable();
 		if (name == null || prefix == null || func == null)
 			throw new IllegalArgumentException();
+
 		if (_xelmtds == null)
 			_xelmtds = new LinkedList();
 		_xelmtds.add(new Object[] {prefix, name, func});
-		_eval = null; //ask for re-gen
-		_mapper = null; //ask for re-parse
 	}
 	/** Initializes XEL context for the specified page.
 	 *
@@ -799,26 +832,29 @@ public class PageDefinition implements NodeInfo {
 
 	/** Adds a tag lib. */
 	public void addTaglib(Taglib taglib) {
+		checkXelModifiable();
 		if (taglib == null)
 			throw new IllegalArgumentException("null");
 
 		if (_taglibs == null)
 			_taglibs = new LinkedList();
 		_taglibs.add(taglib);
-		_eval = null; //ask for re-gen
-		_mapper = null; //ask for re-parse
 	}
 	/** Adds an imported class to the expression factory.
 	 * @since 3.0.0
 	 */
 	public void addExpressionImport(String nm, Class cls) {
+		checkXelModifiable();
 		if (nm == null || cls == null)
 			throw new IllegalArgumentException();
+
 		if (_expimps == null)
 			_expimps = new HashMap(4);
 		_expimps.put(nm, cls);
-		_eval = null; //ask for re-gen
-		_mapper = null; //ask for re-parse
+	}
+	private void checkXelModifiable() {
+		if (_eval != null || _mapper != null)
+			throw new IllegalStateException("getEvaluator() has been called, and no further change is allowed");
 	}
 	/** Sets the implementation of the expression factory that shall
 	 * be used by this page.
@@ -832,8 +868,9 @@ public class PageDefinition implements NodeInfo {
 	 * @since 3.0.0
 	 */
 	public void setExpressionFactoryClass(Class expfcls) {
+		checkXelModifiable();
 		if (expfcls != null && !ExpressionFactory.class.isAssignableFrom(expfcls))
-			throw new IllegalArgumentException(expfcls+" must implement "+ExpressionFactory.class);
+			throw new IllegalArgumentException(ExpressionFactory.class+" must be implemented: "+expfcls);
 		_expfcls = expfcls;
 	}
 	/** Returns the implementation of the expression factory that
