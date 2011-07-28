@@ -37,6 +37,7 @@ import java.net.URL;
 import org.zkoss.lang.D;
 import org.zkoss.lang.Library;
 import org.zkoss.lang.Classes;
+import org.zkoss.lang.ClassResolver;
 import org.zkoss.lang.PotentialDeadLockException;
 import org.zkoss.util.CollectionsX;
 import org.zkoss.util.logging.Log;
@@ -539,8 +540,9 @@ public class Parser {
 
 		final Method mtd;
 		try {
-			final Class cls = pgdef.getImportedClassResolver().resolveClass(clsnm);
-			mtd = Classes.getMethodBySignature(cls, sig, null);
+			final ClassResolver clsresolver = pgdef.getImportedClassResolver();
+			final Class cls = clsresolver.resolveClass(clsnm);
+			mtd = Classes.getMethodBySignature(cls, sig, null, clsresolver);
 		} catch (ClassNotFoundException ex) {
 			throw new UiException("Class not found: "+clsnm+", "+pi.getLocator());
 		} catch (Exception ex) {

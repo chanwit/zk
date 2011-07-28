@@ -9,7 +9,7 @@
 <?function-mapper class="F327Mapper"?>
 <?xel-method prefix="c" name="forName"
 	class="Class"
-	signature="java.lang.Class forName(java.lang.String)"?>
+	signature="Class forName(String)"?>
 
 <window border="normal" apply="F327Composer" use="Window">
 	If you saw this page, it runs correctly.
