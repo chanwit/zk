@@ -105,16 +105,20 @@ public class ImportedClassResolver implements ClassResolver, java.io.Serializabl
 
 	//@Override
 	public Class resolveClass(String clsnm) throws ClassNotFoundException {
-		if (_pkgs != null && clsnm.indexOf('.') < 0) {
-			final Class cls = (Class)_clses.get(clsnm);
-			if (cls != null)
-				return cls;
+		if (clsnm.indexOf('.') < 0) {
+			if (_clses != null) {
+				final Class cls = (Class)_clses.get(clsnm);
+				if (cls != null)
+					return cls;
+			}
 
-			for (Iterator it = _pkgs.iterator(); it.hasNext();) {
-				final String pkg = (String)it.next();
-				try {
-					return Classes.forNameByThread(pkg + clsnm);
-				} catch (ClassNotFoundException ex) { //ignore
+			if (_pkgs != null) {
+				for (Iterator it = _pkgs.iterator(); it.hasNext();) {
+					final String pkg = (String)it.next();
+					try {
+						return Classes.forNameByThread(pkg + clsnm);
+					} catch (ClassNotFoundException ex) { //ignore
+					}
 				}
 			}
 		}

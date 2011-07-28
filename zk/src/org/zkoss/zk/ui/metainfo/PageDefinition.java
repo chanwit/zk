@@ -344,7 +344,7 @@ public class PageDefinition implements NodeInfo {
 	 * a wildcard representing all classes of the give pacakge, e.g., <code>com.foo.*</code>.
 	 * @since 5.1.0
 	 */
-	public void addImportedClass(String clsptn) {
+	public void addImportedClass(String clsptn) throws ClassNotFoundException {
 		_clsresolver.addImportedClass(clsptn);
 	}
 	/** Returns a readonly list of the imported class.
@@ -360,7 +360,7 @@ public class PageDefinition implements NodeInfo {
 		return _clsresolver;
 	}
 
-	/** Adds a defintion of {@link org.zkoss.zk.ui.util.Initiator}. */
+	/** Adds a defintion of {@link Initiator}. */
 	public void addInitiatorInfo(InitiatorInfo init) {
 		if (init == null)
 			throw new IllegalArgumentException("null");
@@ -426,39 +426,6 @@ public class PageDefinition implements NodeInfo {
 		if (_xelmtds == null)
 			_xelmtds = new LinkedList();
 		_xelmtds.add(new Object[] {prefix, name, func});
-	}
-	/** Initializes XEL context for the specified page.
-	 *
-	 * @param page the page to initialize the context. It cannot be null.
-	 */
-	public void initXelContext(Page page) {
-		page.addFunctionMapper(getTaglibMapper());
-
-		if (_mapperdefs != null)
-			for (Iterator it = _mapperdefs.iterator(); it.hasNext();) {
-				final FunctionMapperInfo def = (FunctionMapperInfo)it.next();
-				try {
-					FunctionMapper mapper =
-						def.newFunctionMapper(this, page);
-					if (mapper != null) 
-						page.addFunctionMapper(mapper);
-				} catch (Throwable ex) {
-					throw UiException.Aide.wrap(ex);
-				}
-			}
-
-		if (_resolvdefs != null)
-			for (Iterator it = _resolvdefs.iterator(); it.hasNext();) {
-				final VariableResolverInfo def = (VariableResolverInfo)it.next();
-				try {
-					VariableResolver resolver =
-						def.newVariableResolver(this, page);
-					if (resolver != null) 
-						page.addVariableResolver(resolver);
-				} catch (Throwable ex) {
-					throw UiException.Aide.wrap(ex);
-				}
-			}
 	}
 
 	/** Adds a response header.
@@ -920,8 +887,46 @@ public class PageDefinition implements NodeInfo {
 		return _mapper != Expressions.EMPTY_MAPPER ? _mapper: null;
 	}
 
+	/** Initializes the context for the given page before rendering
+	 * this page definition.
+	 * <p>It is called before {@link Initiator#doInit} and {@link #init}.
+	 *
+	 * @param page the page to initialize the context. It cannot be null.
+	 */
+	public void preInit(Page page) {
+		page.addClassResolver(_clsresolver);
+
+		page.addFunctionMapper(getTaglibMapper());
+
+		if (_mapperdefs != null)
+			for (Iterator it = _mapperdefs.iterator(); it.hasNext();) {
+				final FunctionMapperInfo def = (FunctionMapperInfo)it.next();
+				try {
+					FunctionMapper mapper =
+						def.newFunctionMapper(this, page);
+					if (mapper != null) 
+						page.addFunctionMapper(mapper);
+				} catch (Throwable ex) {
+					throw UiException.Aide.wrap(ex);
+				}
+			}
+
+		if (_resolvdefs != null)
+			for (Iterator it = _resolvdefs.iterator(); it.hasNext();) {
+				final VariableResolverInfo def = (VariableResolverInfo)it.next();
+				try {
+					VariableResolver resolver =
+						def.newVariableResolver(this, page);
+					if (resolver != null) 
+						page.addVariableResolver(resolver);
+				} catch (Throwable ex) {
+					throw UiException.Aide.wrap(ex);
+				}
+			}
+	}
 	/** Initializes a page after execution is activated.
 	 * It setup the identifier and title, and adds it to desktop.
+	 * <p>It is called after {@link #preInit} and {@link Initiator#doInit}.
 	 */
 	public void init(final Page page, final boolean evalHeaders) {
 		final PageCtrl pageCtrl = (PageCtrl)page;

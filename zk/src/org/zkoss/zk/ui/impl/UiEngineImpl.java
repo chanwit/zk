@@ -385,7 +385,7 @@ public class UiEngineImpl implements UiEngine {
 			//init's zscirpt might depend on it.
 			if (pagedef != null) {
 				((PageCtrl)page).preInit();
-				pagedef.initXelContext(page);
+				pagedef.preInit(page);
 
 				final Initiators inits = Initiators.doInit(
 					pagedef, page, config.getInitiators());
@@ -1000,7 +1000,7 @@ public class UiEngineImpl implements UiEngine {
 		//it might cause name pollution but we got no choice since they
 		//are used as long as components created by this method are alive
 		if (fakepg) ((PageCtrl)page).preInit();
-		pagedef.initXelContext(page);
+		pagedef.preInit(page);
 
 		//Note: the forward directives are ignore in this case
 
