@@ -10,10 +10,7 @@
 Copyright (C) 2011 Potix Corporation. All Rights Reserved.
 
 */
-package org.zkoss.zk.ui.impl;
-
-import org.zkoss.lang.Classes;
-import org.zkoss.lang.ClassResolver;
+package org.zkoss.lang;
 
 /**
  * A simple resolver that depends on {@link Classes#forNameByThread}.

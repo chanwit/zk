@@ -38,6 +38,7 @@ import org.zkoss.lang.Objects;
 import org.zkoss.lang.Strings;
 import org.zkoss.lang.Library;
 import org.zkoss.lang.ClassResolver;
+import org.zkoss.lang.SimpleClassResolver;
 import org.zkoss.lang.Exceptions;
 import org.zkoss.lang.Expectable;
 import org.zkoss.util.CollectionsX;

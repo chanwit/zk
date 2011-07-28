@@ -27,6 +27,7 @@ import java.util.LinkedHashMap;
 
 import org.zkoss.lang.Classes;
 import org.zkoss.lang.ClassResolver;
+import org.zkoss.lang.ImportedClassResolver;
 import org.zkoss.util.resource.Locator;
 import org.zkoss.xel.ExpressionFactory;
 import org.zkoss.xel.Expressions;
@@ -46,7 +47,6 @@ import org.zkoss.zk.xel.Evaluator;
 import org.zkoss.zk.xel.ExValue;
 import org.zkoss.zk.xel.impl.SimpleEvaluator;
 import org.zkoss.zk.xel.EvaluatorRef;
-import org.zkoss.zk.ui.impl.ImportedClassResolver;
 
 /**
  * A page definition.
