@@ -859,7 +859,7 @@ new zul.wnd.Window{
 						_unlistenFlex(this);
 				} else
 					_listenFlex(this);
-				zWatch.fireDown('onSize', this.parent);
+				zUtl.fireSized(this.parent, true);
 			}
 		},
 		/**
@@ -893,9 +893,8 @@ new zul.wnd.Window{
 		 */
 		hflex: function(v) {
 			this.setHflex_(v);
-			if (_binds[this.uuid] === this) { //if already bind
-				zWatch.fireDown('onSize', this.parent);
-			}
+			if (_binds[this.uuid] === this) //if already bind
+				zUtl.fireSized(this.parent, true);
 		},
 		/** Returns the number of milliseconds before rendering this component
 		 * at the client.
@@ -2289,10 +2288,8 @@ function () {
 			this.bind(desktop, skipper);
 		}
 
-		if (!skipper) {
-			zWatch.fireDown('beforeSize', this);
-			zWatch.fireDown('onSize', this);
-		}
+		if (!skipper)
+			zUtl.fireSized(this);
 
 		_rsFocus(cf);
 		return this;
@@ -2381,8 +2378,7 @@ function () {
 
 						zWatch.fireDown('onRestore', this);
 							//to notify it is restored from rerender with skipper
-						zWatch.fireDown('beforeSize', this);
-						zWatch.fireDown('onSize', this);
+						zUtl.fireSized(this);
 
 						_rsFocus(cf);
 					}
