@@ -25,14 +25,12 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Set;
 import java.util.HashSet;
-import java.lang.reflect.Method;
 
 import org.zkoss.lang.Library;
 import org.zkoss.lang.Classes;
 import org.zkoss.lang.Objects;
 import org.zkoss.lang.PotentialDeadLockException;
 import org.zkoss.lang.Exceptions;
-import org.zkoss.lang.reflect.Fields;
 import org.zkoss.util.WaitLock;
 import org.zkoss.util.FastReadArray;
 import org.zkoss.util.logging.Log;
@@ -469,15 +467,8 @@ public class Configuration {
 		for (Iterator it = inits.iterator(); it.hasNext();) {
 			final EventThreadInit fn = (EventThreadInit)it.next();
 			try {
-				try {
-					if (!fn.init(comp, evt))
-						return false; //ignore the event
-				} catch (AbstractMethodError ex) { //backward compatible prior to 3.0
-					final Method m = fn.getClass().getMethod(
-						"init", new Class[] {Component.class, Event.class});
-					Fields.setAccessible(m, true);
-					m.invoke(fn, new Object[] {comp, evt});
-				}
+				if (!fn.init(comp, evt))
+					return false; //ignore the event
 			} catch (Throwable ex) {
 				throw UiException.Aide.wrap(ex);
 				//Don't intercept; to prevent the event being processed
@@ -778,14 +769,7 @@ public class Configuration {
 			final Class klass = (Class)ary[j];
 			try {
 				final SessionInit fn = (SessionInit)klass.newInstance();
-				try {
-					fn.init(sess, request);
-				} catch (AbstractMethodError ex) { //backward compatible prior to 3.0.1
-					final Method m =
-						klass.getMethod("init", new Class[] {Session.class});
-					Fields.setAccessible(m, true);
-					m.invoke(fn, new Object[] {sess});
-				}
+				fn.init(sess, request);
 			} catch (Throwable ex) {
 				throw UiException.Aide.wrap(ex);
 				//Don't intercept; to prevent the creation of a session
@@ -837,14 +821,7 @@ public class Configuration {
 			final Class klass = (Class)ary[j];
 			try {
 				final DesktopInit fn = (DesktopInit)klass.newInstance();
-				try {
-					fn.init(desktop, request);
-				} catch (AbstractMethodError ex) { //backward compatible prior to 3.0.1
-					final Method m =
-						klass.getMethod("init", new Class[] {Desktop.class});
-					Fields.setAccessible(m, true);
-					m.invoke(fn, new Object[] {desktop});
-				}
+				fn.init(desktop, request);
 			} catch (Throwable ex) {
 				throw UiException.Aide.wrap(ex);
 				//Don't intercept; to prevent the creation of a session

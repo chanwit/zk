@@ -197,12 +197,8 @@ abstract public class AbstractWebApp implements WebApp, WebAppCtrl {
 		_engine.start(this);
 		_provider.start(this);
 		_factory.start(this);
-		if (_failover != null) {
-			try {
-				_failover.start(this);
-			} catch (AbstractMethodError ex) { //backward compatible
-			}
-		}
+		if (_failover != null)
+			_failover.start(this);
 		_sesscache.init(this);
 
 		_config.invokeWebAppInits();
@@ -215,7 +211,6 @@ abstract public class AbstractWebApp implements WebApp, WebAppCtrl {
 		try {
 			_sesscache.destroy(this);
 		} catch (NoClassDefFoundError ex) { //Bug 3046360
-		} catch (AbstractMethodError ex) { //backward compatible
 		}
 		_factory.stop(this);
 		_provider.stop(this);
@@ -224,7 +219,6 @@ abstract public class AbstractWebApp implements WebApp, WebAppCtrl {
 			try {
 				_failover.stop(this);
 			} catch (NoClassDefFoundError ex) { //Bug 3046360
-			} catch (AbstractMethodError ex) { //backward compatible
 			}
 			_failover = null;
 		}

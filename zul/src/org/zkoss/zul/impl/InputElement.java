@@ -438,24 +438,20 @@ implements Constrainted, Readonly, Disable {
 				return;
 			} else if (_auxinf.constr instanceof ClientConstraint) {
 				final ClientConstraint cc = (ClientConstraint)_auxinf.constr;
-				try {
-					final String cpkg = cc.getClientPackages();
-					if (cpkg != null)
-						smartUpdate("z$pk", cpkg);
+				final String cpkg = cc.getClientPackages();
+				if (cpkg != null)
+					smartUpdate("z$pk", cpkg);
 
-					final String js = cc.getClientConstraint();
-					if (js != null) {
-						final char c = js.length() > 0 ? js.charAt(0): (char)0;
-						if (c != '\'' && c != '"') {
-							smartUpdate("z$al",
-								new JavaScriptValue("{constraint:function(){\nreturn "+js+";}}"));
-						} else {
-							smartUpdate("constraint", js.substring(1, js.length() - 1));
-						}
-						return;
+				final String js = cc.getClientConstraint();
+				if (js != null) {
+					final char c = js.length() > 0 ? js.charAt(0): (char)0;
+					if (c != '\'' && c != '"') {
+						smartUpdate("z$al",
+							new JavaScriptValue("{constraint:function(){\nreturn "+js+";}}"));
+					} else {
+						smartUpdate("constraint", js.substring(1, js.length() - 1));
 					}
-				} catch (AbstractMethodError ex) {
-					log.warning("Ignore incompatible constraint: "+cc);
+					return;
 				}
 			}
 			smartUpdate("constraint", _auxinf.constr != null ? "[s": null);
@@ -768,22 +764,18 @@ implements Constrainted, Readonly, Disable {
 			constrDone = true;
 		} else if (constr instanceof ClientConstraint) {
 			final ClientConstraint cc = (ClientConstraint)constr;
-			try {
-				render(renderer, "z$pk", cc.getClientPackages());
+			render(renderer, "z$pk", cc.getClientPackages());
 
-				final String js = cc.getClientConstraint();
-				if (js != null) {
-					final char c = js.length() > 0 ? js.charAt(0): (char)0;
-					if (c != '\'' && c != '"') {
-						renderer.renderDirectly("z$al",
-							"{constraint:function(){\nreturn "+js+";}}");
-					} else {
-						renderer.renderDirectly("constraint", js);
-					}
-					constrDone = true;
+			final String js = cc.getClientConstraint();
+			if (js != null) {
+				final char c = js.length() > 0 ? js.charAt(0): (char)0;
+				if (c != '\'' && c != '"') {
+					renderer.renderDirectly("z$al",
+						"{constraint:function(){\nreturn "+js+";}}");
+				} else {
+					renderer.renderDirectly("constraint", js);
 				}
-			} catch (AbstractMethodError ex) {
-				log.warning("Ignore incompatible constraint: "+cc);
+				constrDone = true;
 			}
 		}
 		if (!constrDone && constr != null)

@@ -38,7 +38,6 @@ import org.zkoss.lang.Library;
 import org.zkoss.lang.Classes;
 import org.zkoss.lang.Strings;
 import org.zkoss.lang.Objects;
-import org.zkoss.lang.reflect.Fields;
 import org.zkoss.util.CollectionsX;
 import org.zkoss.util.logging.Log;
 import org.zkoss.io.Serializables;
@@ -2709,20 +2708,6 @@ w:use="foo.MyWindow"&gt;
 
 		return clone;
 	}
-	private Object willClone(ComponentCloneListener val) {
-		try {
-			return val.willClone(this);
-		} catch (AbstractMethodError ex) { //backward compatible prior to 5.0
-			try {
-				final Method m = val.getClass().getMethod(
-					"clone", new Class[] {Component.class});
-				Fields.setAccessible(m, true);
-				return m.invoke(val, new Object[] {this});
-			} catch (Exception t) {
-				throw UiException.Aide.wrap(t);
-			}
-		}
-	}
 	private void cloneSpaceInfoFrom(SpaceInfo from) {
 		//rebuild ID space by binding itself and all children
 		if (!isAutoId(_id))
@@ -3155,7 +3140,7 @@ w:use="foo.MyWindow"&gt;
 
 			//AuService
 			if (ausvc instanceof ComponentCloneListener)
-				clone.ausvc = (AuService)owner.willClone((ComponentCloneListener)ausvc);
+				clone.ausvc = (AuService)((ComponentCloneListener)ausvc).willClone(owner);
 		}
 		private void cloneListeners(AbstractComponent owner, AuxInfo clone) {
 			if (listeners != null) {
@@ -3168,7 +3153,7 @@ w:use="foo.MyWindow"&gt;
 					it2.hasNext();) {
 						Object val = it2.next();
 						if (val instanceof ComponentCloneListener) {
-							val = owner.willClone((ComponentCloneListener)val);
+							val = ((ComponentCloneListener)val).willClone(owner);
 							if (val == null) continue; //don't use it in clone
 						}
 						list.add(val);
