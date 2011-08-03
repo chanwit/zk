@@ -39,6 +39,7 @@ import org.zkoss.lang.Classes;
 import org.zkoss.lang.Strings;
 import org.zkoss.lang.Objects;
 import org.zkoss.util.CollectionsX;
+import org.zkoss.util.Converter;
 import org.zkoss.util.logging.Log;
 import org.zkoss.io.Serializables;
 
@@ -2010,7 +2011,11 @@ w:use="foo.MyWindow"&gt;
 	}
 
 	//Event//
+	//@SuppressWarnings("deprecation")
 	public boolean addEventListener(String evtnm, EventListener listener) {
+		return addEventListener(listener instanceof org.zkoss.zk.ui.event.Express ? 1000: 0, evtnm, listener);
+	}
+	public boolean addEventListener(int priority, String evtnm, EventListener listener) {
 		if (evtnm == null || listener == null)
 			throw new IllegalArgumentException("null");
 		if (!Events.isValid(evtnm))
@@ -2021,20 +2026,39 @@ w:use="foo.MyWindow"&gt;
 		if (initAuxInfo().listeners == null)
 			_auxinf.listeners = new HashMap(8);
 
+		boolean found = false;
 		List l = (List)_auxinf.listeners.get(evtnm);
+		final EventListenerInfo listenerInfo = new EventListenerInfo(priority, listener);
 		if (l != null) {
-			for (Iterator it = l.iterator(); it.hasNext();) {
-				final EventListener li = (EventListener)it.next();
-				if (listener.equals(li))
-					return false;
+			if (duplicateListenerIgnored()) {
+				for (Iterator it = l.iterator(); it.hasNext();) {
+					final EventListenerInfo li = (EventListenerInfo)it.next();
+					if (li.listener.equals(listener)) {
+						if (li.priority == priority)
+							return false; //nothing to do
+						it.remove(); //re-added later
+						found = true;
+						break;
+					}
+				}
 			}
+
+			for (ListIterator it = l.listIterator(l.size());;) {
+				final EventListenerInfo li =
+					it.hasPrevious() ? (EventListenerInfo)it.previous(): null;
+				if (li == null || li.priority >= priority) {
+					if (li != null) it.next();
+					it.add(listenerInfo);
+					break;
+				}
+			}	
 		} else {
 			_auxinf.listeners.put(evtnm, l = new LinkedList());
+			l.add(listenerInfo);
 		}
-		l.add(listener);
 
-		final Desktop desktop = getDesktop();
-		if (desktop != null) {
+		final Desktop desktop;
+		if (!found && (desktop = getDesktop()) != null) {
 			if (Events.ON_CLIENT_INFO.equals(evtnm)) {
 				response(new AuClientInfo(desktop));
 			} else if (Events.ON_PIGGYBACK.equals(evtnm)) {
@@ -2045,8 +2069,16 @@ w:use="foo.MyWindow"&gt;
 					smartUpdate("$" + evtnm, asap);
 			}
 		}
-		return true;
+		return !found;
 	}
+	private static boolean duplicateListenerIgnored() {
+		if (dupListenerIgnored == null)
+			dupListenerIgnored = Boolean.valueOf(
+				"true".equals(Library.getProperty("org.zkoss.zk.ui.EventListener.duplicateIgnored")));
+		return dupListenerIgnored.booleanValue();
+	}
+	private static Boolean dupListenerIgnored;
+
 	public boolean removeEventListener(String evtnm, EventListener listener) {
 		if (evtnm == null || listener == null)
 			throw new IllegalArgumentException("null");
@@ -2056,8 +2088,8 @@ w:use="foo.MyWindow"&gt;
 			final List l = (List)_auxinf.listeners.get(evtnm);
 			if (l != null) {
 				for (Iterator it = l.iterator(); it.hasNext();) {
-					final EventListener li = (EventListener)it.next();
-					if (listener.equals(li)) {
+					final EventListenerInfo li = (EventListenerInfo)it.next();
+					if (li.listener.equals(listener)) {
 						it.remove();
 						if (l.isEmpty())
 							_auxinf.listeners.remove(evtnm);
@@ -2181,9 +2213,9 @@ w:use="foo.MyWindow"&gt;
 					return !l.isEmpty();
 
 				for (Iterator it = l.iterator(); it.hasNext();) {
-					final EventListener li = (EventListener)it.next();
-					if (!(li instanceof Deferrable)
-					|| !(((Deferrable)li).isDeferrable()))
+					final EventListenerInfo li = (EventListenerInfo)it.next();
+					if (!(li.listener instanceof Deferrable)
+					|| !(((Deferrable)li.listener).isDeferrable()))
 						return true;
 				}
 			}
@@ -2194,7 +2226,7 @@ w:use="foo.MyWindow"&gt;
 		if (_auxinf != null && _auxinf.listeners != null) {
 			final List l = (List)_auxinf.listeners.get(evtnm);
 			if (l != null)
-				return CollectionsX.comodifiableIterator(l);
+				return CollectionsX.comodifiableIterator(l, _listenerInfoConverter);
 		}
 		return CollectionsX.EMPTY_ITERATOR;
 	}
@@ -2491,6 +2523,85 @@ w:use="foo.MyWindow"&gt;
 			Events.postEvent(Event.getEvent(request));
 	}
 
+	public void service(Event event, Scope scope) throws Exception {
+		final Page page = getPage();
+		final Execution exec = Executions.getCurrent();
+		if (page == null || !page.isAlive()) {
+			final Desktop desktop = exec.getDesktop();
+			String msg = (page == null ? "No page is available in "+desktop: "Page "+page+" was destroyed");
+			if (desktop.isAlive())
+				msg += " (but desktop is alive)";
+			else
+				msg += " because desktop was destroyed.\n"
+				+"It is usually caused by invalidating the native session directly. "
+				+"If it is required, please set Attributes.RENEW_NATIVE_SESSION first.";
+			log.warning(msg);
+		}
+
+		final ExecInfo execinf;
+		((ExecutionCtrl)exec).setExecutionInfo(execinf = new ExecInfo(event));
+		final String evtnm = event.getName();
+		final List listeners = _auxinf != null && _auxinf.listeners != null ?
+			(List)_auxinf.listeners.get(evtnm): null;
+		if (listeners != null)
+			for (Iterator it = CollectionsX.comodifiableIterator(listeners); it.hasNext();) {
+				final EventListenerInfo eli = (EventListenerInfo)it.next();
+				if (eli.priority < 1000)
+					break; //no more
+
+				execinf.update(null, eli.listener, null);
+				eli.listener.onEvent(event);
+				if (!event.isPropagatable())
+					return; //done
+			}
+		
+		if (page != null && getDesktop() != null) {
+			final ZScript zscript = getEventHandler(evtnm);
+			execinf.update(null, null, zscript);
+			if (zscript != null) {
+				page.interpret(
+						zscript.getLanguage(), zscript.getContent(page, this), scope);
+				if (!event.isPropagatable())
+					return; //done
+			}
+		}
+
+		if (listeners != null)
+			for (Iterator it = CollectionsX.comodifiableIterator(listeners); it.hasNext();) {
+				final EventListenerInfo eli = (EventListenerInfo)it.next();
+				if (eli.priority < 1000) {
+					execinf.update(null, eli.listener, null);
+					eli.listener.onEvent(event);
+					if (!event.isPropagatable())
+						return; //done
+				}
+			}
+
+		final Method mtd =
+			ComponentsCtrl.getEventMethod(getClass(), evtnm);
+		if (mtd != null) {
+//			if (log.finerable()) log.finer("Method for event="+evtnm+" comp="+this+" method="+mtd);
+			execinf.update(mtd, null, null);
+
+			if (mtd.getParameterTypes().length == 0)
+				mtd.invoke(this, null);
+			else
+				mtd.invoke(this, new Object[] {event});
+			if (!event.isPropagatable())
+				return; //done
+		}
+
+		if (page != null)
+			for (Iterator it = page.getListenerIterator(evtnm); it.hasNext();) {
+			//Note: CollectionsX.comodifiableIterator is used so OK to iterate
+				final EventListener el = (EventListener)it.next();
+				execinf.update(null, el, null);
+				el.onEvent(event);
+				if (!event.isPropagatable())
+					return; //done
+			}
+	}
+
 	/** Called when the widget running at the client asks the server
 	 * to update a value. The update is caused by an AU request named <code>setAttr</code>
 	 * (by invoking zk.Widget's smartUpdate at client).
@@ -2769,12 +2880,34 @@ w:use="foo.MyWindow"&gt;
 
 				final Collection ls = (Collection)me.getValue();
 				willSerialize(ls);
-				Serializables.smartWrite(s, ls);
+				writeListeners(s, ls);
 			}
 		s.writeObject(null);
 
 		willSerialize(_auxinf.ausvc);
 		Serializables.smartWrite(s, _auxinf.ausvc);
+	}
+	private static void writeListeners(java.io.ObjectOutputStream s, Collection col)
+	throws IOException {
+		if (col != null) {
+			final Log logio = Serializables.logio;
+			final boolean debug = logio.debugable();
+			for (Iterator it = col.iterator(); it.hasNext();) {
+				final EventListenerInfo li = (EventListenerInfo)it.next();
+				if ((li.listener instanceof java.io.Serializable)
+				|| (li.listener instanceof java.io.Externalizable)) {
+					try {
+						s.writeObject(li);
+					} catch (java.io.NotSerializableException ex) {
+						logio.error("Unable to serialize item: "+li.listener);
+						throw ex;
+					}
+				} else if (li.listener != null && debug) {
+					logio.debug("Skip not-serializable item: "+li.listener);
+				}
+			}
+		}
+		s.writeObject(null);
 	}
 
 	/** Utility to invoke {@link ComponentSerializationListener#willSerialize}
@@ -2860,6 +2993,7 @@ w:use="foo.MyWindow"&gt;
 
 			if (_auxinf.listeners == null) _auxinf.listeners = new HashMap(4);
 			final Collection ls = Serializables.smartRead(s, (Collection)null);
+				//OK to use Serializables.smartRead to read back
 			_auxinf.listeners.put(evtnm, ls);
 		}
 
@@ -3036,7 +3170,7 @@ w:use="foo.MyWindow"&gt;
 		private transient SpaceInfo spaceInfo;
 		/** Component attributes. */
 		private transient SimpleScope attrs;
-		/** A map of event listener: Map(evtnm, List(EventListener)). */
+		/** A map of event listener: Map(evtnm, List(EventListenerInfo)). */
 		private transient Map listeners;
 
 		/** A map of annotations. Serializable since a component might have
@@ -3251,5 +3385,69 @@ w:use="foo.MyWindow"&gt;
 				else
 					_aring[which] = null;
 		}
+	}
+	private static class EventListenerInfo
+	implements ComponentSerializationListener, ComponentActivationListener,
+	java.io.Serializable {
+		private final int priority;
+		private final EventListener listener;
+		private EventListenerInfo(int priority, EventListener listener) {
+			this.priority = priority;
+			this.listener = listener;
+		}
+		//ComponentSerializationListener//
+		public void willSerialize(Component comp) {
+			((AbstractComponent)comp).willSerialize(this.listener);
+		}
+		public void didDeserialize(Component comp) {
+			((AbstractComponent)comp).didDeserialize(this.listener);
+		}
+		//ComponentActivationListener//
+		public void didActivate(Component comp) {
+			((AbstractComponent)comp).didActivate(this.listener);
+		}
+		public void willPassivate(Component comp) {
+			((AbstractComponent)comp).willPassivate(this.listener);
+		}
+		public String toString() {
+			return "[" + this.priority + ": " + this.listener.toString() + "]";
+		}
+	}
+	private static final Converter _listenerInfoConverter = new Converter() {
+		public Object convert(Object o) {
+			return ((EventListenerInfo)o).listener;
+		}
+	};
+}
+/*package*/ class ExecInfo implements org.zkoss.zk.ui.sys.ExecutionInfo {
+	private final Thread _thread;
+	private final Event _event;
+	private Method _method;
+	private EventListener _listener;
+	private ZScript _zscript;
+
+	/*package*/ ExecInfo(Event event) {
+		_thread = Thread.currentThread();
+		_event = event;
+	}
+	public Thread getThread() {
+		return _thread;
+	}
+	public Event getEvent() {
+		return _event;
+	}
+	public Method getEventMethod() {
+		return _method;
+	}
+	public EventListener getEventListener() {
+		return _listener;
+	}
+	public ZScript getEventZScript() {
+		return _zscript;
+	}
+	public void update(Method mtd, EventListener ln, ZScript zs) {
+		_method = mtd;
+		_listener = ln;
+		_zscript = zs;
 	}
 }

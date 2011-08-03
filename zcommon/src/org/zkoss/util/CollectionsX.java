@@ -465,7 +465,17 @@ public class CollectionsX {
 	 * @since 5.0.6
 	 */
 	public static Iterator comodifiableIterator(Collection col) {
-		return new ComodifiableIterator(col);
+		return comodifiableIterator(col, null);
+	}
+	/** Returns an iterator that allows the caller to modify the collection
+	 * directly (in addition to Iterator.remove()).
+	 * @param filter the filter used to convert the value of each element
+	 * found in the given collection to the return iterator.
+	 * Ignored if null.
+	 * @since 5.1.0
+	 */
+	public static Iterator comodifiableIterator(Collection col, Converter converter) {
+		return new ComodifiableIterator(col, converter);
 	}
 }
 /*package*/ class ComodifiableIterator implements Iterator {
@@ -474,11 +484,13 @@ public class CollectionsX {
 	private final Collection _col;
 	private Iterator _it;
 	private Object _next;
+	private Converter _converter;
 	private boolean _nextAvail;
 
-	/*package*/ ComodifiableIterator(Collection col) {
+	/*package*/ ComodifiableIterator(Collection col, Converter converter) {
 		_col = col;
 		_it = col.iterator();
+		_converter = converter;
 	}
 	public boolean hasNext() {
 		//Note: we cannot just check hasNext() since it does not throw
@@ -509,7 +521,7 @@ public class CollectionsX {
 	public Object next() {
 		if (_nextAvail) {
 			_nextAvail = false;
-			return _next;
+			return _converter != null ? _converter.convert(_next): _next;
 		}
 		for (;;) {
 			final Object o;
@@ -522,7 +534,7 @@ public class CollectionsX {
 			}
 			if (!removeFromLastVisited(o)) { //not visited before
 				_visited.add(o);
-				return o;
+				return _converter != null ? _converter.convert(o): o;
 			}
 		}
 	}

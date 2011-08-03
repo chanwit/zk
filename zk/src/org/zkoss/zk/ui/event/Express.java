@@ -17,6 +17,9 @@ Copyright (C) 2006 Potix Corporation. All Rights Reserved.
 package org.zkoss.zk.ui.event;
 
 /**
+ * @deprecated As of release 5.1.0, replaced with
+ * {@link org.zkoss.zk.ui.Component#addEventListener(int, String, EventListener)}
+ * (and specifying the priority to 1000 or greater).
  * Decorates an event listener ({@link EventListener}) shall be invoked
  * before other event listeners, including the onXxx member declared in the
  * ZUML pages.
